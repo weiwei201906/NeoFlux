@@ -14,8 +14,15 @@ enum class RenderBackend {
   kNull,
 };
 
+enum class SkiaGraphicsApi {
+  kOpenGL,
+  kVulkan,
+  kSoftware,
+};
+
 struct RenderPipelineConfig {
   RenderBackend backend = RenderBackend::kSkia;
+  SkiaGraphicsApi skiaApi = SkiaGraphicsApi::kOpenGL;
   bool antialiasing = true;
   bool enableCaching = true;
   bool useGpu = false;
@@ -25,6 +32,7 @@ struct RenderPipelineConfig {
 
 std::string_view platformName();
 std::string_view renderBackendName(RenderBackend backend);
+std::string_view skiaApiName(SkiaGraphicsApi api);
 
 class RenderEngine {
  public:

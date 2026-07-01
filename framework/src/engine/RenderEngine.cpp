@@ -34,6 +34,18 @@ std::string_view renderBackendName(RenderBackend backend) {
   return "unknown";
 }
 
+std::string_view skiaApiName(SkiaGraphicsApi api) {
+  switch (api) {
+    case SkiaGraphicsApi::kOpenGL:
+      return "opengl";
+    case SkiaGraphicsApi::kVulkan:
+      return "vulkan";
+    case SkiaGraphicsApi::kSoftware:
+      return "software";
+  }
+  return "unknown";
+}
+
 RenderEngine::RenderEngine(RenderPipelineConfig config) : pipelineConfig_(std::move(config)) {}
 
 void RenderEngine::setPipelineConfig(RenderPipelineConfig config) {
@@ -47,6 +59,9 @@ const RenderPipelineConfig& RenderEngine::pipelineConfig() const {
 void RenderEngine::renderWidget(const core::Widget& root) const {
   LOG(INFO) << "RenderEngine: rendering widget tree from root='" << root.name() << "' via "
             << renderBackendName(pipelineConfig_.backend) << " on " << pipelineConfig_.platform;
+  if (pipelineConfig_.backend == RenderBackend::kSkia) {
+    LOG(INFO) << "RenderEngine: Skia pipeline using " << skiaApiName(pipelineConfig_.skiaApi);
+  }
   if (pipelineConfig_.antialiasing) {
     LOG(INFO) << "RenderEngine: antialiasing enabled";
   }

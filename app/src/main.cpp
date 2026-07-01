@@ -46,6 +46,15 @@ RenderPipelineConfig parsePipelineConfig(int argc, char** argv) {
       } else if (value == "null") {
         config.backend = RenderBackend::kNull;
       }
+    } else if (arg == "--skia-api" && index + 1 < argc) {
+      const std::string_view value{argv[++index]};
+      if (value == "vulkan") {
+        config.skiaApi = neoflux::engine::SkiaGraphicsApi::kVulkan;
+      } else if (value == "software") {
+        config.skiaApi = neoflux::engine::SkiaGraphicsApi::kSoftware;
+      } else {
+        config.skiaApi = neoflux::engine::SkiaGraphicsApi::kOpenGL;
+      }
     } else if (arg == "--platform" && index + 1 < argc) {
       config.platform = argv[++index];
     } else if (arg == "--disable-aa") {
@@ -99,7 +108,12 @@ int main(int argc, char** argv) {
   LOG(INFO) << "App configured render backend='" << neoflux::engine::renderBackendName(config.backend)
             << "' on platform='" << config.platform << "'";
   std::cout << "NeoFlux sample: backend=" << neoflux::engine::renderBackendName(config.backend)
+            << " skia-api=" << neoflux::engine::skiaApiName(config.skiaApi)
             << " platform=" << config.platform << " antialiasing="
             << (config.antialiasing ? "on" : "off") << '\n';
+  std::cout << "[UI Scene] Header: Hello, NeoFlux!\n";
+  std::cout << "[UI Scene] Body: A composable widget tree with text, buttons, and layout.\n";
+  std::cout << "[UI Scene] Footer: Render pipeline ready for Skia + "
+            << neoflux::engine::skiaApiName(config.skiaApi) << "\n";
   return EXIT_SUCCESS;
 }
