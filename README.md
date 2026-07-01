@@ -1,4 +1,4 @@
-# NeoFlux++ — 轻量 · 极速 · 声明式 C++20 UI 框架
+# NeoFlux — 轻量 · 极速 · 声明式 C++20 UI 框架
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/compiler_support)
 [![License](https://img.shields.io/badge/license-GPLv3-green.svg)](LICENSE)

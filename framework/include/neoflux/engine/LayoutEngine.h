@@ -1,9 +1,10 @@
 #pragma once
 
+#include "../core/BuildContext.h"
+
 namespace neoflux {
 namespace core {
 class Widget;
-class BuildContext;
 }
 namespace engine {
 

@@ -1,11 +1,12 @@
 #pragma once
 
+#include "BuildContext.h"
+#include "State.h"
+
 #include <memory>
 
 namespace neoflux {
 namespace core {
-class BuildContext;
-class State;
 class Widget;
 }
 namespace engine {
