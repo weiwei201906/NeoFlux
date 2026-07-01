@@ -1,0 +1,7 @@
+Checks: 'google-*,performance-*,modernize-*,cppcoreguidelines-*,bugprone-*'
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+CheckOptions:
+  - key:             cppcoreguidelines-avoid-magic-numbers.IgnoreEnums
+    value:           '1'
