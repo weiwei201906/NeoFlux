@@ -10,9 +10,11 @@ list(APPEND CMAKE_PREFIX_PATH
 set(gflags_DIR "${CMAKE_BINARY_DIR}/thirdparty/gflags" CACHE PATH "Location of gflagsConfig.cmake" FORCE)
 set(GTest_DIR "${CMAKE_BINARY_DIR}/thirdparty/googletest" CACHE PATH "Location of GTestConfig.cmake" FORCE)
 
-# Disable dependency subproject tests to avoid requiring extra external test packages.
+# Use static dependency builds and avoid dependency subproject tests.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Enable PIC for thirdparty dependencies" FORCE)
 option(BUILD_TESTING "Build tests for dependencies" OFF)
 set(BUILD_TESTING OFF CACHE BOOL "Disable dependency subproject tests" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries for thirdparty dependencies" FORCE)
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/gflags/CMakeLists.txt")
   add_subdirectory("${CMAKE_SOURCE_DIR}/thirdparty/gflags" EXCLUDE_FROM_ALL)

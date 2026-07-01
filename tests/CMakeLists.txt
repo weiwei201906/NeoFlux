@@ -12,6 +12,10 @@ target_link_libraries(neoflux_test
   PRIVATE glog::glog
 )
 
+target_include_directories(neoflux_test PRIVATE
+  "${CMAKE_SOURCE_DIR}/app/src"
+)
+
 target_compile_features(neoflux_test PRIVATE cxx_std_20)
 
 enable_testing()

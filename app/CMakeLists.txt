@@ -1,7 +1,7 @@
 # GNU General Public License v3.0
 # Author: weiwei201906
 # Date: 2026-07-01
-add_executable(neoflux_app "src/main.cpp")
+add_executable(neoflux_app "src/main.cpp" "src/MyAppWidget.cpp")
 
 target_link_libraries(neoflux_app
   PRIVATE neoflux_core
