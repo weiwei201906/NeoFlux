@@ -3,11 +3,16 @@
 // Date: 2026-07-01
 
 #include <glog/logging.h>
+
+#include <cstdlib>
 #include <iostream>
+#include <string_view>
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
-  LOG(INFO) << "neoflux App started";
-  std::cout << "neoflux App started\n";
-  return 0;
+
+  constexpr std::string_view kHelloWorld = "Hello, NeoFlux!";
+  LOG(INFO) << kHelloWorld;
+  std::cout << kHelloWorld << '\n';
+  return EXIT_SUCCESS;
 }
