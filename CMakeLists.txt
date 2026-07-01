@@ -15,7 +15,6 @@ endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 include(cmake/Dependencies.cmake)
-find_package(Skia REQUIRED)
 add_subdirectory(framework)
 add_subdirectory(app)
 add_subdirectory(tests)

@@ -1,6 +1,19 @@
 # GNU General Public License v3.0
 # Author: weiwei201906
 # Date: 2026-07-01
+
+# Ensure subproject package configs from thirdparty are visible to other dependencies.
+list(APPEND CMAKE_PREFIX_PATH
+  "${CMAKE_BINARY_DIR}/thirdparty/gflags"
+  "${CMAKE_BINARY_DIR}/thirdparty/googletest"
+)
+set(gflags_DIR "${CMAKE_BINARY_DIR}/thirdparty/gflags" CACHE PATH "Location of gflagsConfig.cmake" FORCE)
+set(GTest_DIR "${CMAKE_BINARY_DIR}/thirdparty/googletest" CACHE PATH "Location of GTestConfig.cmake" FORCE)
+
+# Disable dependency subproject tests to avoid requiring extra external test packages.
+option(BUILD_TESTING "Build tests for dependencies" OFF)
+set(BUILD_TESTING OFF CACHE BOOL "Disable dependency subproject tests" FORCE)
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/gflags/CMakeLists.txt")
   add_subdirectory("${CMAKE_SOURCE_DIR}/thirdparty/gflags" EXCLUDE_FROM_ALL)
 else()
