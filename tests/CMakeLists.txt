@@ -4,7 +4,8 @@
 add_executable(neoflux_test
   "src/test_main.cpp"
   "src/test_placeholder.cpp"
-  "${CMAKE_SOURCE_DIR}/app/src/MyAppWidget.cpp"
+  "src/test_spsc.cpp"
+  "src/test_renderer.cpp"
 )
 
 target_link_libraries(neoflux_test

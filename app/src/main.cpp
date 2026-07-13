@@ -2,12 +2,15 @@
 // Author: weiwei201906
 // Date: 2026-07-01
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string_view>
+#include <thread>
 
 #include <neoflux/core/Bridge.h>
 #include <neoflux/core/BuildContext.h>
@@ -15,9 +18,9 @@
 #include <neoflux/core/Widget.h>
 #include <neoflux/engine/LayoutEngine.h>
 #include <neoflux/engine/RenderEngine.h>
-#include <neoflux/widgets/ButtonWidget.h>
-#include <neoflux/widgets/ContainerWidget.h>
-#include <neoflux/widgets/TextWidget.h>
+#include <neoflux/platform/PlatformWindow.h>
+#include "MyAppWidget.h"
+
 
 namespace {
 
@@ -31,64 +34,50 @@ using neoflux::widgets::ButtonWidget;
 using neoflux::widgets::ContainerWidget;
 using neoflux::widgets::TextWidget;
 
-RenderPipelineConfig parsePipelineConfig(int argc, char** argv) {
-  RenderPipelineConfig config;
-  config.platform = neoflux::engine::platformName();
+DEFINE_string(backend, "skia", "Rendering backend: skia, software, null");
+DEFINE_string(skia_api, "vulkan", "Skia graphics API: opengl, vulkan, software");
+DEFINE_string(platform, std::string{neoflux::engine::platformName()}, "Platform label");
+DEFINE_bool(disable_aa, false, "Disable antialiasing");
+DEFINE_bool(disable_cache, false, "Disable render cache");
+DEFINE_bool(gpu, false, "Prefer a GPU path");
 
-  for (int index = 1; index < argc; ++index) {
-    const std::string_view arg{argv[index]};
-    if (arg == "--backend" && index + 1 < argc) {
-      const std::string_view value{argv[++index]};
-      if (value == "skia") {
-        config.backend = RenderBackend::kSkia;
-      } else if (value == "software") {
-        config.backend = RenderBackend::kSoftware;
-      } else if (value == "null") {
-        config.backend = RenderBackend::kNull;
-      }
-    } else if (arg == "--skia-api" && index + 1 < argc) {
-      const std::string_view value{argv[++index]};
-      if (value == "vulkan") {
-        config.skiaApi = neoflux::engine::SkiaGraphicsApi::kVulkan;
-      } else if (value == "software") {
-        config.skiaApi = neoflux::engine::SkiaGraphicsApi::kSoftware;
-      } else {
-        config.skiaApi = neoflux::engine::SkiaGraphicsApi::kOpenGL;
-      }
-    } else if (arg == "--platform" && index + 1 < argc) {
-      config.platform = argv[++index];
-    } else if (arg == "--disable-aa") {
-      config.antialiasing = false;
-    } else if (arg == "--disable-cache") {
-      config.enableCaching = false;
-    } else if (arg == "--gpu") {
-      config.useGpu = true;
-    }
+RenderPipelineConfig parsePipelineConfig() {
+  RenderPipelineConfig config;
+  config.platform = FLAGS_platform;
+  config.antialiasing = !FLAGS_disable_aa;
+  config.enableCaching = !FLAGS_disable_cache;
+  config.useGpu = FLAGS_gpu;
+
+  if (FLAGS_backend == "skia") {
+    config.backend = RenderBackend::kSkia;
+  } else if (FLAGS_backend == "software") {
+    config.backend = RenderBackend::kSoftware;
+  } else if (FLAGS_backend == "null") {
+    config.backend = RenderBackend::kNull;
+  }
+
+  if (FLAGS_skia_api == "vulkan") {
+    config.skiaApi = neoflux::engine::SkiaGraphicsApi::kVulkan;
+  } else if (FLAGS_skia_api == "software") {
+    config.skiaApi = neoflux::engine::SkiaGraphicsApi::kSoftware;
+  } else {
+    config.skiaApi = neoflux::engine::SkiaGraphicsApi::kOpenGL;
   }
 
   return config;
 }
 
 std::shared_ptr<Widget> buildDemoWidget() {
-  auto root = std::make_shared<ContainerWidget>(ContainerWidget::Direction::Column);
-  auto title = std::make_shared<TextWidget>("Hello, NeoFlux!");
-  auto subtitle = std::make_shared<TextWidget>("Skia pipeline demo");
-  auto button = std::make_shared<ButtonWidget>("Render now");
-
-  button->setOnClick([] { std::cout << "Button clicked" << '\n'; });
-
-  root->addChild(title);
-  root->addChild(subtitle);
-  root->addChild(button);
-  return root;
+  return createAppWidget();
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  const auto config = parsePipelineConfig(argc, argv);
+  const auto config = parsePipelineConfig();
   auto root = buildDemoWidget();
 
   BuildContext context;
@@ -105,15 +94,31 @@ int main(int argc, char** argv) {
   bridge.update(state, context);
   bridge.render(state);
 
+  root->setBounds(0, 0, context.width, context.height);
+  root->layout(context);
+
+  neoflux::platform::PlatformWindow window{"NeoFlux Demo"};
+  window.open();
+  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+  const std::string outputPath = "neoflux_gui.ppm";
+  if (!renderEngine.renderToFile(*root, outputPath, context.width, context.height)) {
+    LOG(WARNING) << "Failed to write raster artifact to '" << outputPath << "'";
+  } else {
+    std::cout << "Rendered raster artifact: " << outputPath << '\n';
+  }
+
   LOG(INFO) << "App configured render backend='" << neoflux::engine::renderBackendName(config.backend)
             << "' on platform='" << config.platform << "'";
   std::cout << "NeoFlux sample: backend=" << neoflux::engine::renderBackendName(config.backend)
             << " skia-api=" << neoflux::engine::skiaApiName(config.skiaApi)
             << " platform=" << config.platform << " antialiasing="
             << (config.antialiasing ? "on" : "off") << '\n';
-  std::cout << "[UI Scene] Header: Hello, NeoFlux!\n";
-  std::cout << "[UI Scene] Body: A composable widget tree with text, buttons, and layout.\n";
-  std::cout << "[UI Scene] Footer: Render pipeline ready for Skia + "
-            << neoflux::engine::skiaApiName(config.skiaApi) << "\n";
+  std::cout << renderEngine.buildTerminalPreview("Hello, NeoFlux!",
+                                                  "Skia pipeline demo",
+                                                  "Render now")
+            << std::flush;
+
+  window.close();
   return EXIT_SUCCESS;
 }

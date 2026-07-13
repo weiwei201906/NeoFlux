@@ -12,6 +12,7 @@ class TextWidget : public core::Widget {
  public:
   explicit TextWidget(std::string_view text = "Text");
   void setText(std::string_view text);
+  const std::string& text() const;
   void render() const override;
 
  private:

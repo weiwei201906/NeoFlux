@@ -24,6 +24,7 @@ void Bridge::update(core::State& state, const core::BuildContext& context) {
 
   state.tick += 1;
   state.dirty = true;
+  lastContext_ = context;
   layoutEngine_->computeLayout(*root_, context);
 }
 
@@ -38,7 +39,7 @@ void Bridge::render(const core::State& state) const {
     return;
   }
 
-  renderEngine_->renderWidget(*root_);
+  renderEngine_->renderWidget(root_, lastContext_);
 }
 
 core::Widget* Bridge::rootWidget() const {

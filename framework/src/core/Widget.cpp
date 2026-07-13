@@ -28,6 +28,13 @@ void Widget::render() const {
   }
 }
 
+void Widget::render(const neoflux::render::RenderContext& context) const {
+  // Default implementation forwards to legacy render()
+  // Derived widgets may override this to use the provided context.
+  (void)context; // unused in default path
+  render();
+}
+
 void Widget::addChild(std::shared_ptr<Widget> child) {
   if (child != nullptr) {
     children_.push_back(std::move(child));

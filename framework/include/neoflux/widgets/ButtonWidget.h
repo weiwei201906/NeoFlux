@@ -14,6 +14,7 @@ class ButtonWidget : public core::Widget {
   explicit ButtonWidget(std::string_view title = "Button");
 
   void setOnClick(std::function<void()> callback);
+  const std::string& title() const;
   void layout(const core::BuildContext& context) override;
   void render() const override;
 

@@ -6,10 +6,14 @@
 namespace neoflux {
 namespace widgets {
 
-ButtonWidget::ButtonWidget(std::string_view title) : title_(title) {}
+ButtonWidget::ButtonWidget(std::string_view title) : core::Widget(title), title_(title) {}
 
 void ButtonWidget::setOnClick(std::function<void()> callback) {
   onClick_ = std::move(callback);
+}
+
+const std::string& ButtonWidget::title() const {
+  return title_;
 }
 
 void ButtonWidget::layout(const core::BuildContext& context) {

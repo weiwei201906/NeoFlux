@@ -28,5 +28,6 @@ class Bridge {
   std::shared_ptr<core::Widget> root_;
   engine::LayoutEngine* layoutEngine_ = nullptr;
   engine::RenderEngine* renderEngine_ = nullptr;
+  core::BuildContext lastContext_;
 };
 } // namespace neoflux

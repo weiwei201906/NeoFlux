@@ -14,6 +14,12 @@ target_include_directories(neoflux_core
 )
 
 find_package(Threads REQUIRED)
+find_package(X11 QUIET)
+
+if(X11_FOUND)
+  target_include_directories(neoflux_core PRIVATE ${X11_INCLUDE_DIR})
+  target_link_libraries(neoflux_core PUBLIC ${X11_LIBRARIES})
+endif()
 
 target_link_libraries(neoflux_core
   PUBLIC glog::glog

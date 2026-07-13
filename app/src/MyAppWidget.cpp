@@ -1,21 +1,18 @@
 #include "MyAppWidget.h"
+
 #include <neoflux/widgets/ButtonWidget.h>
 #include <neoflux/widgets/ContainerWidget.h>
 #include <neoflux/widgets/TextWidget.h>
-#include <glog/logging.h>
-
-namespace {
-void onButtonPressed() {
-  LOG(INFO) << "MyAppWidget: button pressed";
-}
-} // namespace
 
 std::shared_ptr<neoflux::core::Widget> createAppWidget() {
-  auto root = std::make_shared<neoflux::widgets::ContainerWidget>(neoflux::widgets::ContainerWidget::Direction::Column);
-  auto title = std::make_shared<neoflux::widgets::TextWidget>("Welcome to NeoFlux");
-  auto button = std::make_shared<neoflux::widgets::ButtonWidget>("Click Me");
-  button->setOnClick(onButtonPressed);
-  root->addChild(title);
-  root->addChild(button);
+  using neoflux::widgets::ButtonWidget;
+  using neoflux::widgets::ContainerWidget;
+  using neoflux::widgets::TextWidget;
+
+  auto root = std::make_shared<ContainerWidget>(ContainerWidget::Direction::Column);
+  root->emplaceChild<TextWidget>("Hello, NeoFlux!");
+  root->emplaceChild<TextWidget>("Skia pipeline demo");
+  auto button = root->emplaceChild<ButtonWidget>("Render now");
+  button->setOnClick([] { std::cout << "Button clicked" << '\n'; });
   return root;
 }
