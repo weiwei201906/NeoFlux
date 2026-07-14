@@ -8,12 +8,16 @@ function(find_package pkg_name)
   if(pkg_name STREQUAL "gflags")
     set(gflags_FOUND ON PARENT_SCOPE)
     set(gflags_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/thirdparty/gflags/src" PARENT_SCOPE)
-    set(gflags_LIBRARIES gflags PARENT_SCOPE)
-    set(gflags_LIBRARY gflags PARENT_SCOPE)
+    set(gflags_LIBRARIES gflags_nothreads_static PARENT_SCOPE)
+    set(gflags_LIBRARY gflags_nothreads_static PARENT_SCOPE)
     return()
   endif()
   _find_package(${pkg_name} ${ARGN})
 endfunction()
+
+# 全局禁用所有install/export，杜绝多导出集合冲突
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON CACHE INTERNAL "")
+set(CMAKE_SKIP_PACKAGE_EXPORT ON CACHE INTERNAL "")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
