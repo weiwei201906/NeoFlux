@@ -33,8 +33,8 @@ class SPSCQueue {
   const size_t capacity_;
   const size_t mask_;
   std::unique_ptr<T[]> buffer_;
-  std::atomic<size_t> head_{0};
-  std::atomic<size_t> tail_{0};
+  alignas(64) std::atomic<std::size_t> head_{0};
+  alignas(64) std::atomic<std::size_t> tail_{0};
 };
 
 }  // namespace neoflux::util

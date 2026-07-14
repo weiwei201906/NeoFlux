@@ -85,6 +85,6 @@ std::size_t SPSCQueue<T>::capacity() const noexcept {
 }
 
 template class SPSCQueue<int>;
-template class SPSCQueue<neoflux::engine::RenderEngine::RenderRequest>;
+template class SPSCQueue<engine::RenderEngine::RenderRequest>;
 
 }  // namespace neoflux::util

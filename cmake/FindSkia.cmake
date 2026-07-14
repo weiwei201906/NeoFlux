@@ -14,7 +14,7 @@ find_library(Skia_LIBRARY
 )
 
 if(NOT Skia_INCLUDE_DIR OR NOT Skia_LIBRARY)
-  message(FATAL_ERROR "Skia not found. Please run thirdparty/skia/download_skia.sh")
+  message(FATAL_ERROR "Skia not found.")
 endif()
 
 add_library(Skia::Skia STATIC IMPORTED)

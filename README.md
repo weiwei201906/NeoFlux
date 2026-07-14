@@ -3,23 +3,25 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/compiler_support)
 [![License](https://img.shields.io/badge/license-GPLv3-green.svg)](LICENSE)
 
-NeoFlux++ 是一个面向未来桌面与移动应用的轻量级 C++20 UI 框架。它融合了声明式组件模型、布局与渲染分层、线程友好的基础设施和现代 CMake 构建流程，目标是在保持高性能与低复杂度的同时，提供接近 Flutter 风格的组合式开发体验。
-
-## ✨ 项目定位
+NeoFlux 是一个面向未来桌面与移动应用的轻量级 C++20 UI 框架。它融合了声明式组件模型、布局与渲染分层、线程友好的基础设施和现代 CMake 构建流程，目标是在保持高性能与低复杂度的同时，提供接近 Flutter 风格的组合式开发体验。
+> _~~CPP也要有自己的Flutter(bushi~~_ \
+> 本项目仍未实现GUI绘图等关键功能,**无法作为真正的UI框架使用** \
+> 本项目**部分代码由AI生成**,但关键部分(如SPSC Queue为本人手写...) \
+## 项目定位
 
 - **声明式 UI**：通过组合小组件构建复杂界面。
 - **模块化架构**：核心层、引擎层、应用层和测试层分离清晰。
 - **高性能基础设施**：内置线程池、信号量、环形缓冲区和轻量型布局/渲染桥接。
 - **现代构建**：基于 CMake 3.20+，第三方依赖通过子模块与本地构建目录管理。
 
-## 🧱 项目结构
+## 项目结构
 
 - app：应用入口与示例界面。
 - framework：核心框架、布局/渲染引擎、基础 widget 类型。
 - tests：GoogleTest 测试用例。
 - thirdparty：gflags、glog、googletest、Skia、Taitank 等依赖子模块。
 
-## 🚀 快速开始
+## 快速开始
 
 ### 1. 初始化第三方依赖
 
@@ -45,7 +47,7 @@ NeoFlux++ 是一个面向未来桌面与移动应用的轻量级 C++20 UI 框架
 ctest --test-dir build --output-on-failure
 ```
 
-## 🧪 示例：构建一个简单界面
+## 示例：构建一个简单界面
 
 下面的示例展示了如何组合一个容器、标题文本和按钮：
 
@@ -67,18 +69,22 @@ std::shared_ptr<neoflux::core::Widget> buildDemoWidget() {
 }
 ```
 
-## 🛠️ 构建要求
+## 构建要求
 
 - CMake 3.20+
 - C++20 编译器（GCC/Clang/MSVC）
-- 可用的 POSIX 线程环境
 
-## 📌 当前状态
+## 当前状态
 
 当前仓库已经具备可构建的骨架：
-
+> _~~人话:项目处于半烂尾阶段~~_
 - 可构建应用目标 `neoflux_app`
 - 可构建测试目标 `neoflux_test`
 - 支持通过 `neoflux` 头文件路径访问框架 API
 
-后续会继续完善布局/渲染引擎、Skia 集成和更完整的 UI 组件系统。
+## TODO
+- [x] 确定系统架构
+- [x] 实现关键的**SPSC Queue**对接线程
+- [ ] **完成GUI绘图**
+- [ ] 继续完善布局/渲染引擎、Skia 集成和更完整的 UI 组件系统
+- [ ] 下一步**从Skia迁移到TGFX**并**对移动端提供支持**
