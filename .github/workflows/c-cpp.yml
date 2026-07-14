@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: setup-thirdparty
-      run: setup_thirdparty.sh
+      run: scripts/setup_thirdparty.sh
     - name: build
       run: scripts/build.sh
     - name: tests
