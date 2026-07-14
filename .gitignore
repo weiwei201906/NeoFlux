@@ -1,4 +1,5 @@
 # Build output
+build-*/
 build/
 CMakeFiles/
 CMakeCache.txt
@@ -19,3 +20,6 @@ compile_commands.json
 
 # OS files
 .DS_Store
+
+#Thirdparty
+thirdparty/
