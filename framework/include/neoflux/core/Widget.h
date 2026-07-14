@@ -20,6 +20,8 @@ class Widget {
   virtual ~Widget();
 
   void setBounds(int x, int y, int width, int height);
+  void setFlex(std::size_t flex);
+  [[nodiscard]] std::size_t flex() const noexcept;
   virtual void layout(const BuildContext& context);
   virtual void render() const;
   virtual void render(const neoflux::render::RenderContext& context) const;
@@ -45,6 +47,7 @@ class Widget {
   int y_ = 0;
   int width_ = 0;
   int height_ = 0;
+  std::size_t flex_ = 1;
   std::vector<std::shared_ptr<Widget>> children_;
 };
 

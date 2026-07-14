@@ -3,40 +3,51 @@
 #include <algorithm>
 #include <glog/logging.h>
 
-namespace neoflux {
-namespace widgets {
+namespace neoflux::widgets {
 
 ContainerWidget::ContainerWidget(Direction direction) : Widget("container"), direction_(direction) {}
 
 void ContainerWidget::layout(const core::BuildContext& context) {
-  const int childCount = static_cast<int>(children().size());
-  if (childCount <= 0) {
+  const std::size_t childCount = children().size();
+  if (childCount == 0U) {
     LOG(INFO) << "ContainerWidget: no children to layout";
     return;
   }
 
-  const int spacing = 6;
+  constexpr int spacing = 6;
+  std::size_t totalFlex = 0U;
+  for (const auto& child : children()) {
+    totalFlex += std::max<std::size_t>(1U, child->flex());
+  }
+
   if (direction_ == Direction::Row) {
-    const int unitWidth = std::max(1, (width_ - spacing * (childCount - 1)) / childCount);
+    const int availableWidth = std::max(0, width_ - spacing * static_cast<int>(childCount - 1));
     int cursorX = x_;
-    for (int index = 0; index < childCount; ++index) {
-      auto& child = children()[index];
-      child->setBounds(cursorX, y_, unitWidth, height_);
+    for (std::size_t index = 0; index < childCount; ++index) {
+      const auto& child = children()[index];
+      const int childWidth =
+          totalFlex == 0U ? 1
+                          : std::max(1, availableWidth * static_cast<int>(std::max<std::size_t>(1U, child->flex())) /
+                                            static_cast<int>(totalFlex));
+      child->setBounds(cursorX, y_, childWidth, height_);
       child->layout(context);
-      cursorX += unitWidth + spacing;
+      cursorX += childWidth + spacing;
     }
   } else {
-    const int unitHeight = std::max(1, (height_ - spacing * (childCount - 1)) / childCount);
+    const int availableHeight = std::max(0, height_ - spacing * static_cast<int>(childCount - 1));
     int cursorY = y_;
-    for (int index = 0; index < childCount; ++index) {
-      auto& child = children()[index];
-      child->setBounds(x_, cursorY, width_, unitHeight);
+    for (std::size_t index = 0; index < childCount; ++index) {
+      const auto& child = children()[index];
+      const int childHeight =
+          totalFlex == 0U ? 1
+                          : std::max(1, availableHeight * static_cast<int>(std::max<std::size_t>(1U, child->flex())) /
+                                            static_cast<int>(totalFlex));
+      child->setBounds(x_, cursorY, width_, childHeight);
       child->layout(context);
-      cursorY += unitHeight + spacing;
+      cursorY += childHeight + spacing;
     }
   }
-  LOG(INFO) << "ContainerWidget: layout with direction="
-            << (direction_ == Direction::Row ? "row" : "column");
+  LOG(INFO) << "ContainerWidget: layout with direction=" << (direction_ == Direction::Row ? "row" : "column");
 }
 
 void ContainerWidget::render() const {
@@ -44,5 +55,13 @@ void ContainerWidget::render() const {
   Widget::render();
 }
 
-}  // namespace widgets
-}  // namespace neoflux
+void ContainerWidget::render(const neoflux::render::RenderContext& context) const {
+  if (context.out != nullptr) {
+    *context.out << "[container] direction=" << (direction_ == Direction::Row ? "row" : "column") << "\n";
+  }
+  for (const auto& child : children()) {
+    child->render(context);
+  }
+}
+
+}  // namespace neoflux::widgets

@@ -16,6 +16,9 @@ static inline std::shared_ptr<neoflux::core::Widget> createAppWidget() {
   auto title = root->emplaceChild<TextWidget>("Hello, NeoFlux!");
   auto subtitle = root->emplaceChild<TextWidget>("Skia pipeline demo");
   auto button = root->emplaceChild<ButtonWidget>("Render now");
+  title->setFlex(2U);
+  subtitle->setFlex(1U);
+  button->setFlex(1U);
   button->setOnClick([] { /* noop for tests */ });
   (void)title;
   (void)subtitle;

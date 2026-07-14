@@ -14,6 +14,7 @@ class TextWidget : public core::Widget {
   void setText(std::string_view text);
   const std::string& text() const;
   void render() const override;
+  void render(const neoflux::render::RenderContext& context) const override;
 
  private:
   std::string text_;

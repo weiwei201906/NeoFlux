@@ -4,7 +4,7 @@
 #include "neoflux/core/Widget.h"
 #include "neoflux/render/RenderContext.h"
 #include "neoflux/render/Renderer.h"
-#include "neoflux/util/SPSCQueue.h"
+#include "neoflux/utils/SPSCQueue.h"
 
 #include <atomic>
 #include <memory>
@@ -46,17 +46,15 @@ std::string_view skiaApiName(SkiaGraphicsApi api);
 
 class RenderEngine {
  public:
-  explicit RenderEngine(RenderPipelineConfig config = {});
+  explicit RenderEngine(const RenderPipelineConfig& config = {});
   ~RenderEngine();
 
   bool initialize(int width, int height);
-  void setPipelineConfig(RenderPipelineConfig config);
-  const RenderPipelineConfig& pipelineConfig() const;
+  void setPipelineConfig(const RenderPipelineConfig& config);
+  [[nodiscard]] const RenderPipelineConfig& pipelineConfig() const;
   bool renderWidget(std::shared_ptr<core::Widget> root, const core::BuildContext& context);
-  bool renderToFile(const core::Widget& root, const std::string& outputPath, int width,
-                    int height) const;
-  std::string buildTerminalPreview(std::string_view title, std::string_view body,
-                                   std::string_view action) const;
+  [[nodiscard]] const std::string& lastFramePreview() const;
+
 
  private:
   void renderLoop();
@@ -71,6 +69,7 @@ class RenderEngine {
   std::thread renderThread_;
   std::atomic<bool> running_{false};
   ::neoflux::render::RenderContext renderContext_;
+  std::string lastFramePreview_;
 };
 
 } // namespace engine

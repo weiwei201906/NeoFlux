@@ -1,8 +1,7 @@
 #include "neoflux/core/Widget.h"
 #include <vector>
 
-namespace neoflux {
-namespace middleware {
+namespace neoflux::middleware {
 
 std::vector<std::shared_ptr<core::Widget>> flatten(const std::shared_ptr<core::Widget>& root) {
   std::vector<std::shared_ptr<core::Widget>> result;
@@ -18,5 +17,4 @@ std::vector<std::shared_ptr<core::Widget>> flatten(const std::shared_ptr<core::W
   return result;
 }
 
-} // namespace middleware
-} // namespace neoflux
+}  // namespace neoflux::middleware

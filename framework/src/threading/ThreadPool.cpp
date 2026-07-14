@@ -4,13 +4,11 @@
 #include <queue>
 #include <thread>
 
-namespace neoflux {
-namespace threading {
+namespace neoflux::threading {
 
 class ThreadPool {
  public:
-  explicit ThreadPool(std::size_t threadCount = std::thread::hardware_concurrency())
-      : running_(true) {
+  explicit ThreadPool(const std::size_t threadCount = std::thread::hardware_concurrency()) : running_(true) {
     for (std::size_t i = 0; i < threadCount; ++i) {
       workers_.emplace_back([this] {
         while (running_) {
@@ -61,5 +59,4 @@ class ThreadPool {
   bool running_;
 };
 
-} // namespace threading
-} // namespace neoflux
+}  // namespace neoflux::threading

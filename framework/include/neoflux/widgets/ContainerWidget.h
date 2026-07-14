@@ -12,6 +12,7 @@ class ContainerWidget : public core::Widget {
   explicit ContainerWidget(Direction direction = Direction::Column);
   void layout(const core::BuildContext& context) override;
   void render() const override;
+  void render(const neoflux::render::RenderContext& context) const override;
 
  private:
   Direction direction_;

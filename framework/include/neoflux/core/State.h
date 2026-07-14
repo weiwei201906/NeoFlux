@@ -2,13 +2,11 @@
 
 #include <cstdint>
 
-namespace neoflux {
-namespace core {
+namespace neoflux::core {
 
 struct State {
-  std::uint64_t tick = 0;
+  std::size_t tick = 0;
   bool dirty = true;
 };
 
-} // namespace core
-} // namespace neoflux
+}  // namespace neoflux::core

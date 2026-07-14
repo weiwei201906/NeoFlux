@@ -4,8 +4,7 @@
 #include <memory>
 #include <string>
 
-namespace neoflux {
-namespace platform {
+namespace neoflux::platform {
 
 class PlatformWindow {
  public:
@@ -14,7 +13,9 @@ class PlatformWindow {
 
   void open();
   void close();
-  bool isOpen() const;
+  [[nodiscard]] bool isOpen() const;
+  bool pollEvents();
+  void* nativeHandle() const;
 
  private:
   struct Impl;
@@ -24,5 +25,4 @@ class PlatformWindow {
   std::unique_ptr<Impl> impl_;
 };
 
-} // namespace platform
-} // namespace neoflux
+}  // namespace neoflux::platform

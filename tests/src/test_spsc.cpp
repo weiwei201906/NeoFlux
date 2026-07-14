@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include "neoflux/util/SPSCQueue.h"
+#include "neoflux/utils/SPSCQueue.h"
 
 #include <thread>
 

@@ -2,8 +2,7 @@
 
 #include <string>
 
-namespace neoflux {
-namespace plugin {
+namespace neoflux::plugin {
 
 class Plugin {
  public:
@@ -20,5 +19,4 @@ class Plugin {
   std::string name_;
 };
 
-} // namespace plugin
-} // namespace neoflux
+}  // namespace neoflux::plugin

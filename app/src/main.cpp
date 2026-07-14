@@ -90,22 +90,21 @@ int main(int argc, char** argv) {
   RenderEngine renderEngine{config};
   neoflux::Bridge bridge;
 
-  bridge.initialize(root, &layoutEngine, &renderEngine);
-  bridge.update(state, context);
-  bridge.render(state);
-
-  root->setBounds(0, 0, context.width, context.height);
-  root->layout(context);
-
   neoflux::platform::PlatformWindow window{"NeoFlux Demo"};
   window.open();
-  std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
-  const std::string outputPath = "neoflux_gui.ppm";
-  if (!renderEngine.renderToFile(*root, outputPath, context.width, context.height)) {
-    LOG(WARNING) << "Failed to write raster artifact to '" << outputPath << "'";
-  } else {
-    std::cout << "Rendered raster artifact: " << outputPath << '\n';
+  if (!renderEngine.initialize(context.width, context.height)) {
+    LOG(WARNING) << "Failed to start render thread";
+  }
+
+  bridge.initialize(root, &layoutEngine, &renderEngine);
+
+  for (int frame = 0; window.isOpen(); ++frame) {
+    root->setBounds(0, 0, context.width, context.height);
+    layoutEngine.computeLayout(*root, context);
+    bridge.update(state, context);
+    bridge.render(state);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 
   LOG(INFO) << "App configured render backend='" << neoflux::engine::renderBackendName(config.backend)
@@ -114,10 +113,6 @@ int main(int argc, char** argv) {
             << " skia-api=" << neoflux::engine::skiaApiName(config.skiaApi)
             << " platform=" << config.platform << " antialiasing="
             << (config.antialiasing ? "on" : "off") << '\n';
-  std::cout << renderEngine.buildTerminalPreview("Hello, NeoFlux!",
-                                                  "Skia pipeline demo",
-                                                  "Render now")
-            << std::flush;
 
   window.close();
   return EXIT_SUCCESS;

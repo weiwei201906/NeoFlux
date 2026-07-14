@@ -17,6 +17,7 @@ class ButtonWidget : public core::Widget {
   const std::string& title() const;
   void layout(const core::BuildContext& context) override;
   void render() const override;
+  void render(const neoflux::render::RenderContext& context) const override;
 
  private:
   std::string title_;

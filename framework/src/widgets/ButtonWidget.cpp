@@ -3,18 +3,13 @@
 #include <glog/logging.h>
 #include <utility>
 
-namespace neoflux {
-namespace widgets {
+namespace neoflux::widgets {
 
 ButtonWidget::ButtonWidget(std::string_view title) : core::Widget(title), title_(title) {}
 
-void ButtonWidget::setOnClick(std::function<void()> callback) {
-  onClick_ = std::move(callback);
-}
+void ButtonWidget::setOnClick(std::function<void()> callback) { onClick_ = std::move(callback); }
 
-const std::string& ButtonWidget::title() const {
-  return title_;
-}
+const std::string& ButtonWidget::title() const { return title_; }
 
 void ButtonWidget::layout(const core::BuildContext& context) {
   Widget::layout(context);
@@ -28,5 +23,10 @@ void ButtonWidget::render() const {
   }
 }
 
-}  // namespace widgets
-}  // namespace neoflux
+void ButtonWidget::render(const neoflux::render::RenderContext& context) const {
+  if (context.out != nullptr) {
+    *context.out << "[button] " << title_ << "\n";
+  }
+}
+
+}  // namespace neoflux::widgets

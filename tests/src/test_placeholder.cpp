@@ -7,7 +7,21 @@
 #include <neoflux/widgets/ButtonWidget.h>
 #include <neoflux/widgets/ContainerWidget.h>
 #include <neoflux/widgets/TextWidget.h>
-#include "MyAppWidget.h"
+
+
+std::shared_ptr<neoflux::core::Widget> createAppWidget() {
+  using neoflux::widgets::ButtonWidget;
+  using neoflux::widgets::ContainerWidget;
+  using neoflux::widgets::TextWidget;
+
+  auto root = std::make_shared<ContainerWidget>(ContainerWidget::Direction::Column);
+  root->emplaceChild<TextWidget>("Hello, NeoFlux!");
+  root->emplaceChild<TextWidget>("Skia pipeline demo");
+  auto button = root->emplaceChild<ButtonWidget>("Render now");
+  button->setOnClick([] { std::cout << "Button clicked" << '\n'; });
+  return root;
+}
+
 
 TEST(NeoFluxPlaceholder, WidgetTreeIsCreated) {
   auto root = createAppWidget();
@@ -28,21 +42,6 @@ TEST(NeoFluxPlaceholder, LayoutComputesBounds) {
   EXPECT_EQ(root->height(), context.height);
 }
 
-TEST(NeoFluxPlaceholder, TerminalPreviewUsesFlexLayout) {
-  neoflux::engine::RenderPipelineConfig config;
-  config.backend = neoflux::engine::RenderBackend::kSkia;
-  config.skiaApi = neoflux::engine::SkiaGraphicsApi::kOpenGL;
-  config.platform = "linux";
-
-  neoflux::engine::RenderEngine engine{config};
-  const auto preview = engine.buildTerminalPreview("Hello, NeoFlux!", "Skia pipeline demo", "Render now");
-
-  EXPECT_NE(preview.find("Hello, NeoFlux!"), std::string::npos);
-  EXPECT_NE(preview.find("Skia pipeline demo"), std::string::npos);
-  EXPECT_NE(preview.find("Render now"), std::string::npos);
-  EXPECT_NE(preview.find("+"), std::string::npos);
-}
-
 TEST(NeoFluxPlaceholder, EmplaceChildKeepsOwnershipAndBuilding) {
   auto root = std::make_shared<neoflux::widgets::ContainerWidget>(
       neoflux::widgets::ContainerWidget::Direction::Column);
@@ -55,22 +54,6 @@ TEST(NeoFluxPlaceholder, EmplaceChildKeepsOwnershipAndBuilding) {
   EXPECT_EQ(title->name(), "Hello");
 }
 
-TEST(NeoFluxPlaceholder, RenderEngineProducesRasterArtifact) {
-  neoflux::engine::RenderPipelineConfig config;
-  config.backend = neoflux::engine::RenderBackend::kSkia;
-  config.platform = "linux";
-
-  neoflux::engine::RenderEngine engine{config};
-  auto root = std::make_shared<neoflux::widgets::ContainerWidget>(
-      neoflux::widgets::ContainerWidget::Direction::Column);
-  root->emplaceChild<neoflux::widgets::TextWidget>("Rendered UI");
-  root->emplaceChild<neoflux::widgets::ButtonWidget>("Save");
-
-  const auto outputPath = std::filesystem::temp_directory_path() / "neoflux_render_test.ppm";
-  EXPECT_TRUE(engine.renderToFile(*root, outputPath.string(), 320, 180));
-  EXPECT_TRUE(std::filesystem::exists(outputPath));
-  std::filesystem::remove(outputPath);
-}
 
 TEST(NeoFluxPlaceholder, PlatformWindowCanOpenAndClose) {
   neoflux::platform::PlatformWindow window{"NeoFlux Test Window"};

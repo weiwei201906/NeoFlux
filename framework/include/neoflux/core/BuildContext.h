@@ -1,13 +1,11 @@
 #pragma once
 
-namespace neoflux {
-namespace core {
+namespace neoflux::core {
 
 struct BuildContext {
-  int width = 800;
-  int height = 600;
+  int width = 0;
+  int height = 0;
   bool debug = false;
 };
 
-} // namespace core
-} // namespace neoflux
+}  // namespace neoflux::core

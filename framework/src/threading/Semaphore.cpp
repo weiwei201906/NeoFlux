@@ -2,12 +2,11 @@
 #include <mutex>
 #include "neoflux/core/BuildContext.h"
 
-namespace neoflux {
-namespace threading {
+namespace neoflux::threading {
 
 class Semaphore {
  public:
-  explicit Semaphore(int count = 0) : count_(count) {}
+  explicit Semaphore(const int count = 0) : count_(count) {}
 
   void notify() {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -27,5 +26,4 @@ class Semaphore {
   int count_;
 };
 
-} // namespace threading
-} // namespace neoflux
+}  // namespace neoflux::threading

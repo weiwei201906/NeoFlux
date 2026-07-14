@@ -22,7 +22,7 @@ class Bridge {
                   engine::RenderEngine* renderEngine);
   void update(core::State& state, const core::BuildContext& context);
   void render(const core::State& state) const;
-  core::Widget* rootWidget() const;
+  [[nodiscard]] core::Widget* rootWidget() const;
 
  private:
   std::shared_ptr<core::Widget> root_;
