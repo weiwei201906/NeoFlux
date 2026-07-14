@@ -4,6 +4,17 @@
 cmake_minimum_required(VERSION 3.20)
 project(neoflux VERSION 1.0.0 LANGUAGES CXX)
 
+function(find_package pkg_name)
+  if(pkg_name STREQUAL "gflags")
+    set(gflags_FOUND ON PARENT_SCOPE)
+    set(gflags_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/thirdparty/gflags/src" PARENT_SCOPE)
+    set(gflags_LIBRARIES gflags PARENT_SCOPE)
+    set(gflags_LIBRARY gflags PARENT_SCOPE)
+    return()
+  endif()
+  _find_package(${pkg_name} ${ARGN})
+endfunction()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
