@@ -8,9 +8,9 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 repos=(
-  "https://github.com/gflags/gflags.git thirdparty/gflags v2.2.2"
-  "https://github.com/google/glog.git thirdparty/glog v0.7.1"
-  "https://github.com/google/googletest.git thirdparty/googletest v1.14.0"
+  "https://github.com/gflags/gflags.git thirdparty/gflags main"
+  "https://github.com/google/glog.git thirdparty/glog main"
+  "https://github.com/google/googletest.git thirdparty/googletest main"
   "https://github.com/Tencent/Taitank.git thirdparty/taitank main"
 )
 
