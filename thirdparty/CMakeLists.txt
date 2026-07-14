@@ -5,7 +5,6 @@
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/glog/CMakeLists.txt")
   add_subdirectory(glog)
 endif()
-
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gflags/CMakeLists.txt")
   add_subdirectory(gflags)
 endif()
