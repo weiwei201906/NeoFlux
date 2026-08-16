@@ -1,0 +1,46 @@
+# Build directories
+build/
+build-*/
+build-real/
+build-test/
+cmake-build-*/
+out/
+
+# Third-party fetched dependencies
+thirdparty/_deps/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Compiled object files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# Testing
+Testing/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Glog output
+*.log.*
