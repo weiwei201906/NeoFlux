@@ -50,7 +50,8 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 ### 构建
 
 ```bash
-mkdir build && cd build
+mkdir build
+cd build
 cmake .. -G Ninja
 cmake --build .
 ```
