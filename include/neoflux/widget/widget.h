@@ -91,6 +91,22 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Paints this widget and its children onto the given render context.
   virtual void Paint(RenderContext& context);
 
+  // Handles a pointer down event at the given local coordinates.
+  //
+  // Returns true if the event was consumed by this widget. The default
+  // implementation returns false. Subclasses that respond to touch/click
+  // (e.g. Button) override this.
+  virtual bool OnPointerDown(const Point& local_pos);
+
+  // Handles a pointer up event at the given local coordinates.
+  virtual void OnPointerUp(const Point& local_pos);
+
+  // Performs a hit test at the given global coordinates.
+  //
+  // Returns the deepest widget that contains the point, or nullptr if no
+  // widget is hit. Children are tested in reverse order (top-most first).
+  [[nodiscard]] Widget* HitTest(const Point& global_pos);
+
   // Performs Taitank layout rooted at this widget with the given available
   // size, then recursively copies computed bounds back into the widget tree.
   void PerformLayout(float width, float height);

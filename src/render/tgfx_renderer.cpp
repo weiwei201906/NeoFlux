@@ -30,6 +30,7 @@
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include "neoflux/core/types.h"
@@ -217,6 +218,10 @@ void TgfxRenderer::ClipRectImpl(const Rect&) {}
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
+// Optional user-specified font file path. If non-empty, this font is loaded
+// first; otherwise the renderer falls back to platform default fonts.
+DEFINE_string(font_path, "", "Path to a TrueType/OpenType font file (.ttf/.ttc/.otf)");
+
 namespace neoflux {
 namespace {
 
@@ -342,7 +347,7 @@ class GlRendererImpl {
 
   // Called on render thread (context already current). Performs all GL setup.
   bool InitializeGL() {
-    if (gl_ready_) return true;
+    if (gl_ready_) { return true; }
     if (!gl.Load()) { LOG(ERROR) << "Failed to load GL functions"; return false; }
     if (!CreateShaderProgram()) { LOG(ERROR) << "Failed to create shader program"; return false; }
     gl.glGenVertexArrays(1, &vao_);
@@ -514,15 +519,26 @@ class GlRendererImpl {
   }
 
   void LoadFont() {
-    static const char* kFontPaths[] = {
+    // Build the list of font paths to try. User-specified --font_path takes
+    // priority, followed by platform default fonts.
+    std::vector<std::string> font_paths;
+    if (!FLAGS_font_path.empty()) {
+      font_paths.push_back(FLAGS_font_path);
+    }
+    static const char* kDefaultFontPaths[] = {
       "C:/Windows/Fonts/msyh.ttc",
       "C:/Windows/Fonts/simhei.ttf",
       "C:/Windows/Fonts/segoeui.ttf",
       "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
       "/System/Library/Fonts/PingFang.ttc",
+      "/System/Library/Fonts/Helvetica.ttc",
     };
-    for (const char* path : kFontPaths) {
-      FILE* f = fopen(path, "rb");
+    for (const char* p : kDefaultFontPaths) {
+      font_paths.emplace_back(p);
+    }
+    for (const auto& path : font_paths) {
+      FILE* f = fopen(path.c_str(), "rb");
       if (!f) continue;
       fseek(f, 0, SEEK_END);
       long size = ftell(f);

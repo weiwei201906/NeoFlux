@@ -58,6 +58,12 @@ class Button : public Widget {
 
   void Paint(RenderContext& context) override;
 
+  // Handles pointer down: sets pressed state if the point is inside.
+  bool OnPointerDown(const Point& local_pos) override;
+
+  // Handles pointer up: triggers callback if released inside the button.
+  void OnPointerUp(const Point& local_pos) override;
+
  private:
   // Returns true if the given point is inside the button bounds.
   [[nodiscard]] bool ContainsPoint(const Point& point) const noexcept;

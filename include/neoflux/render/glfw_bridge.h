@@ -8,14 +8,27 @@
 #ifndef NEOFLUX_RENDER_GLFW_BRIDGE_H_
 #define NEOFLUX_RENDER_GLFW_BRIDGE_H_
 
+#include <functional>
 #include <string_view>
 
 #include "neoflux/core/noncopyable.h"
+#include "neoflux/core/types.h"
 
 // Forward declaration of GLFW window to avoid including GLFW headers here.
 struct GLFWwindow;
 
 namespace neoflux {
+
+// Mouse button identifiers (matches GLFW constants).
+enum class MouseButton : std::uint8_t { kLeft = 0, kRight = 1, kMiddle = 2 };
+
+// Input action identifiers (matches GLFW constants).
+enum class InputAction : std::uint8_t { kPress = 1, kRelease = 0, kRepeat = 2 };
+
+// Callback type for input events. Receives button, action, and cursor position
+// in window coordinates (pixels, origin at top-left).
+using InputEventCallback =
+    std::function<void(MouseButton button, InputAction action, const Point& pos)>;
 
 // Desktop window and input bridge using GLFW.
 class GlfwBridge : public NonCopyable {
@@ -53,6 +66,9 @@ class GlfwBridge : public NonCopyable {
   // Releases the OpenGL context from the calling thread.
   void ReleaseContext();
 
+  // Sets the callback invoked for mouse button events.
+  void SetInputCallback(InputEventCallback callback) noexcept;
+
  private:
   static void ErrorCallback(int error, const char* description);
   static void FramebufferSizeCallback(GLFWwindow* window, int width,
@@ -65,6 +81,9 @@ class GlfwBridge : public NonCopyable {
 
   GLFWwindow* window_;
   bool initialized_;
+  InputEventCallback input_callback_;
+  double last_cursor_x_ = 0.0;
+  double last_cursor_y_ = 0.0;
 };
 
 }  // namespace neoflux

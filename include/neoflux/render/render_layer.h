@@ -56,6 +56,9 @@ class RenderLayer : public NonCopyable {
   // Polls window events (desktop only; called from UI thread).
   void PollEvents();
 
+  // Returns the GLFW bridge (desktop only, may be nullptr before Start).
+  [[nodiscard]] GlfwBridge* GetGlfwBridge() const noexcept;
+
  private:
   // Main render loop. Runs on the render thread.
   void RenderLoop();

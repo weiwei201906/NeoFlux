@@ -135,6 +135,10 @@ void* GlfwBridge::GetGlContext() const noexcept {
   return static_cast<void*>(window_);
 }
 
+void GlfwBridge::SetInputCallback(InputEventCallback callback) noexcept {
+  input_callback_ = std::move(callback);
+}
+
 void GlfwBridge::ErrorCallback(int error, const char* description) {
   LOG(ERROR) << "GLFW error " << error << ": "
              << (description != nullptr ? description : "unknown");
@@ -150,14 +154,27 @@ void GlfwBridge::KeyCallback(GLFWwindow* /*window*/, int key,
   VLOG(2) << "Key event: key=" << key << " action=" << action;
 }
 
-void GlfwBridge::MouseButtonCallback(GLFWwindow* /*window*/, int button,
+void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
                                      int action, int /*mods*/) {
-  VLOG(2) << "Mouse button: button=" << button << " action=" << action;
+  auto* user_data =
+      static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
+  if (user_data == nullptr || user_data->bridge == nullptr) return;
+  auto* bridge = user_data->bridge;
+  if (!bridge->input_callback_) return;
+  const auto btn = static_cast<MouseButton>(button);
+  const auto act = static_cast<InputAction>(action);
+  bridge->input_callback_(btn, act,
+                          {.x = static_cast<float>(bridge->last_cursor_x_),
+                           .y = static_cast<float>(bridge->last_cursor_y_)});
 }
 
-void GlfwBridge::CursorPosCallback(GLFWwindow* /*window*/, double xpos,
+void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,
                                    double ypos) {
-  VLOG(3) << "Cursor pos: " << xpos << ", " << ypos;
+  auto* user_data =
+      static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
+  if (user_data == nullptr || user_data->bridge == nullptr) return;
+  user_data->bridge->last_cursor_x_ = xpos;
+  user_data->bridge->last_cursor_y_ = ypos;
 }
 
 }  // namespace neoflux

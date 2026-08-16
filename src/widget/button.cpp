@@ -111,6 +111,14 @@ void Button::HandleRelease(const Point& local_pos) {
   MarkNeedsBuild();
 }
 
+bool Button::OnPointerDown(const Point& local_pos) {
+  return HandlePress(local_pos);
+}
+
+void Button::OnPointerUp(const Point& local_pos) {
+  HandleRelease(local_pos);
+}
+
 Size Button::OnMeasure(float width, int width_mode, float height,
                        int height_mode) {
   const float label_width = EstimateLabelWidth(label_, font_size_);

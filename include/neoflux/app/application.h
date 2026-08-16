@@ -15,6 +15,7 @@
 #include "neoflux/app/event_loop.h"
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
+#include "neoflux/render/glfw_bridge.h"
 #include "neoflux/render/render_context.h"
 #include "neoflux/render/render_layer.h"
 #include "neoflux/widget/widget.h"
@@ -71,11 +72,14 @@ class Application : public NonCopyable {
   void PaintAndSubmit();
   void BuildWidgetRecursive(Widget& widget, BuildContext& context);
   void PaintWidgetRecursive(Widget& widget, RenderContext& context);
+  void DispatchPointerEvent(MouseButton button, InputAction action,
+                            const Point& pos);
 
   EventLoop event_loop_{};
   std::unique_ptr<RenderLayer> render_layer_ = nullptr;
   std::vector<std::shared_ptr<Widget>> navigation_stack_{};
   RenderContext render_context_{};
+  Widget* pressed_widget_ = nullptr;  // Not owned. Widget receiving pointer down.
   int window_width_ = 800;
   int window_height_ = 600;
   bool initialized_ = false;

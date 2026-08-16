@@ -149,6 +149,10 @@ void RenderLayer::PollEvents() {
 #endif
 }
 
+GlfwBridge* RenderLayer::GetGlfwBridge() const noexcept {
+  return glfw_bridge_.get();
+}
+
 void RenderLayer::RenderLoop() {
   LOG(INFO) << "Render thread started";
 

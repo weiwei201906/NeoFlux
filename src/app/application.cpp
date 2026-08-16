@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -24,7 +25,11 @@
 DEFINE_int32(target_fps, 60, "Target frames per second for the event loop.");
 DEFINE_bool(verbose_logging, false,
             "Enable verbose (VLOG) logging output.");
-// logtostderr and log_dir are built-in glog flags; declare (not define) them.
+// logtostderr and log_dir are glog built-in flag variables. glog defines them
+// but (when built without gflags integration) does not register them with the
+// gflags command-line parser. We DECLARE them here to access the variables,
+// and pre-scan argv in Init() to handle --logtostderr / --log_dir=... manually
+// before gflags parses the remaining flags.
 DECLARE_bool(logtostderr);
 DECLARE_string(log_dir);
 
@@ -37,7 +42,37 @@ Application::~Application() { Stop(); }
 bool Application::Init(int argc, char** argv, int window_width,
                        int window_height, std::string_view window_title,
                        void* platform_surface) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  // glog (when built without gflags integration) defines FLAGS_logtostderr and
+  // FLAGS_log_dir as variables but does not register them with the gflags
+  // command-line parser. Pre-scan argv to handle these two flags manually,
+  // then strip them from argv before gflags parses the rest.
+  std::vector<char*> filtered_argv;
+  filtered_argv.reserve(static_cast<std::size_t>(argc));
+  for (int i = 0; i < argc; ++i) {
+    std::string_view arg(argv[i]);
+    if (arg == "--logtostderr" || arg == "-logtostderr") {
+      FLAGS_logtostderr = true;
+    } else if (arg == "--nologtostderr" || arg == "-nologtostderr") {
+      FLAGS_logtostderr = false;
+    } else if (arg.substr(0, 10) == "--log_dir=" || arg.substr(0, 9) == "-log_dir=") {
+      const auto eq = arg.find('=');
+      if (eq != std::string_view::npos) {
+        FLAGS_log_dir = std::string(arg.substr(eq + 1));
+      }
+    } else if ((arg == "--log_dir" || arg == "-log_dir") && i + 1 < argc) {
+      FLAGS_log_dir = argv[++i];
+    } else {
+      filtered_argv.push_back(argv[i]);
+    }
+  }
+  int filtered_argc = static_cast<int>(filtered_argv.size());
+  char** filtered_argv_ptr = filtered_argv.data();
+
+  // Initialize glog first so its built-in flags are accessible. Suppress
+  // initial logging until we have configured the log destination.
+  FLAGS_logtostderr = true;
+  google::InitGoogleLogging(argv[0]);
+  gflags::ParseCommandLineFlags(&filtered_argc, &filtered_argv_ptr, true);
 
   // Configure glog logging destination. Default is file-based logging to
   // --log_dir (defaults to ./logs); --logtostderr redirects all output to
@@ -56,7 +91,6 @@ bool Application::Init(int argc, char** argv, int window_width,
 
   // Disable log buffering so messages appear immediately.
   FLAGS_logbuflevel = -1;
-  google::InitGoogleLogging(argv[0]);
 
   if (FLAGS_verbose_logging) {
     google::SetStderrLogging(google::GLOG_INFO);
@@ -80,6 +114,14 @@ bool Application::Init(int argc, char** argv, int window_width,
   }
 
   event_loop_.SetTargetFps(FLAGS_target_fps);
+
+  // Wire up input events from the GLFW bridge to the widget tree.
+  if (auto* bridge = render_layer_->GetGlfwBridge(); bridge != nullptr) {
+    bridge->SetInputCallback([this](MouseButton button, InputAction action,
+                                    const Point& pos) {
+      DispatchPointerEvent(button, action, pos);
+    });
+  }
 
   initialized_ = true;
   LOG(INFO) << "NeoFlux Application initialized successfully";
@@ -237,6 +279,31 @@ void Application::PaintAndSubmit() {
 void Application::PaintWidgetRecursive(Widget& widget,
                                        RenderContext& context) {
   widget.Paint(context);
+}
+
+void Application::DispatchPointerEvent(MouseButton button, InputAction action,
+                                       const Point& pos) {
+  if (button != MouseButton::kLeft) return;
+  Widget* root = GetRootWidget();
+  if (root == nullptr) return;
+
+  if (action == InputAction::kPress) {
+    Widget* hit = root->HitTest(pos);
+    if (hit != nullptr) {
+      const Point local{.x = pos.x - hit->GetBounds().x,
+                        .y = pos.y - hit->GetBounds().y};
+      if (hit->OnPointerDown(local)) {
+        pressed_widget_ = hit;
+      }
+    }
+  } else if (action == InputAction::kRelease) {
+    if (pressed_widget_ != nullptr) {
+      const Point local{.x = pos.x - pressed_widget_->GetBounds().x,
+                        .y = pos.y - pressed_widget_->GetBounds().y};
+      pressed_widget_->OnPointerUp(local);
+      pressed_widget_ = nullptr;
+    }
+  }
 }
 
 }  // namespace neoflux
