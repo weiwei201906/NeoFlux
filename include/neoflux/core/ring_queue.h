@@ -32,9 +32,10 @@ inline constexpr std::size_t kCacheLineSize = 64;
 // Template parameters:
 //   T - Element type; must be movable (or copyable).
 //
-// The capacity is specified at construction time. One slot is reserved
-// for the full/empty distinction, so the maximum number of storable
-// elements is (capacity - 1).
+// The requested capacity is rounded up to the next power of two so that
+// index wrapping can use a single bitwise AND (& mask_) instead of an
+// integer modulo (%). One slot is reserved for the full/empty distinction,
+// so the maximum number of storable elements is (capacity - 1).
 //
 // Thread safety: Exactly one producer thread and one consumer thread.
 template <typename T>
@@ -43,7 +44,8 @@ class SpscRingQueue {
   using value_type = T;
   using size_type = std::size_t;
 
-  // Constructs a queue with the given capacity. capacity must be >= 2.
+  // Constructs a queue with the given capacity (rounded up to power of two).
+  // capacity must be >= 2.
   explicit SpscRingQueue(std::size_t capacity);
   ~SpscRingQueue();
 
@@ -78,8 +80,11 @@ class SpscRingQueue {
   // Raw storage for elements (allocated to capacity * sizeof(T)).
   std::vector<std::byte> storage_;
 
-  // Requested capacity (number of slots including the reserved one).
+  // Actual capacity (rounded up to power of two, including reserved slot).
   std::size_t capacity_;
+
+  // Bitmask for index wrapping: capacity_ - 1 (all lower bits set).
+  std::size_t mask_;
 
   // Producer index (cache-line aligned).
   alignas(detail::kCacheLineSize) std::atomic<std::size_t> head_;

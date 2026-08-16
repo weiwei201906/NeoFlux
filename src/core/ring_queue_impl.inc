@@ -11,6 +11,7 @@
 // =============================================================================
 #pragma once
 
+#include <bit>
 #include <cassert>
 #include <memory>
 #include <new>
@@ -23,14 +24,22 @@ namespace neoflux {
 
 template <typename T>
 SpscRingQueue<T>::SpscRingQueue(std::size_t capacity)
-    : storage_(capacity * sizeof(T)),
-      capacity_(capacity),
+    : storage_(),
+      capacity_(0),
+      mask_(0),
       head_(0),
       tail_(0) {
   assert(capacity >= 2 && "SpscRingQueue capacity must be at least 2");
   static_assert(std::is_move_constructible_v<T> ||
                     std::is_copy_constructible_v<T>,
                 "T must be move-constructible or copy-constructible");
+
+  // Round up to the next power of two so that index wrapping can use a
+  // single bitwise AND (& mask_) instead of an integer modulo (%).
+  // Integer division is ~20-40 cycles; bitwise AND is 1 cycle.
+  capacity_ = std::bit_ceil(capacity);
+  mask_ = capacity_ - 1;
+  storage_.resize(capacity_ * sizeof(T));
 }
 
 template <typename T>
@@ -44,7 +53,7 @@ SpscRingQueue<T>::~SpscRingQueue() {
 template <typename T>
 bool SpscRingQueue<T>::TryPush(T value) {
   const std::size_t head = head_.load(std::memory_order_relaxed);
-  const std::size_t next_head = (head + 1) % capacity_;
+  const std::size_t next_head = (head + 1) & mask_;
 
   if (next_head == tail_.load(std::memory_order_acquire)) {
     return false;
@@ -65,7 +74,7 @@ bool SpscRingQueue<T>::TryPop(T& out) {
 
   out = std::move(*Slot(tail));
   std::destroy_at(Slot(tail));
-  tail_.store((tail + 1) % capacity_, std::memory_order_release);
+  tail_.store((tail + 1) & mask_, std::memory_order_release);
   return true;
 }
 
@@ -78,14 +87,14 @@ bool SpscRingQueue<T>::Empty() const noexcept {
 template <typename T>
 bool SpscRingQueue<T>::Full() const noexcept {
   const std::size_t head = head_.load(std::memory_order_acquire);
-  return ((head + 1) % capacity_) == tail_.load(std::memory_order_acquire);
+  return ((head + 1) & mask_) == tail_.load(std::memory_order_acquire);
 }
 
 template <typename T>
 std::size_t SpscRingQueue<T>::Size() const noexcept {
   const std::size_t head = head_.load(std::memory_order_acquire);
   const std::size_t tail = tail_.load(std::memory_order_acquire);
-  return (head - tail) % capacity_;
+  return (head - tail) & mask_;
 }
 
 template <typename T>
@@ -95,7 +104,8 @@ std::size_t SpscRingQueue<T>::CapacityValue() const noexcept {
 
 template <typename T>
 T* SpscRingQueue<T>::Slot(std::size_t index) noexcept {
-  return std::launder(reinterpret_cast<T*>(storage_.data() + (index * sizeof(T))));
+  return std::launder(
+      reinterpret_cast<T*>(storage_.data() + (index * sizeof(T))));
 }
 
 }  // namespace neoflux
