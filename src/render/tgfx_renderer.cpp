@@ -519,18 +519,28 @@ class GlRendererImpl {
   }
 
   void LoadFont() {
-    // Build the list of font paths to try. User-specified --font_path takes
-    // priority, followed by platform default fonts.
+    // Build the list of font paths to try. Priority order:
+    //   1. User-specified --font_path
+    //   2. Bundled fonts in thirdparty/fonts/
+    //   3. Platform system fonts (TTF preferred over TTC for stb_truetype)
     std::vector<std::string> font_paths;
     if (!FLAGS_font_path.empty()) {
       font_paths.push_back(FLAGS_font_path);
     }
     static const char* kDefaultFontPaths[] = {
-      "C:/Windows/Fonts/msyh.ttc",
+      // Bundled fonts (place .ttf/.otf files here for out-of-the-box CJK support).
+      "thirdparty/fonts/NotoSansSC-Regular.ttf",
+      "thirdparty/fonts/SourceHanSansSC-Regular.otf",
+      // Windows system fonts (TTF first, TTC as fallback).
       "C:/Windows/Fonts/simhei.ttf",
+      "C:/Windows/Fonts/simsun.ttc",
+      "C:/Windows/Fonts/msyh.ttc",
       "C:/Windows/Fonts/segoeui.ttf",
+      // Linux system fonts.
       "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
       "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+      // macOS system fonts.
       "/System/Library/Fonts/PingFang.ttc",
       "/System/Library/Fonts/Helvetica.ttc",
     };

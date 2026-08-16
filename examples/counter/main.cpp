@@ -35,12 +35,11 @@ class CounterWidget : public StatefulWidget {
 class CounterState : public State<StatefulWidget> {
  public:
   [[nodiscard]] std::shared_ptr<Widget> Build(BuildContext& /*context*/) override {
-    auto root = std::make_shared<Container>();
-    root->SetFlexDirection(FlexDirection::kColumn)
+    auto col = std::make_shared<Container>();
+    col->SetFlexDirection(FlexDirection::kColumn)
         .SetJustifyContent(HAlign::kCenter)
         .SetAlignItems(VAlign::kCenter)
-        .SetPadding({.left = 40.0F, .top = 40.0F, .right = 40.0F, .bottom = 40.0F})
-        .SetBackgroundColor({.r = 255, .g = 255, .b = 255, .a = 255});
+        .SetPadding({.left = 40.0F, .top = 40.0F, .right = 40.0F, .bottom = 40.0F});
 
     auto count_text = std::make_shared<Text>("Count: " + std::to_string(count_));
     count_text->SetFontSize(48.0F)
@@ -67,9 +66,9 @@ class CounterState : public State<StatefulWidget> {
     button_row->AddChild(decrement);
     button_row->AddChild(increment);
 
-    root->AddChild(count_text);
-    root->AddChild(button_row);
-    return root;
+    col->AddChild(count_text);
+    col->AddChild(button_row);
+    return col;
   }
 
  private:
@@ -80,8 +79,15 @@ std::unique_ptr<State<StatefulWidget>> CounterWidget::CreateState() {
   return std::make_unique<CounterState>();
 }
 
+// Root page: a full-window Container that centers the CounterWidget.
 std::shared_ptr<Widget> BuildCounterPage(BuildContext& /*context*/) {
-  return std::make_shared<CounterWidget>();
+  auto root = std::make_shared<Container>();
+  root->SetFlexDirection(FlexDirection::kColumn)
+      .SetJustifyContent(HAlign::kCenter)
+      .SetAlignItems(VAlign::kCenter)
+      .SetBackgroundColor({.r = 255, .g = 255, .b = 255, .a = 255});
+  root->AddChild(std::make_shared<CounterWidget>());
+  return root;
 }
 
 }  // namespace
