@@ -47,6 +47,12 @@ class GlfwBridge : public NonCopyable {
   // Returns the OpenGL context (for tgfx initialization).
   [[nodiscard]] void* GetGlContext() const noexcept;
 
+  // Makes the OpenGL context current on the calling thread.
+  void MakeContextCurrent();
+
+  // Releases the OpenGL context from the calling thread.
+  void ReleaseContext();
+
  private:
   static void ErrorCallback(int error, const char* description);
   static void FramebufferSizeCallback(GLFWwindow* window, int width,

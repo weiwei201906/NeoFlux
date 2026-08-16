@@ -6,6 +6,7 @@
 
 #include "neoflux/app/application.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -20,8 +21,12 @@
 #include "neoflux/widget/route_registry.h"
 #include "neoflux/widget/widget.h"
 
-DEFINE_int32(target_fps, 60, "Target frames per second");
-DEFINE_bool(verbose_logging, false, "Enable verbose logging");
+DEFINE_int32(target_fps, 60, "Target frames per second for the event loop.");
+DEFINE_bool(verbose_logging, false,
+            "Enable verbose (VLOG) logging output.");
+// logtostderr and log_dir are built-in glog flags; declare (not define) them.
+DECLARE_bool(logtostderr);
+DECLARE_string(log_dir);
 
 namespace neoflux {
 
@@ -34,13 +39,35 @@ bool Application::Init(int argc, char** argv, int window_width,
                        void* platform_surface) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
+  // Configure glog logging destination. Default is file-based logging to
+  // --log_dir (defaults to ./logs); --logtostderr redirects all output to
+  // stderr (useful for debugging and CI environments).
+  if (!FLAGS_logtostderr) {
+    if (FLAGS_log_dir.empty()) {
+      FLAGS_log_dir = "./logs";
+    }
+    std::error_code ec;
+    std::filesystem::create_directories(FLAGS_log_dir, ec);
+    if (ec) {
+      // Fall back to stderr if the log directory cannot be created.
+      FLAGS_logtostderr = true;
+    }
+  }
+
+  // Disable log buffering so messages appear immediately.
+  FLAGS_logbuflevel = -1;
   google::InitGoogleLogging(argv[0]);
+
   if (FLAGS_verbose_logging) {
     google::SetStderrLogging(google::GLOG_INFO);
+    FLAGS_v = 1;
   }
 
   LOG(INFO) << "NeoFlux Application initializing";
   LOG(INFO) << "Window: " << window_width << "x" << window_height;
+  if (!FLAGS_logtostderr) {
+    LOG(INFO) << "Logging to directory: " << FLAGS_log_dir;
+  }
 
   window_width_ = window_width;
   window_height_ = window_height;
@@ -161,20 +188,25 @@ void Application::LayoutWidgetTree() {
   if (root == nullptr) {
     return;
   }
-
-  LayoutConstraints constraints;
-  constraints.min_width = 0.0F;
-  constraints.max_width = static_cast<float>(window_width_);
-  constraints.min_height = 0.0F;
-  constraints.max_height = static_cast<float>(window_height_);
-
-  const Size root_size = LayoutWidgetRecursive(*root, constraints);
-  root->SetBounds({.x = 0.0F, .y = 0.0F, .width = root_size.width, .height = root_size.height});
-}
-
-Size Application::LayoutWidgetRecursive(
-    Widget& widget, const LayoutConstraints& constraints) {
-  return widget.Layout(constraints);
+  // Taitank flex layout: the root fills the entire window. PerformLayout
+  // calls taitank::DoLayout on the root node and recursively copies
+  // computed bounds back into the widget tree.
+  root->PerformLayout(static_cast<float>(window_width_),
+                      static_cast<float>(window_height_));
+  if (VLOG_IS_ON(1)) {
+    std::string children_info;
+    for (const auto& child : root->GetChildren()) {
+      if (child) {
+        const auto& b = child->GetBounds();
+        children_info += "[" + std::to_string(static_cast<int>(b.x)) + "," +
+                         std::to_string(static_cast<int>(b.y)) + " " +
+                         std::to_string(static_cast<int>(b.width)) + "x" +
+                         std::to_string(static_cast<int>(b.height)) + "] ";
+      }
+    }
+    VLOG(1) << "Layout: root " << root->GetBounds().width << "x"
+            << root->GetBounds().height << ", children: " << children_info;
+  }
 }
 
 void Application::PaintAndSubmit() {
@@ -185,13 +217,20 @@ void Application::PaintAndSubmit() {
 
   render_context_.Clear();
 
+  // Frame boundary: kBeginFrame tells the render thread to start a new frame.
+  render_context_.AppendCommand(RenderCommand::MakeBeginFrame());
+
   render_context_.Save();
   PaintWidgetRecursive(*root, render_context_);
   render_context_.Restore();
 
+  // Frame boundary: kEndFrame tells the render thread to submit and swap.
+  render_context_.AppendCommand(RenderCommand::MakeEndFrame());
+
   const auto& commands = render_context_.GetCommands();
   if (!commands.empty()) {
-    render_layer_->Submit(commands.data(), commands.size());
+    const auto submitted = render_layer_->Submit(commands.data(), commands.size());
+    VLOG(1) << "Submitted " << submitted << "/" << commands.size() << " render commands";
   }
 }
 

@@ -20,10 +20,9 @@ TEST(RenderCommandTest, MakeDrawRect) {
   auto cmd = RenderCommand::MakeDrawRect(rect, color);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kDrawRect);
-  const auto& payload = std::get<DrawRectCommand>(cmd.payload);
-  EXPECT_FLOAT_EQ(payload.rect.x, 10.0F);
-  EXPECT_FLOAT_EQ(payload.rect.width, 100.0F);
-  EXPECT_EQ(payload.color.r, 255);
+  EXPECT_FLOAT_EQ(cmd.rect.x, 10.0F);
+  EXPECT_FLOAT_EQ(cmd.rect.width, 100.0F);
+  EXPECT_EQ(cmd.color.r, 255);
 }
 
 TEST(RenderCommandTest, MakeDrawText) {
@@ -32,9 +31,8 @@ TEST(RenderCommandTest, MakeDrawText) {
       Color{.r = 0, .g = 0, .b = 0, .a = 255}, 16.0F);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kDrawText);
-  const auto& payload = std::get<DrawTextCommand>(cmd.payload);
-  EXPECT_EQ(payload.text, "Hello");
-  EXPECT_FLOAT_EQ(payload.font_size, 16.0F);
+  EXPECT_EQ(cmd.text, "Hello");
+  EXPECT_FLOAT_EQ(cmd.font_size, 16.0F);
 }
 
 TEST(RenderCommandTest, MakeSaveRestore) {
@@ -49,9 +47,8 @@ TEST(RenderCommandTest, MakeTranslate) {
   auto cmd = RenderCommand::MakeTranslate(10.0F, 20.0F);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kTranslate);
-  const auto& payload = std::get<TranslateCommand>(cmd.payload);
-  EXPECT_FLOAT_EQ(payload.dx, 10.0F);
-  EXPECT_FLOAT_EQ(payload.dy, 20.0F);
+  EXPECT_FLOAT_EQ(cmd.translate_x, 10.0F);
+  EXPECT_FLOAT_EQ(cmd.translate_y, 20.0F);
 }
 
 TEST(RenderCommandTest, MakeClipRect) {
@@ -59,8 +56,7 @@ TEST(RenderCommandTest, MakeClipRect) {
   auto cmd = RenderCommand::MakeClipRect(rect);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kClipRect);
-  const auto& payload = std::get<ClipRectCommand>(cmd.payload);
-  EXPECT_FLOAT_EQ(payload.rect.width, 50.0F);
+  EXPECT_FLOAT_EQ(cmd.rect.width, 50.0F);
 }
 
 TEST(RenderCommandTest, MakeBeginEndFrame) {

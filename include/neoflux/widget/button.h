@@ -52,7 +52,10 @@ class Button : public Widget {
   // Handles a release event at the given local coordinates.
   void HandleRelease(const Point& local_pos);
 
-  Size Layout(const LayoutConstraints& constraints) override;
+  // Reports intrinsic button size to the Taitank layout engine.
+  [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
+                               int height_mode) override;
+
   void Paint(RenderContext& context) override;
 
  private:

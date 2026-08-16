@@ -44,7 +44,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(NEOFLUX_BUILD_TESTS    "Build unit tests"         ON)
 option(NEOFLUX_BUILD_EXAMPLES "Build example applications" ON)
 option(NEOFLUX_ENABLE_CLANG_TIDY "Enable clang-tidy checks" ON)
-option(NEOFLUX_USE_TGFX      "Enable tgfx rendering backend (requires depsync + full tgfx deps)" OFF)
+option(NEOFLUX_USE_TGFX      "Use tgfx rendering backend (requires MSVC on Windows)" OFF)
 
 # ---------------------------------------------------------------------------
 # Third-party dependencies
@@ -99,20 +99,32 @@ target_include_directories(neoflux
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/thirdparty
 )
+
+# OpenGL is required for both the GLFW bridge and the OpenGL fallback renderer.
+find_package(OpenGL REQUIRED)
 
 target_link_libraries(neoflux
   PUBLIC
     taitank
     glog::glog
     gflags
+    OpenGL::GL
 )
 
-# tgfx is optional; when disabled, tgfx_renderer.cpp compiles a stub via
-# __has_include detection.
+# tgfx is an optional rendering backend. When enabled, tgfx performs all
+# rendering; when disabled, a built-in OpenGL renderer (shader + VBO +
+# stb_truetype for UTF-8 text) is used. GLFW remains only a window/context
+# bridge in both cases.
 if(NEOFLUX_USE_TGFX AND TARGET tgfx)
-  target_link_libraries(neoflux PUBLIC tgfx)
-  target_compile_definitions(neoflux PUBLIC NEOFLUX_HAVE_TGFX=1)
+  target_link_libraries(neoflux PRIVATE tgfx)
+  target_compile_definitions(neoflux PRIVATE NEOFLUX_HAVE_TGFX=1)
+  target_include_directories(neoflux PRIVATE
+    ${tgfx_SOURCE_DIR}/src
+    ${tgfx_SOURCE_DIR}/include
+  )
 endif()
 
 # GLFW is only available on desktop platforms.

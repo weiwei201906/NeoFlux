@@ -54,6 +54,9 @@ class RenderContext {
   // Returns the number of recorded commands.
   [[nodiscard]] std::size_t GetCommandCount() const noexcept;
 
+  // Appends a pre-built render command (used for frame boundaries).
+  void AppendCommand(RenderCommand command);
+
  private:
   std::vector<RenderCommand> commands_;
 };

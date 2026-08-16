@@ -2,7 +2,9 @@
 // NeoFlux - render_command.h
 //
 // Render commands are the FIFO messages passed from the Application layer
-// to the Render layer via the SPSC ring queue.
+// to the Render layer via the SPSC ring queue. A flat struct is used (rather
+// than std::variant) for cache efficiency in the render hot path; the `type`
+// field discriminates which payload fields are valid.
 // All factory method implementations are in render_command.cpp.
 // =============================================================================
 
@@ -11,7 +13,6 @@
 
 #include <cstdint>
 #include <string>
-#include <variant>
 
 #include "neoflux/core/types.h"
 
@@ -30,37 +31,18 @@ enum class RenderCommandType : uint8_t {
   kEndFrame,
 };
 
-// Command payload: draw a filled rectangle.
-struct DrawRectCommand {
-  Rect rect;
-  Color color;
-};
-
-// Command payload: draw text at a position.
-struct DrawTextCommand {
-  std::string text;
-  Point position;
-  Color color;
-  float font_size = 14.0F;
-};
-
-// Command payload: translate the coordinate system.
-struct TranslateCommand {
-  float dx = 0.0F;
-  float dy = 0.0F;
-};
-
-// Command payload: set a rectangular clip.
-struct ClipRectCommand {
-  Rect rect;
-};
-
-// A single render command, discriminated by type.
+// A single render command. Fields are interpreted according to `type`.
 struct RenderCommand {
   RenderCommandType type = RenderCommandType::kNoop;
-  std::variant<std::monostate, DrawRectCommand, DrawTextCommand,
-               TranslateCommand, ClipRectCommand>
-      payload;
+
+  // Payload fields (valid depending on `type`).
+  Rect rect{};                     // kDrawRect, kClipRect
+  Color color{};                   // kDrawRect, kDrawText
+  std::string text{};              // kDrawText (UTF-8)
+  Point point{};                   // kDrawText
+  float font_size = 14.0F;         // kDrawText
+  float translate_x = 0.0F;        // kTranslate
+  float translate_y = 0.0F;        // kTranslate
 
   // Factory: create a draw-rect command.
   [[nodiscard]] static RenderCommand MakeDrawRect(const Rect& rect,
@@ -79,7 +61,8 @@ struct RenderCommand {
   [[nodiscard]] static RenderCommand MakeRestore();
 
   // Factory: create a translate command.
-  [[nodiscard]] static RenderCommand MakeTranslate(float delta_x, float delta_y);
+  [[nodiscard]] static RenderCommand MakeTranslate(float delta_x,
+                                                   float delta_y);
 
   // Factory: create a clip-rect command.
   [[nodiscard]] static RenderCommand MakeClipRect(const Rect& rect);

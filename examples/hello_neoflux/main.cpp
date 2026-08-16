@@ -23,6 +23,10 @@
 #include <glog/logging.h>
 
 namespace neoflux {
+  class StatefulWidget;
+}
+
+namespace neoflux {
 namespace {
 
 // A custom stateful widget that demonstrates the Flutter-like pattern.
@@ -40,13 +44,13 @@ class CounterState : public State<StatefulWidget> {
  public:
   [[nodiscard]] std::shared_ptr<Widget> Build(BuildContext& /*context*/) override {
     auto container = std::make_shared<Container>();
-    container->SetBackgroundColor({240, 240, 240, 255})
-        .SetPadding({20.0F, 20.0F, 20.0F, 20.0F});
+    container->SetBackgroundColor({.r=240, .g=240, .b=245, .a=255})
+        .SetPadding({.left=20.0F, .top=20.0F, .right=20.0F, .bottom=20.0F});
 
     auto text = std::make_shared<Text>("Count: " + std::to_string(count_));
-    text->SetFontSize(24.0F).SetTextColor({33, 33, 33, 255});
+    text->SetFontSize(24.0F).SetTextColor({.r=33, .g=33, .b=33, .a=255});
 
-    auto button = std::make_shared<Button>("Increment");
+    const auto button = std::make_shared<Button>("Increment");
     button->SetOnPressed([this] {
       SetState([this] { ++count_; });
     });
@@ -67,19 +71,19 @@ std::unique_ptr<State<StatefulWidget>> CounterWidget::CreateState() {
 // Builds the home page widget.
 std::shared_ptr<Widget> BuildHomePage(BuildContext& context) {
   auto root = std::make_shared<Container>();
-  root->SetBackgroundColor({255, 255, 255, 255})
-      .SetPadding({40.0F, 40.0F, 40.0F, 40.0F});
+  root->SetBackgroundColor({.r=255, .g=255, .b=255, .a=255})
+      .SetPadding({.left=40.0F, .top=40.0F, .right=40.0F, .bottom=40.0F});
 
-  auto title = std::make_shared<Text>("NeoFlux Hello World");
-  title->SetFontSize(32.0F).SetTextColor({0, 0, 0, 255});
+  const auto title = std::make_shared<Text>("NeoFlux Hello World");
+  title->SetFontSize(32.0F).SetTextColor({.r=0, .g=0, .b=0, .a=255});
 
   auto subtitle = std::make_shared<Text>(
       "A cross-platform C++20 UI framework");
-  subtitle->SetFontSize(16.0F).SetTextColor({100, 100, 100, 255});
+  subtitle->SetFontSize(16.0F).SetTextColor({.r=100, .g=100, .b=100, .a=255});
 
-  auto counter = std::make_shared<CounterWidget>();
+  const auto counter = std::make_shared<CounterWidget>();
 
-  auto nav_button = std::make_shared<Button>("Go to About Page");
+  const auto nav_button = std::make_shared<Button>("Go to About Page");
   nav_button->SetOnPressed([&context] { context.PushRoute("/about"); });
 
   root->AddChild(title);
@@ -93,17 +97,17 @@ std::shared_ptr<Widget> BuildHomePage(BuildContext& context) {
 // Builds the about page widget.
 std::shared_ptr<Widget> BuildAboutPage(BuildContext& context) {
   auto root = std::make_shared<Container>();
-  root->SetBackgroundColor({255, 255, 255, 255})
-      .SetPadding({40.0F, 40.0F, 40.0F, 40.0F});
+  root->SetBackgroundColor({.r=255, .g=255, .b=255, .a=255})
+      .SetPadding({.left=40.0F, .top=40.0F, .right=40.0F, .bottom=40.0F});
 
-  auto title = std::make_shared<Text>("About NeoFlux");
-  title->SetFontSize(28.0F).SetTextColor({0, 0, 0, 255});
+  const auto title = std::make_shared<Text>("About NeoFlux");
+  title->SetFontSize(28.0F).SetTextColor({.r=0, .g=0, .b=0, .a=255});
 
   auto desc = std::make_shared<Text>(
       "Two-layer architecture: Application + Render. "
       "SPSC ring queue for thread-safe communication. "
       "tgfx for mobile rendering, GLFW bridge for desktop.");
-  desc->SetFontSize(14.0F).SetTextColor({60, 60, 60, 255});
+  desc->SetFontSize(14.0F).SetTextColor({.r=60, .g=60, .b=60, .a=255});
 
   auto back_button = std::make_shared<Button>("Back");
   back_button->SetOnPressed([&context] { context.PopRoute(); });

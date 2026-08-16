@@ -1,8 +1,10 @@
 // =============================================================================
 // NeoFlux - container.h
 //
-// Container widget: combines common painting, positioning, and sizing of
-// a single child. All method implementations are in container.cpp.
+// Container widget: a flexbox layout container backed by Taitank. Supports
+// flex direction, padding, margin, justification, alignment, and fixed
+// sizing. All layout is computed by Taitank; the Container only paints its
+// background and delegates children to the base class.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_CONTAINER_H_
@@ -16,7 +18,15 @@
 
 namespace neoflux {
 
-// A widget that contains a single child with optional styling and sizing.
+// Flex direction for Container layout.
+enum class FlexDirection {
+  kRow,         // Main axis horizontal, left to right.
+  kRowReverse,  // Main axis horizontal, right to left.
+  kColumn,      // Main axis vertical, top to bottom.
+  kColumnReverse,  // Main axis vertical, bottom to top.
+};
+
+// A widget that lays out its children using Taitank flexbox.
 class Container : public Widget {
  public:
   Container();
@@ -33,29 +43,40 @@ class Container : public Widget {
   // Sets the margin outside the container.
   Container& SetMargin(const EdgeInsets& margin) noexcept;
 
-  // Sets a fixed width (0 = unspecified, use child's width).
+  // Sets a fixed width (0 = flexible, determined by layout).
   Container& SetWidth(float width) noexcept;
 
-  // Sets a fixed height (0 = unspecified, use child's height).
+  // Sets a fixed height (0 = flexible, determined by layout).
   Container& SetHeight(float height) noexcept;
 
-  // Sets the child widget.
+  // Sets the child widget (convenience for single-child containers).
   Container& SetChild(std::shared_ptr<Widget> child);
 
-  // Sets horizontal alignment of the child within the container.
-  Container& SetAlignment(HAlign align) noexcept;
+  // Sets the flex direction (default: kColumn).
+  Container& SetFlexDirection(FlexDirection direction) noexcept;
 
-  Size Layout(const LayoutConstraints& constraints) override;
+  // Sets justify content along the main axis.
+  Container& SetJustifyContent(HAlign align) noexcept;
+
+  // Sets align items along the cross axis.
+  Container& SetAlignItems(VAlign align) noexcept;
+
+  // Sets the flex grow factor (how much this container expands to fill
+  // available space in its parent).
+  Container& SetFlexGrow(float grow) noexcept;
+
   void Paint(RenderContext& context) override;
 
  private:
-  Color background_color_;
-  EdgeInsets padding_;
-  EdgeInsets margin_;
-  float fixed_width_;
-  float fixed_height_;
-  HAlign alignment_;
-  bool has_background_;
+  void ApplyPaddingToTaitank() noexcept;
+  void ApplyMarginToTaitank() noexcept;
+
+  Color background_color_{};
+  EdgeInsets padding_{};
+  EdgeInsets margin_{};
+  float fixed_width_ = 0.0F;
+  float fixed_height_ = 0.0F;
+  bool has_background_ = false;
 };
 
 }  // namespace neoflux

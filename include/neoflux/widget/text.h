@@ -39,7 +39,10 @@ class Text : public Widget {
   // Sets the text alignment.
   Text& SetAlignment(HAlign align) noexcept;
 
-  Size Layout(const LayoutConstraints& constraints) override;
+  // Reports intrinsic text size to the Taitank layout engine.
+  [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
+                               int height_mode) override;
+
   void Paint(RenderContext& context) override;
 
  private:

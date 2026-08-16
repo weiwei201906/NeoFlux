@@ -83,13 +83,16 @@ FetchContent_MakeAvailable(taitank)
 # ---------------------------------------------------------------------------
 # tgfx - Tencent lightweight 2D graphics rendering library
 #
-# tgfx has a heavy dependency tree (managed via `depsync` + DEPS file,
-# including shaderc/freetype/libpng/libjpeg-turbo/libwebp/zlib/etc.).
-# It is OFF by default; when disabled, tgfx_renderer.cpp compiles a
-# lightweight stub so the rest of the framework builds and tests cleanly.
-# To enable: cmake -DNEOFLUX_USE_TGFX=ON ..
-#   Prerequisites: npm install -g depsync, then run tgfx's sync_deps.sh
+# tgfx uses `depsync` (npm package) to manage vendor dependencies, and its
+# vendor build system requires MSVC on Windows. On MinGW or other non-MSVC
+# toolchains, tgfx cannot be built; the framework falls back to a built-in
+# OpenGL renderer (shader + VBO + stb_truetype for UTF-8 text).
+#
+# To enable tgfx: cmake -DNEOFLUX_USE_TGFX=ON .. (requires MSVC on Windows,
+# or a pre-built tgfx package on other platforms).
 # ---------------------------------------------------------------------------
+option(NEOFLUX_USE_TGFX "Use tgfx as the rendering backend (requires MSVC on Windows)" OFF)
+
 if(NEOFLUX_USE_TGFX)
   FetchContent_Declare(
     tgfx
@@ -97,6 +100,16 @@ if(NEOFLUX_USE_TGFX)
     GIT_TAG        main
     GIT_SHALLOW    TRUE
   )
+  set(TGFX_USE_OPENGL ON CACHE BOOL "" FORCE)
+  set(TGFX_USE_D3D12 OFF CACHE BOOL "" FORCE)
+  set(TGFX_USE_METAL OFF CACHE BOOL "" FORCE)
+  set(TGFX_USE_VULKAN OFF CACHE BOOL "" FORCE)
+  set(TGFX_USE_WEBGPU OFF CACHE BOOL "" FORCE)
+  set(TGFX_USE_FREETYPE ON CACHE BOOL "" FORCE)
+  set(TGFX_BUILD_SVG OFF CACHE BOOL "" FORCE)
+  set(TGFX_BUILD_PDF OFF CACHE BOOL "" FORCE)
+  set(TGFX_BUILD_LAYERS OFF CACHE BOOL "" FORCE)
+  set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(tgfx)
 endif()
 

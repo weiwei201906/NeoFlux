@@ -46,8 +46,8 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
 
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
 
   const std::string title_str(title);  // NOLINT(bugprone-unused-local-non-trivial-variable)
   window_ = glfwCreateWindow(width, height, title_str.c_str(), nullptr,
@@ -61,8 +61,8 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
   auto* user_data = new WindowUserData{this};
   glfwSetWindowUserPointer(window_, user_data);
 
-  glfwMakeContextCurrent(window_);
-  glfwSwapInterval(1);
+  // Context is made current later in the render thread via MakeContextCurrent().
+  // This allows the render thread to own the GL context exclusively.
 
   glfwSetFramebufferSizeCallback(window_, FramebufferSizeCallback);
   glfwSetKeyCallback(window_, KeyCallback);
@@ -103,6 +103,17 @@ void GlfwBridge::SwapBuffers() {
   if (window_ != nullptr) {
     glfwSwapBuffers(window_);
   }
+}
+
+void GlfwBridge::MakeContextCurrent() {
+  if (window_ != nullptr) {
+    glfwMakeContextCurrent(window_);
+    glfwSwapInterval(1);
+  }
+}
+
+void GlfwBridge::ReleaseContext() {
+  glfwMakeContextCurrent(nullptr);
 }
 
 bool GlfwBridge::ShouldClose() const {

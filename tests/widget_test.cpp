@@ -78,13 +78,11 @@ TEST(ContainerTest, LayoutWithFixedSize) {
   Container container;
   container.SetWidth(200.0F).SetHeight(100.0F);
 
-  LayoutConstraints constraints;
-  constraints.max_width = 800.0F;
-  constraints.max_height = 600.0F;
+  container.PerformLayout(800.0F, 600.0F);
 
-  const Size size = container.Layout(constraints);
-  EXPECT_FLOAT_EQ(size.width, 200.0F);
-  EXPECT_FLOAT_EQ(size.height, 100.0F);
+  const auto& bounds = container.GetBounds();
+  EXPECT_FLOAT_EQ(bounds.width, 200.0F);
+  EXPECT_FLOAT_EQ(bounds.height, 100.0F);
 }
 
 TEST(ContainerTest, LayoutWrapsChild) {
@@ -94,37 +92,28 @@ TEST(ContainerTest, LayoutWrapsChild) {
   container->SetChild(text);
   container->SetPadding({5.0F, 5.0F, 5.0F, 5.0F});
 
-  LayoutConstraints constraints;
-  constraints.max_width = 800.0F;
-  constraints.max_height = 600.0F;
+  container->PerformLayout(800.0F, 600.0F);
 
-  const Size size = container->Layout(constraints);
-  EXPECT_GT(size.width, 10.0F);
-  EXPECT_GT(size.height, 10.0F);
+  const auto& bounds = container->GetBounds();
+  EXPECT_GT(bounds.width, 10.0F);
+  EXPECT_GT(bounds.height, 10.0F);
 }
 
-TEST(TextTest, LayoutProducesPositiveSize) {
+TEST(TextTest, OnMeasureProducesPositiveSize) {
   Text text("Hello World");
   text.SetFontSize(20.0F);
 
-  LayoutConstraints constraints;
-  constraints.max_width = 800.0F;
-  constraints.max_height = 600.0F;
-
-  const Size size = text.Layout(constraints);
+  // Measure mode 0 = undefined (no constraint).
+  const Size size = text.OnMeasure(0.0F, 0, 0.0F, 0);
   EXPECT_GT(size.width, 0.0F);
   EXPECT_GT(size.height, 0.0F);
 }
 
-TEST(ButtonTest, LayoutProducesPositiveSize) {
+TEST(ButtonTest, OnMeasureProducesPositiveSize) {
   Button button("Click Me");
   button.SetFontSize(16.0F);
 
-  LayoutConstraints constraints;
-  constraints.max_width = 800.0F;
-  constraints.max_height = 600.0F;
-
-  const Size size = button.Layout(constraints);
+  const Size size = button.OnMeasure(0.0F, 0, 0.0F, 0);
   EXPECT_GT(size.width, 0.0F);
   EXPECT_GT(size.height, 0.0F);
 }

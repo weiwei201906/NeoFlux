@@ -71,6 +71,20 @@ ctest --output-on-failure
 ./bin/hello_neoflux
 ```
 
+## Configuration (gflags)
+
+NeoFlux uses gflags for runtime configuration. All flags are optional.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--target_fps` | int | `60` | Target frame rate for the render loop. |
+| `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Must be a power of two (rounded up automatically). |
+| `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
+| `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. (Built-in glog flag.) |
+| `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. (Built-in glog flag.) |
+
+By default, logs are written to files in `./logs/` and no console window appears on Windows. To debug, pass `--logtostderr --verbose_logging`.
+
 ## Minimal Example
 
 ```cpp

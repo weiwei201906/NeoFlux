@@ -1,14 +1,21 @@
 // =============================================================================
 // NeoFlux - container.cpp
 //
-// Implementation of Container widget. Methods moved from header.
+// Implementation of Container widget. All layout is delegated to Taitank;
+// this file only configures Taitank style properties and paints the
+// background.
 // =============================================================================
 
 #include "neoflux/widget/container.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string_view>
+
+#include <glog/logging.h>
+
+#include "taitank.h"
 
 #include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
@@ -16,14 +23,55 @@
 
 namespace neoflux {
 
-Container::Container()
-    : background_color_(),
-      padding_(),
-      margin_(),
-      fixed_width_(0.0F),
-      fixed_height_(0.0F),
-      alignment_(HAlign::kLeft),
-      has_background_(false) {}
+namespace {
+
+taitank::FlexDirection ToTaitankDirection(FlexDirection direction) {
+  switch (direction) {
+    case FlexDirection::kRow:
+      return taitank::FLEX_DIRECTION_ROW;
+    case FlexDirection::kRowReverse:
+      return taitank::FLEX_DIRECTION_ROW_REVERSE;
+    case FlexDirection::kColumnReverse:
+      return taitank::FLEX_DIRECTION_COLUNM_REVERSE;
+    case FlexDirection::kColumn:
+    default:
+      return taitank::FLEX_DIRECTION_COLUMN;
+  }
+}
+
+taitank::FlexAlign ToTaitankAlign(HAlign align) {
+  switch (align) {
+    case HAlign::kCenter:
+      return taitank::FLEX_ALIGN_CENTER;
+    case HAlign::kRight:
+      return taitank::FLEX_ALIGN_END;
+    case HAlign::kLeft:
+    default:
+      return taitank::FLEX_ALIGN_START;
+  }
+}
+
+taitank::FlexAlign ToTaitankVAlign(VAlign align) {
+  switch (align) {
+    case VAlign::kCenter:
+      return taitank::FLEX_ALIGN_CENTER;
+    case VAlign::kBottom:
+      return taitank::FLEX_ALIGN_END;
+    case VAlign::kTop:
+    default:
+      return taitank::FLEX_ALIGN_START;
+  }
+}
+
+}  // namespace
+
+Container::Container() {
+  auto* node = GetTaitankNode();
+  if (node != nullptr) {
+    taitank::SetFlexDirection(node, taitank::FLEX_DIRECTION_COLUMN);
+    taitank::SetAlignItems(node, taitank::FLEX_ALIGN_STRETCH);
+  }
+}
 
 Container::~Container() = default;
 
@@ -39,21 +87,31 @@ Container& Container::SetBackgroundColor(const Color& color) noexcept {
 
 Container& Container::SetPadding(const EdgeInsets& padding) noexcept {
   padding_ = padding;
+  ApplyPaddingToTaitank();
   return *this;
 }
 
 Container& Container::SetMargin(const EdgeInsets& margin) noexcept {
   margin_ = margin;
+  ApplyMarginToTaitank();
   return *this;
 }
 
 Container& Container::SetWidth(float width) noexcept {
   fixed_width_ = width;
+  auto* node = GetTaitankNode();
+  if (node != nullptr) {
+    taitank::SetWidth(node, width > 0.0F ? width : NAN);
+  }
   return *this;
 }
 
 Container& Container::SetHeight(float height) noexcept {
   fixed_height_ = height;
+  auto* node = GetTaitankNode();
+  if (node != nullptr) {
+    taitank::SetHeight(node, height > 0.0F ? height : NAN);
+  }
   return *this;
 }
 
@@ -63,62 +121,67 @@ Container& Container::SetChild(std::shared_ptr<Widget> child) {
   return *this;
 }
 
-Container& Container::SetAlignment(HAlign align) noexcept {
-  alignment_ = align;
+Container& Container::SetFlexDirection(FlexDirection direction) noexcept {
+  auto* node = GetTaitankNode();
+  if (node != nullptr) {
+    taitank::SetFlexDirection(node, ToTaitankDirection(direction));
+  }
   return *this;
 }
 
-Size Container::Layout(const LayoutConstraints& constraints) {
-  LayoutConstraints inner = constraints;
-  inner.min_width =
-      std::max(0.0F, constraints.min_width - padding_.left - padding_.right);
-  inner.max_width =
-      std::max(0.0F, constraints.max_width - padding_.left - padding_.right);
-  inner.min_height =
-      std::max(0.0F, constraints.min_height - padding_.top - padding_.bottom);
-  inner.max_height =
-      std::max(0.0F, constraints.max_height - padding_.top - padding_.bottom);
-
-  float content_width = 0.0F;
-  float content_height = 0.0F;
-
-  if (!GetChildren().empty() && GetChildren().front() != nullptr) {
-    const auto& child = GetChildren().front();
-    const auto [width, height] = child->Layout(inner);
-    content_width = width;
-    content_height = height;
-
-    float child_x = padding_.left;
-    if (alignment_ == HAlign::kCenter) {
-      child_x = padding_.left +
-                std::max(0.0F, (inner.max_width - content_width) / 2.0F);
-    } else if (alignment_ == HAlign::kRight) {
-      child_x = inner.max_width - content_width - padding_.right;
-    }
-    child->SetBounds({.x=child_x, .y=padding_.top, .width=content_width, .height=content_height});
+Container& Container::SetJustifyContent(HAlign align) noexcept {
+  auto* node = GetTaitankNode();
+  if (node != nullptr) {
+    taitank::SetJustifyContent(node, ToTaitankAlign(align));
   }
+  return *this;
+}
 
-  float width = fixed_width_ > 0.0F
-                    ? fixed_width_
-                    : content_width + padding_.left + padding_.right;
-  float height = fixed_height_ > 0.0F
-                     ? fixed_height_
-                     : content_height + padding_.top + padding_.bottom;
+Container& Container::SetAlignItems(VAlign align) noexcept {
+  auto* node = GetTaitankNode();
+  if (node != nullptr) {
+    taitank::SetAlignItems(node, ToTaitankVAlign(align));
+  }
+  return *this;
+}
 
-  width = std::clamp(width, constraints.min_width, constraints.max_width);
-  height = std::clamp(height, constraints.min_height, constraints.max_height);
-
-  SetBounds({.x = bounds_.x, .y = bounds_.y, .width = width, .height = height});
-  SetDesiredSize({.width = width, .height = height});
-  return {.width = width, .height = height};
+Container& Container::SetFlexGrow(float grow) noexcept {
+  auto* node = GetTaitankNode();
+  if (node != nullptr) {
+    taitank::SetFlexGrow(node, grow);
+  }
+  return *this;
 }
 
 void Container::Paint(RenderContext& context) {
   if (has_background_) {
-    context.DrawRect({.x=0.0F, .y=0.0F, .width=bounds_.width, .height=bounds_.height},
-                     background_color_);
+    context.DrawRect(
+        {.x = 0.0F, .y = 0.0F, .width = bounds_.width, .height = bounds_.height},
+        background_color_);
   }
   PaintChildren(context);
+}
+
+void Container::ApplyPaddingToTaitank() noexcept {
+  auto* node = GetTaitankNode();
+  if (node == nullptr) {
+    return;
+  }
+  taitank::SetPadding(node, taitank::CSS_LEFT, padding_.left);
+  taitank::SetPadding(node, taitank::CSS_TOP, padding_.top);
+  taitank::SetPadding(node, taitank::CSS_RIGHT, padding_.right);
+  taitank::SetPadding(node, taitank::CSS_BOTTOM, padding_.bottom);
+}
+
+void Container::ApplyMarginToTaitank() noexcept {
+  auto* node = GetTaitankNode();
+  if (node == nullptr) {
+    return;
+  }
+  taitank::SetMargin(node, taitank::CSS_LEFT, margin_.left);
+  taitank::SetMargin(node, taitank::CSS_TOP, margin_.top);
+  taitank::SetMargin(node, taitank::CSS_RIGHT, margin_.right);
+  taitank::SetMargin(node, taitank::CSS_BOTTOM, margin_.bottom);
 }
 
 }  // namespace neoflux

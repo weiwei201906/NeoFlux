@@ -152,52 +152,60 @@ void RenderLayer::PollEvents() {
 void RenderLayer::RenderLoop() {
   LOG(INFO) << "Render thread started";
 
-  while (running_.load()) {
-    if (renderer_ != nullptr) {
-      renderer_->BeginFrame({245, 245, 245, 255});
-      ProcessPendingCommands();
-      renderer_->EndFrame();
-    }
-
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-    if (glfw_bridge_ != nullptr) {
-      glfw_bridge_->SwapBuffers();
-    }
+  // Make the OpenGL context current on the render thread. The context was
+  // created in GlfwBridge::Init but not bound, so this thread owns it
+  // exclusively for all rendering and buffer swap operations.
+  if (glfw_bridge_ != nullptr) {
+    glfw_bridge_->MakeContextCurrent();
+  }
 #endif
 
-    if (command_queue_.Empty()) {
+  // Frame state machine: only render commands between kBeginFrame and
+  // kEndFrame are drawn. This eliminates flicker caused by rendering
+  // partial frames while the main thread is still submitting commands.
+  bool in_frame = false;
+  std::uint64_t frames_rendered = 0;
+  constexpr Color kClearColor{.r = 245, .g = 245, .b = 245, .a = 255};
+
+  while (running_.load()) {
+    RenderCommand cmd;
+    if (command_queue_.TryPop(cmd)) {
+      switch (cmd.type) {
+        case RenderCommandType::kBeginFrame:
+          if (renderer_ != nullptr) {
+            renderer_->BeginFrame(kClearColor);
+          }
+          in_frame = true;
+          break;
+        case RenderCommandType::kEndFrame:
+          if (in_frame && renderer_ != nullptr) {
+            renderer_->EndFrame();
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+            if (glfw_bridge_ != nullptr) {
+              glfw_bridge_->SwapBuffers();
+            }
+#endif
+            ++frames_rendered;
+            if (frames_rendered % 60 == 0) {
+              VLOG(1) << "Rendered " << frames_rendered << " frames";
+            }
+          }
+          in_frame = false;
+          break;
+        default:
+          if (in_frame && renderer_ != nullptr) {
+            renderer_->Execute(cmd);
+          }
+          break;
+      }
+    } else {
+      // No commands available; yield to avoid busy-waiting.
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
 
   LOG(INFO) << "Render thread exiting";
-}
-
-void RenderLayer::ExecuteCommand(const RenderCommand& command) {
-  if (renderer_ == nullptr) {
-    return;
-  }
-
-  // NOLINTBEGIN(bugprone-branch-clone)
-  switch (command.type) {
-    case RenderCommandType::kBeginFrame:
-      renderer_->BeginFrame({245, 245, 245, 255});
-      break;
-    case RenderCommandType::kEndFrame:
-      renderer_->EndFrame();
-      break;
-    default:
-      renderer_->Execute(command);
-      break;
-  }
-  // NOLINTEND(bugprone-branch-clone)
-}
-
-void RenderLayer::ProcessPendingCommands() {
-  RenderCommand cmd;
-  while (command_queue_.TryPop(cmd)) {
-    ExecuteCommand(cmd);
-  }
 }
 
 }  // namespace neoflux

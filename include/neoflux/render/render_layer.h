@@ -60,12 +60,6 @@ class RenderLayer : public NonCopyable {
   // Main render loop. Runs on the render thread.
   void RenderLoop();
 
-  // Executes a single render command using the active renderer.
-  void ExecuteCommand(const RenderCommand& command);
-
-  // Processes all pending commands from the ring queue.
-  void ProcessPendingCommands();
-
   SpscRingQueue<RenderCommand> command_queue_;
 
   std::atomic<bool> running_{false};

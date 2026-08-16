@@ -70,8 +70,6 @@ class Application : public NonCopyable {
   void LayoutWidgetTree();
   void PaintAndSubmit();
   void BuildWidgetRecursive(Widget& widget, BuildContext& context);
-  Size LayoutWidgetRecursive(Widget& widget,
-                             const LayoutConstraints& constraints);
   void PaintWidgetRecursive(Widget& widget, RenderContext& context);
 
   EventLoop event_loop_{};

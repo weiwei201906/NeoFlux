@@ -2,6 +2,8 @@
 // NeoFlux - widget.h
 //
 // Base Widget class and BuildContext for the Flutter-like widget tree.
+// Layout is delegated to the Taitank flexbox engine: each Widget owns an
+// opaque Taitank node, and the widget tree mirrors the Taitank node tree.
 // All method implementations (including State<W> template methods) are in
 // widget.cpp with explicit instantiation for State<StatefulWidget>.
 // =============================================================================
@@ -17,6 +19,9 @@
 
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
+
+// Opaque Taitank layout node (defined in taitank_node.h).
+namespace taitank { struct TaitankNode; }
 
 namespace neoflux {
 
@@ -48,9 +53,10 @@ class BuildContext {
 
 // Base class for all widgets in the NeoFlux framework.
 //
-// A Widget is a node in the UI tree. It holds an optional list of children,
-// its computed layout rectangle, and provides virtual hooks for building,
-// layout, and painting.
+// A Widget is a node in the UI tree. It holds an opaque Taitank flex node
+// that participates in layout, an optional list of children, and its
+// computed layout rectangle. Subclasses override Build() for composition,
+// OnMeasure() for intrinsic sizing, and Paint() for rendering.
 //
 // Thread safety: Widget objects are owned and mutated exclusively by the
 //                 Application (UI) thread.
@@ -74,16 +80,26 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // nullptr (leaf widget). Subclasses override to produce children.
   [[nodiscard]] virtual std::shared_ptr<Widget> Build(BuildContext& context);
 
-  // Performs layout for this widget and its children.
-  virtual Size Layout(const LayoutConstraints& constraints);
+  // Measures the intrinsic size of this widget given Taitank constraints.
+  //
+  // The default implementation returns {0, 0}. Leaf widgets with intrinsic
+  // size (Text, Button) override this to report their desired dimensions.
+  // Called by the Taitank engine during layout via the measure function.
+  [[nodiscard]] virtual Size OnMeasure(float width, int width_mode,
+                                       float height, int height_mode);
 
   // Paints this widget and its children onto the given render context.
   virtual void Paint(RenderContext& context);
 
-  // Adds a child widget.
+  // Performs Taitank layout rooted at this widget with the given available
+  // size, then recursively copies computed bounds back into the widget tree.
+  void PerformLayout(float width, float height);
+
+  // Adds a child widget. Also inserts the child's Taitank node into this
+  // widget's Taitank node to keep the two trees in sync.
   void AddChild(std::shared_ptr<Widget> child);
 
-  // Removes all children.
+  // Removes all children. Also clears them from the Taitank node.
   void ClearChildren();
 
   // Returns a read-only view of the children.
@@ -120,12 +136,24 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Clears the needs-build flag.
   void ClearNeedsBuild() noexcept;
 
- protected:
-  // Lays out a single child with the given constraints.
-  Size LayoutChild(Widget& child, const LayoutConstraints& constraints);
+  // Returns the opaque Taitank node handle (for subclasses to set styles).
+  [[nodiscard]] taitank::TaitankNode* GetTaitankNode() const noexcept;
 
+ protected:
   // Paints all children with appropriate translation.
   void PaintChildren(RenderContext& context);
+
+  // Recomputes the Taitank node tree to match the widget children.
+  // Called after build phase when children may have changed.
+  void SyncTaitankChildren();
+
+  // Recursively reads computed bounds from Taitank nodes into widgets.
+  void ReadLayoutRecursive();
+
+  // Enables the Taitank measure function on this widget's node. Must be
+  // called by leaf widgets (Text, Button, etc.) in their constructors.
+  // Nodes with a measure function cannot have children (Taitank constraint).
+  void EnableMeasureFunction();
 
   // Derived widgets may read their computed bounds directly.
   Rect bounds_{};
@@ -135,6 +163,7 @@ class Widget : public std::enable_shared_from_this<Widget> {
   std::vector<std::shared_ptr<Widget>> children_{};
   Widget* parent_ = nullptr;
   bool needs_build_ = true;
+  taitank::TaitankNode* taitank_node_ = nullptr;  // Opaque Taitank node.
 };
 
 // Mutable state for a StatefulWidget.

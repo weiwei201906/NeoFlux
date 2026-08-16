@@ -2,7 +2,9 @@
 // NeoFlux - widget.cpp
 //
 // Implementation of Widget, BuildContext, StatefulWidget, StatelessWidget.
-// All non-template methods moved from widget.h.
+// Layout is delegated to the Taitank flexbox engine. Each Widget owns an
+// opaque Taitank node; the widget tree and Taitank node tree are kept in
+// sync via AddChild / ClearChildren.
 // =============================================================================
 
 #include "neoflux/widget/widget.h"
@@ -15,11 +17,35 @@
 
 #include <glog/logging.h>
 
+#include "taitank.h"
+
 #include "neoflux/app/application.h"
 #include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
 
 namespace neoflux {
+
+namespace {
+
+// Taitank measure function trampoline. Taitank calls this during layout to
+// query the intrinsic size of a leaf node. The node's context pointer holds
+// the owning Widget*; we forward to Widget::OnMeasure().
+taitank::TaitankSize MeasureTrampoline(taitank::TaitankNodeRef node,
+                                       float width,
+                                       taitank::MeasureMode width_mode,
+                                       float height,
+                                       taitank::MeasureMode height_mode,
+                                       void* /*layout_context*/) {
+  auto* widget = static_cast<Widget*>(taitank::GetContext(node));
+  if (widget == nullptr) {
+    return {.width = 0.0F, .height = 0.0F};
+  }
+  const Size size = widget->OnMeasure(width, static_cast<int>(width_mode),
+                                      height, static_cast<int>(height_mode));
+  return {.width = size.width, .height = size.height};
+}
+
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // BuildContext
@@ -45,47 +71,63 @@ void BuildContext::PopRoute() {
 // Widget
 // ---------------------------------------------------------------------------
 
-Widget::Widget() = default;
+Widget::Widget() : taitank_node_(taitank::NodeCreate()) {
+  if (taitank_node_ != nullptr) {
+    taitank::SetContext(taitank_node_, this);
+    // Note: measure function is NOT set here. Only leaf widgets (Text,
+    // Button, etc.) set a measure function. Taitank forbids children on
+    // nodes with a measure function, so layout containers must not have one.
+  }
+}
 
-Widget::~Widget() = default;
+Widget::~Widget() {
+  if (taitank_node_ != nullptr) {
+    taitank::NodeFree(taitank_node_);
+    taitank_node_ = nullptr;
+  }
+}
 
 std::shared_ptr<Widget> Widget::Build(BuildContext& /*context*/) {
   return nullptr;
 }
 
-Size Widget::Layout(const LayoutConstraints& constraints) {
-  float max_width = constraints.min_width;
-  float max_height = constraints.min_height;
-
-  for (auto& child : children_) {
-    if (child != nullptr) {
-      const Size child_size = LayoutChild(*child, constraints);
-      max_width = std::max(max_width, child_size.width);
-      max_height = std::max(max_height, child_size.height);
-    }
-  }
-
-  max_width =
-      std::clamp(max_width, constraints.min_width, constraints.max_width);
-  max_height =
-      std::clamp(max_height, constraints.min_height, constraints.max_height);
-
-  bounds_.width = max_width;
-  bounds_.height = max_height;
-  desired_size_ = {.width = max_width, .height = max_height};
-  return desired_size_;
+Size Widget::OnMeasure(float /*width*/, int /*width_mode*/,
+                       float /*height*/, int /*height_mode*/) {
+  return {.width = 0.0F, .height = 0.0F};
 }
 
 void Widget::Paint(RenderContext& context) { PaintChildren(context); }
 
+void Widget::PerformLayout(float width, float height) {
+  if (taitank_node_ == nullptr) {
+    return;
+  }
+  SyncTaitankChildren();
+  taitank::DoLayout(taitank_node_, width, height, taitank::DIRECTION_LTR);
+  ReadLayoutRecursive();
+}
+
 void Widget::AddChild(std::shared_ptr<Widget> child) {
-  if (child != nullptr) {
-    child->SetParent(this);
-    children_.push_back(std::move(child));
+  if (child == nullptr) {
+    return;
+  }
+  child->SetParent(this);
+  children_.push_back(std::move(child));
+  if (taitank_node_ != nullptr) {
+    const auto& added = children_.back();
+    taitank::InsertChild(taitank_node_, added->GetTaitankNode(),
+                         static_cast<uint32_t>(children_.size() - 1));
   }
 }
 
 void Widget::ClearChildren() {
+  if (taitank_node_ != nullptr) {
+    for (auto& child : children_) {
+      if (child != nullptr) {
+        taitank::RemoveChild(taitank_node_, child->GetTaitankNode());
+      }
+    }
+  }
   for (auto& child : children_) {
     if (child != nullptr) {
       child->SetParent(nullptr);
@@ -121,21 +163,64 @@ bool Widget::NeedsBuild() const noexcept { return needs_build_; }
 
 void Widget::ClearNeedsBuild() noexcept { needs_build_ = false; }
 
-Size Widget::LayoutChild(Widget& child,
-                         const LayoutConstraints& constraints) {
-  const Size size = child.Layout(constraints);
-  child.SetBounds({.x = 0.0F, .y = 0.0F, .width = size.width, .height = size.height});
-  return size;
+taitank::TaitankNode* Widget::GetTaitankNode() const noexcept {
+  return taitank_node_;
+}
+
+void Widget::SyncTaitankChildren() {
+  if (taitank_node_ == nullptr) {
+    return;
+  }
+  // Remove all existing Taitank children, then re-insert to match the
+  // widget children vector. This handles rebuilds where children change.
+  while (taitank::ChildCount(taitank_node_) > 0) {
+    taitank::TaitankNodeRef first = taitank::GetChild(taitank_node_, 0);
+    if (first == nullptr) {
+      break;
+    }
+    taitank::RemoveChild(taitank_node_, first);
+  }
+  for (std::size_t i = 0; i < children_.size(); ++i) {
+    if (children_[i] != nullptr) {
+      auto* child_node = children_[i]->GetTaitankNode();
+      if (child_node != nullptr) {
+        taitank::InsertChild(taitank_node_, child_node,
+                             static_cast<uint32_t>(i));
+      }
+    }
+  }
+}
+
+void Widget::ReadLayoutRecursive() {
+  if (taitank_node_ != nullptr) {
+    bounds_.x = taitank::GetLeft(taitank_node_);
+    bounds_.y = taitank::GetTop(taitank_node_);
+    bounds_.width = taitank::GetWidth(taitank_node_);
+    bounds_.height = taitank::GetHeight(taitank_node_);
+    desired_size_ = {.width = bounds_.width, .height = bounds_.height};
+  }
+  for (auto& child : children_) {
+    if (child != nullptr) {
+      child->ReadLayoutRecursive();
+    }
+  }
+}
+
+void Widget::EnableMeasureFunction() {
+  if (taitank_node_ != nullptr) {
+    taitank::SetMeasureFunction(taitank_node_, MeasureTrampoline);
+  }
 }
 
 void Widget::PaintChildren(RenderContext& context) {
   for (const auto& child : children_) {
-    if (child != nullptr) {
-      context.Save();
-      context.Translate(child->GetBounds().x, child->GetBounds().y);
-      child->Paint(context);
-      context.Restore();
+    if (child == nullptr) {
+      continue;
     }
+    context.Save();
+    context.Translate(child->GetBounds().x, child->GetBounds().y);
+    child->Paint(context);
+    context.Restore();
   }
 }
 

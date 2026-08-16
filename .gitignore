@@ -44,3 +44,4 @@ Thumbs.db
 
 # Glog output
 *.log.*
+logs/

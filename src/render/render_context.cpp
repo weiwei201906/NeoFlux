@@ -54,4 +54,8 @@ std::size_t RenderContext::GetCommandCount() const noexcept {
   return commands_.size();
 }
 
+void RenderContext::AppendCommand(RenderCommand command) {
+  commands_.push_back(std::move(command));
+}
+
 }  // namespace neoflux
