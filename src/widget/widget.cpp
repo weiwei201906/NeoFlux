@@ -111,9 +111,13 @@ Widget* Widget::HitTest(const Point& global_pos) {
   }
   // Test children in reverse order (top-most / last painted first).
   for (auto it = children_.rbegin(); it != children_.rend(); ++it) {
-    if (*it == nullptr) continue;
+    if (*it == nullptr) {
+      continue;
+    }
     Widget* hit = (*it)->HitTest(global_pos);
-    if (hit != nullptr) return hit;
+    if (hit != nullptr) {
+      return hit;
+    }
   }
   return this;
 }

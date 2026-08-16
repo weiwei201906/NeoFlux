@@ -77,13 +77,14 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--target_fps` | int | `60` | Target frame rate for the render loop. |
-| `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Must be a power of two (rounded up automatically). |
+| `--target_fps` | int | `60` | Target frame rate for the application event loop and render pacing. |
+| `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Rounded up to the next power of two automatically. |
+| `--font_path` | string | `""` | Path to a TrueType/OpenType font file (`.ttf`, `.ttc`, `.otf`). If set, this font is loaded first; otherwise the renderer falls back to platform default fonts. |
 | `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
-| `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. (Built-in glog flag.) |
-| `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. (Built-in glog flag.) |
+| `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
+| `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |
 
-By default, logs are written to files in `./logs/` and no console window appears on Windows. To debug, pass `--logtostderr --verbose_logging`.
+By default, logs are written to files in `./logs/` and no console window appears on Windows (MinGW `-mwindows`). To debug, pass `--logtostderr --verbose_logging`.
 
 ## Minimal Example
 
@@ -116,6 +117,77 @@ int main(int argc, char** argv) {
   app.Run();
   return 0;
 }
+```
+
+## Widget System
+
+NeoFlux uses a Flutter-like widget model. Every UI element is a `Widget` that
+can contain children. Layout is computed by the Taitank flexbox engine.
+
+### Core Widgets
+
+| Widget | Description |
+|--------|-------------|
+| `Widget` | Abstract base class. Override `Build()`, `OnMeasure()`, `Paint()`. |
+| `Container` | Flexbox container with padding, margin, background color, flex direction. |
+| `Text` | Single-line text with configurable font size, color, alignment. |
+| `Button` | Clickable button with label, press callback, and pressed-state styling. |
+| `StatelessWidget` | Base for widgets that don't hold mutable state. |
+| `StatefulWidget` | Base for widgets with mutable state; paired with `State<W>`. |
+
+### Layout (Taitank Flexbox)
+
+`Container` exposes flexbox properties that map directly to Taitank:
+
+```cpp
+auto col = std::make_shared<Container>();
+col->SetFlexDirection(FlexDirection::kColumn)   // children stacked vertically
+   ->SetJustifyContent(HAlign::kCenter)          // center on main axis
+   ->SetAlignItems(VAlign::kCenter)              // center on cross axis
+   ->SetPadding({.left = 16, .top = 16, .right = 16, .bottom = 16})
+   ->SetBackgroundColor({.r = 245, .g = 245, .b = 250, .a = 255});
+```
+
+Leaf widgets (`Text`, `Button`) report their intrinsic size via `OnMeasure()`,
+which Taitank calls during layout.
+
+### Input Handling
+
+Mouse/touch events flow from the platform bridge through the widget tree:
+
+1. `GlfwBridge` receives GLFW mouse events and forwards them via `InputEventCallback`.
+2. `Application` performs a recursive `HitTest()` to find the deepest widget under the cursor.
+3. The hit widget's `OnPointerDown()` / `OnPointerUp()` is called with local coordinates.
+4. `Button` overrides these to track press state and invoke its `on_pressed` callback.
+
+### Route Navigation
+
+Widgets are registered with the `RouteRegistry` and pushed/popped onto a
+navigation stack:
+
+```cpp
+RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
+app.PushRoute("/settings");  // builds and displays the settings page
+app.PopRoute();              // returns to the previous route
+```
+
+## Examples
+
+### hello_neoflux
+
+A complete demo showing stateful widgets, button callbacks, route navigation,
+and flex layout. Run with:
+
+```bash
+./bin/hello_neoflux
+```
+
+### counter
+
+A minimal counter app demonstrating `StatefulWidget` and `Button` callbacks.
+
+```bash
+./bin/counter
 ```
 
 ## Project Structure

@@ -68,7 +68,7 @@ class Application : public NonCopyable {
  private:
   void OnFrame();
   void BuildDirtyWidgets();
-  void LayoutWidgetTree();
+  void LayoutWidgetTree() const;
   void PaintAndSubmit();
   void BuildWidgetRecursive(Widget& widget, BuildContext& context);
   void PaintWidgetRecursive(Widget& widget, RenderContext& context);

@@ -158,21 +158,27 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
                                      int action, int /*mods*/) {
   auto* user_data =
       static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
-  if (user_data == nullptr || user_data->bridge == nullptr) return;
+  if (user_data == nullptr || user_data->bridge == nullptr) {
+    return;
+  }
   auto* bridge = user_data->bridge;
-  if (!bridge->input_callback_) return;
+  if (!bridge->input_callback_) {
+    return;
+  }
   const auto btn = static_cast<MouseButton>(button);
   const auto act = static_cast<InputAction>(action);
   bridge->input_callback_(btn, act,
                           {.x = static_cast<float>(bridge->last_cursor_x_),
-                           .y = static_cast<float>(bridge->last_cursor_y_)});
+                           .y = static_cast<float>(bridge->last_cursor_y_),});
 }
 
 void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,
                                    double ypos) {
   auto* user_data =
       static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
-  if (user_data == nullptr || user_data->bridge == nullptr) return;
+  if (user_data == nullptr || user_data->bridge == nullptr) {
+    return;
+  }
   user_data->bridge->last_cursor_x_ = xpos;
   user_data->bridge->last_cursor_y_ = ypos;
 }

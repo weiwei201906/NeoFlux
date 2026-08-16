@@ -55,9 +55,9 @@ bool Application::Init(int argc, char** argv, int window_width,
     } else if (arg == "--nologtostderr" || arg == "-nologtostderr") {
       FLAGS_logtostderr = false;
     } else if (arg.substr(0, 10) == "--log_dir=" || arg.substr(0, 9) == "-log_dir=") {
-      const auto eq = arg.find('=');
-      if (eq != std::string_view::npos) {
-        FLAGS_log_dir = std::string(arg.substr(eq + 1));
+      const auto equal_pos = arg.find('=');
+      if (equal_pos != std::string_view::npos) {
+        FLAGS_log_dir = std::string(arg.substr(equal_pos + 1));
       }
     } else if ((arg == "--log_dir" || arg == "-log_dir") && i + 1 < argc) {
       FLAGS_log_dir = argv[++i];
@@ -81,9 +81,9 @@ bool Application::Init(int argc, char** argv, int window_width,
     if (FLAGS_log_dir.empty()) {
       FLAGS_log_dir = "./logs";
     }
-    std::error_code ec;
-    std::filesystem::create_directories(FLAGS_log_dir, ec);
-    if (ec) {
+    std::error_code dir_error;
+    std::filesystem::create_directories(FLAGS_log_dir, dir_error);
+    if (dir_error) {
       // Fall back to stderr if the log directory cannot be created.
       FLAGS_logtostderr = true;
     }
@@ -225,7 +225,7 @@ void Application::BuildWidgetRecursive(Widget& widget, BuildContext& context) {
   }
 }
 
-void Application::LayoutWidgetTree() {
+void Application::LayoutWidgetTree() const {
   Widget* root = GetRootWidget();
   if (root == nullptr) {
     return;
@@ -283,15 +283,19 @@ void Application::PaintWidgetRecursive(Widget& widget,
 
 void Application::DispatchPointerEvent(MouseButton button, InputAction action,
                                        const Point& pos) {
-  if (button != MouseButton::kLeft) return;
+  if (button != MouseButton::kLeft) {
+    return;
+  }
   Widget* root = GetRootWidget();
-  if (root == nullptr) return;
+  if (root == nullptr) {
+    return;
+  }
 
   if (action == InputAction::kPress) {
     Widget* hit = root->HitTest(pos);
     if (hit != nullptr) {
       const Point local{.x = pos.x - hit->GetBounds().x,
-                        .y = pos.y - hit->GetBounds().y};
+                        .y = pos.y - hit->GetBounds().y,};
       if (hit->OnPointerDown(local)) {
         pressed_widget_ = hit;
       }
@@ -299,7 +303,7 @@ void Application::DispatchPointerEvent(MouseButton button, InputAction action,
   } else if (action == InputAction::kRelease) {
     if (pressed_widget_ != nullptr) {
       const Point local{.x = pos.x - pressed_widget_->GetBounds().x,
-                        .y = pos.y - pressed_widget_->GetBounds().y};
+                        .y = pos.y - pressed_widget_->GetBounds().y,};
       pressed_widget_->OnPointerUp(local);
       pressed_widget_ = nullptr;
     }

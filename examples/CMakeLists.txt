@@ -3,3 +3,4 @@
 # =============================================================================
 
 add_subdirectory(hello_neoflux)
+add_subdirectory(counter)

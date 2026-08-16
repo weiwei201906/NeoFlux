@@ -29,7 +29,7 @@ float EstimateLabelWidth(std::string_view label, float font_size) {
   constexpr float kLatinWidthRatio = 0.55F;
   float width = 0.0F;
   for (std::size_t i = 0; i < label.size();) {
-    const unsigned char byte = static_cast<unsigned char>(label[i]);
+    const auto byte = static_cast<unsigned char>(label[i]);
     std::size_t char_len = 1;
     if ((byte & 0x80U) == 0U) {
       char_len = 1;

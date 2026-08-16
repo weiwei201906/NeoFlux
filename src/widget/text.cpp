@@ -27,7 +27,7 @@ float EstimateTextWidth(std::string_view text, float font_size) {
   constexpr float kLatinWidthRatio = 0.55F;
   float width = 0.0F;
   for (std::size_t i = 0; i < text.size();) {
-    const unsigned char byte = static_cast<unsigned char>(text[i]);
+    const auto byte = static_cast<unsigned char>(text[i]);
     std::size_t char_len = 1;
     if ((byte & 0x80U) == 0U) {
       char_len = 1;  // ASCII
