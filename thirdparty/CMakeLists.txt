@@ -81,12 +81,32 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(taitank)
 
 # ---------------------------------------------------------------------------
+# FreeType - high-quality TrueType/OpenType font rendering
+#
+# Used by the OpenGL fallback renderer for UTF-8 text rendering. Replaces
+# stb_truetype which produced garbled glyphs with CJK fonts.
+# ---------------------------------------------------------------------------
+FetchContent_Declare(
+  freetype
+  GIT_REPOSITORY https://github.com/freetype/freetype.git
+  GIT_TAG        VER-2-13-2
+  GIT_SHALLOW    TRUE
+)
+set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+set(FT_ENABLE_ERROR_STRINGS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(freetype)
+
+# ---------------------------------------------------------------------------
 # tgfx - Tencent lightweight 2D graphics rendering library
 #
 # tgfx uses `depsync` (npm package) to manage vendor dependencies, and its
 # vendor build system requires MSVC on Windows. On MinGW or other non-MSVC
 # toolchains, tgfx cannot be built; the framework falls back to a built-in
-# OpenGL renderer (shader + VBO + stb_truetype for UTF-8 text).
+# OpenGL renderer (shader + VBO + FreeType for UTF-8 text).
 #
 # To enable tgfx: cmake -DNEOFLUX_USE_TGFX=ON .. (requires MSVC on Windows,
 # or a pre-built tgfx package on other platforms).

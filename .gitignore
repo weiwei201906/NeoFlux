@@ -9,6 +9,11 @@ out/
 # Third-party fetched dependencies
 thirdparty/_deps/
 
+# Downloaded font files (use download_fonts scripts to fetch)
+thirdparty/fonts/*.ttf
+thirdparty/fonts/*.otf
+thirdparty/fonts/*.ttc
+
 # IDE files
 .idea/
 .vscode/

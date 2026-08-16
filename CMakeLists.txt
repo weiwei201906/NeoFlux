@@ -92,8 +92,14 @@ add_library(neoflux STATIC
   src/render/render_command.cpp
   src/render/render_context.cpp
   src/render/tgfx_renderer.cpp
-  src/render/glfw_bridge.cpp
 )
+
+# Platform-specific bridge implementations.
+if(ANDROID OR (APPLE AND IOS))
+  target_sources(neoflux PRIVATE src/render/mobile_bridge.cpp)
+else()
+  target_sources(neoflux PRIVATE src/render/glfw_bridge.cpp)
+endif()
 
 target_include_directories(neoflux
   PUBLIC
@@ -111,12 +117,13 @@ target_link_libraries(neoflux
     taitank
     glog::glog
     gflags
+    freetype
     OpenGL::GL
 )
 
 # tgfx is an optional rendering backend. When enabled, tgfx performs all
 # rendering; when disabled, a built-in OpenGL renderer (shader + VBO +
-# stb_truetype for UTF-8 text) is used. GLFW remains only a window/context
+# FreeType for UTF-8 text) is used. GLFW remains only a window/context
 # bridge in both cases.
 if(NEOFLUX_USE_TGFX AND TARGET tgfx)
   target_link_libraries(neoflux PRIVATE tgfx)
@@ -162,6 +169,28 @@ endif()
 # ---------------------------------------------------------------------------
 if(NEOFLUX_BUILD_EXAMPLES)
   add_subdirectory(examples)
+endif()
+
+# ---------------------------------------------------------------------------
+# Copy bundled fonts to the runtime output directory (bin/fonts/) so that
+# executables can find them regardless of the current working directory.
+# Uses file(GLOB) to collect font files and copies them post-build.
+# ---------------------------------------------------------------------------
+file(GLOB NEOFLUX_BUNDLED_FONTS
+  "${CMAKE_SOURCE_DIR}/thirdparty/fonts/*.ttf"
+  "${CMAKE_SOURCE_DIR}/thirdparty/fonts/*.otf"
+  "${CMAKE_SOURCE_DIR}/thirdparty/fonts/*.ttc"
+)
+if(NEOFLUX_BUNDLED_FONTS)
+  add_custom_command(TARGET neoflux POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+      ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fonts
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      ${NEOFLUX_BUNDLED_FONTS}
+      ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fonts/
+    COMMENT "Copying bundled fonts to bin/fonts/"
+    VERBATIM
+  )
 endif()
 
 # ---------------------------------------------------------------------------

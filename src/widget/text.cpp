@@ -7,6 +7,8 @@
 
 #include "neoflux/widget/text.h"
 
+#include <glog/logging.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <string>
