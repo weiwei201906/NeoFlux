@@ -6,6 +6,7 @@
 
 #include <neoflux/widget/route_registry.h>
 #include <neoflux/widget/text.h>
+#include <neoflux/widget/widget.h>
 
 #include <memory>
 

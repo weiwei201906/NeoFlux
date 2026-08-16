@@ -8,10 +8,12 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <glog/logging.h>
 
+#include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
 
 namespace neoflux {
@@ -103,8 +105,8 @@ Size Button::Layout(const LayoutConstraints& constraints) {
 }
 
 void Button::Paint(RenderContext& context) {
-  const Color bg = is_pressed_ ? pressed_color_ : background_color_;
-  context.DrawRect({.x=0.0F, .y=0.0F, .width=bounds_.width, .height=bounds_.height}, bg);
+  const Color background = is_pressed_ ? pressed_color_ : background_color_;
+  context.DrawRect({.x=0.0F, .y=0.0F, .width=bounds_.width, .height=bounds_.height}, background);
 
   const float label_width = EstimateLabelWidth(label_, font_size_);
   const float label_x = (bounds_.width - label_width) / 2.0F;  // NOLINT(cppcoreguidelines-init-variables)

@@ -6,7 +6,13 @@
 
 #include "neoflux/widget/route_registry.h"
 
+#include <cstddef>
+#include <memory>
+#include <string_view>
+
 #include <glog/logging.h>
+
+#include "neoflux/widget/widget.h"
 
 namespace neoflux {
 
@@ -28,12 +34,12 @@ void RouteRegistry::RegisterRoute(std::string_view route_name,
 
 std::shared_ptr<Widget> RouteRegistry::BuildRoute(
     std::string_view route_name, BuildContext& context) const {
-  const auto it = routes_.find(std::string(route_name));
-  if (it == routes_.end()) {
+  const auto iter = routes_.find(std::string(route_name));
+  if (iter == routes_.end()) {
     LOG(ERROR) << "Route not found: " << route_name;
     return nullptr;
   }
-  return it->second(context);
+  return iter->second(context);
 }
 
 bool RouteRegistry::HasRoute(std::string_view route_name) const {

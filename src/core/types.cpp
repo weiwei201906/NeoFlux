@@ -6,6 +6,8 @@
 
 #include "neoflux/core/types.h"
 
+#include <cstdint>
+
 namespace neoflux {
 
 float Rect::right() const noexcept { return x + width; }

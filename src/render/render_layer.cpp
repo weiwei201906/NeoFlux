@@ -7,7 +7,9 @@
 #include "neoflux/render/render_layer.h"
 
 #include <chrono>
+#include <cstddef>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 
@@ -15,6 +17,7 @@
 #include <glog/logging.h>
 
 #include "neoflux/render/glfw_bridge.h"
+#include "neoflux/render/render_command.h"
 #include "neoflux/render/tgfx_renderer.h"
 
 DEFINE_uint64(render_queue_capacity, 2048,

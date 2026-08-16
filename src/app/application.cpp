@@ -8,12 +8,17 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "neoflux/core/types.h"
+#include "neoflux/render/render_context.h"
+#include "neoflux/render/render_layer.h"
 #include "neoflux/widget/route_registry.h"
+#include "neoflux/widget/widget.h"
 
 DEFINE_int32(target_fps, 60, "Target frames per second");
 DEFINE_bool(verbose_logging, false, "Enable verbose logging");

@@ -4,6 +4,8 @@
 // Unit tests for the SPSC lock-free ring queue.
 // =============================================================================
 
+#include <neoflux/core/ring_queue.h>
+
 #include "core/ring_queue_impl.inc"
 
 #include <thread>
@@ -69,14 +71,14 @@ TEST(SpscRingQueueTest, WrapAround) {
   SpscRingQueue<int> queue(4);
   // Push and pop to advance indices past the buffer end.
   for (int cycle = 0; cycle < 3; ++cycle) {
-    EXPECT_TRUE(queue.TryPush((cycle * 10)));
-    EXPECT_TRUE(queue.TryPush((cycle * 10) + 1));
-    int v1 = 0;
-    int v2 = 0;
-    EXPECT_TRUE(queue.TryPop(v1));
-    EXPECT_TRUE(queue.TryPop(v2));
-    EXPECT_EQ(v1, (cycle * 10));
-    EXPECT_EQ(v2, (cycle * 10) + 1);
+    EXPECT_TRUE(queue.TryPush(10LL * cycle));
+    EXPECT_TRUE(queue.TryPush((10LL * cycle) + 1));
+    int value1 = 0;
+    int value2 = 0;
+    EXPECT_TRUE(queue.TryPop(value1));
+    EXPECT_TRUE(queue.TryPop(value2));
+    EXPECT_EQ(value1, (10LL * cycle));
+    EXPECT_EQ(value2, (10LL * cycle) + 1);
   }
   EXPECT_TRUE(queue.Empty());
 }
@@ -85,7 +87,7 @@ TEST(SpscRingQueueTest, MoveOnlyType) {
   struct MoveOnly {
     int value = 0;
     MoveOnly() = default;
-    explicit MoveOnly(int v) : value(v) {}
+    explicit MoveOnly(int value) : value(value) {}
     MoveOnly(const MoveOnly&) = delete;
     MoveOnly& operator=(const MoveOnly&) = delete;
     MoveOnly(MoveOnly&&) = default;

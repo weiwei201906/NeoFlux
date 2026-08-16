@@ -79,7 +79,7 @@ struct RenderCommand {
   [[nodiscard]] static RenderCommand MakeRestore();
 
   // Factory: create a translate command.
-  [[nodiscard]] static RenderCommand MakeTranslate(float dx, float dy);
+  [[nodiscard]] static RenderCommand MakeTranslate(float delta_x, float delta_y);
 
   // Factory: create a clip-rect command.
   [[nodiscard]] static RenderCommand MakeClipRect(const Rect& rect);

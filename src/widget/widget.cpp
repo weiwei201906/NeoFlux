@@ -8,10 +8,15 @@
 #include "neoflux/widget/widget.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <functional>
+#include <memory>
+#include <string_view>
 
 #include <glog/logging.h>
 
 #include "neoflux/app/application.h"
+#include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
 
 namespace neoflux {
@@ -190,9 +195,9 @@ BuildContext* State<W>::GetContext() const noexcept {
 }
 
 template <typename W>
-void State<W>::SetState(std::function<void()> fn) {
-  if (fn) {
-    fn();
+void State<W>::SetState(std::function<void()> callback) {
+  if (callback) {
+    callback();
   }
   if (widget_ != nullptr) {
     widget_->MarkNeedsBuild();

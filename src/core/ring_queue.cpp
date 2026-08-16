@@ -5,6 +5,7 @@
 // for types used by the framework.
 // =============================================================================
 
+#include "neoflux/core/ring_queue.h"
 #include "neoflux/render/render_command.h"
 
 #include "ring_queue_impl.inc"

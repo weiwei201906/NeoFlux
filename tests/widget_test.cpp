@@ -10,6 +10,9 @@
 #include <neoflux/widget/widget.h>
 
 #include <memory>
+#include <string_view>
+
+#include <neoflux/core/types.h>
 
 #include <gtest/gtest.h>
 

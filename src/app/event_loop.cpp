@@ -7,6 +7,7 @@
 #include "neoflux/app/event_loop.h"
 
 #include <chrono>
+#include <cstdint>
 #include <thread>
 
 #include <glog/logging.h>

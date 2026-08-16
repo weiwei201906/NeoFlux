@@ -7,6 +7,8 @@
 #include <neoflux/render/render_command.h>
 #include <neoflux/render/render_context.h>
 
+#include <neoflux/core/types.h>
+
 #include <gtest/gtest.h>
 
 namespace neoflux {

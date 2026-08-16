@@ -6,7 +6,10 @@
 
 #include "neoflux/render/render_command.h"
 
+#include <string>
 #include <utility>
+
+#include "neoflux/core/types.h"
 
 namespace neoflux {
 
@@ -41,10 +44,10 @@ RenderCommand RenderCommand::MakeRestore() {
   return cmd;
 }
 
-RenderCommand RenderCommand::MakeTranslate(float dx, float dy) {
+RenderCommand RenderCommand::MakeTranslate(float delta_x, float delta_y) {
   RenderCommand cmd;
   cmd.type = RenderCommandType::kTranslate;
-  cmd.payload = TranslateCommand{.dx = dx, .dy = dy};
+  cmd.payload = TranslateCommand{.dx = delta_x, .dy = delta_y};
   return cmd;
 }
 

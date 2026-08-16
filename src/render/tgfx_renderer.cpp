@@ -7,10 +7,14 @@
 #include "neoflux/render/tgfx_renderer.h"
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 
 #include <glog/logging.h>
+
+#include "neoflux/core/types.h"
+#include "neoflux/render/render_command.h"
 
 #if __has_include(<tgfx/tgfx.h>)
 #include <tgfx/tgfx.h>
@@ -30,8 +34,7 @@ struct TgfxContext {
   std::shared_ptr<tgfx::Context> context;
 };
 
-TgfxRenderer::TgfxRenderer()
-    : width_(0), height_(0), initialized_(false), tgfx_context_(nullptr) {}
+TgfxRenderer::TgfxRenderer() = default;
 
 TgfxRenderer::~TgfxRenderer() {
   if (tgfx_context_ != nullptr) {
@@ -199,10 +202,10 @@ void TgfxRenderer::RestoreImpl() {
   }
 }
 
-void TgfxRenderer::TranslateImpl(float dx, float dy) {
+void TgfxRenderer::TranslateImpl(float delta_x, float delta_y) {
   auto* ctx = static_cast<TgfxContext*>(tgfx_context_);
   if (ctx != nullptr && ctx->canvas != nullptr) {
-    ctx->canvas->translate(dx, dy);
+    ctx->canvas->translate(delta_x, delta_y);
   }
 }
 
@@ -222,8 +225,7 @@ void TgfxRenderer::ClipRectImpl(const Rect& rect) {
 
 #else  // !NEOFLUX_TGFX_AVAILABLE
 
-TgfxRenderer::TgfxRenderer()
-    : width_(0), height_(0), initialized_(false), tgfx_context_(nullptr) {}
+TgfxRenderer::TgfxRenderer() = default;
 
 TgfxRenderer::~TgfxRenderer() = default;
 
@@ -262,7 +264,7 @@ void TgfxRenderer::SaveImpl() {}
 
 void TgfxRenderer::RestoreImpl() {}
 
-void TgfxRenderer::TranslateImpl(float /*dx*/, float /*dy*/) {}
+void TgfxRenderer::TranslateImpl(float /*delta_x*/, float /*delta_y*/) {}
 
 void TgfxRenderer::ClipRectImpl(const Rect& /*rect*/) {}
 

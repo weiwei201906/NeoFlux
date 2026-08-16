@@ -7,8 +7,12 @@
 #include "neoflux/widget/container.h"
 
 #include <algorithm>
+#include <memory>
+#include <string_view>
 
+#include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
+#include "neoflux/widget/widget.h"
 
 namespace neoflux {
 

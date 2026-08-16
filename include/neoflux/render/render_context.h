@@ -39,8 +39,8 @@ class RenderContext {
   // Restores the previous transform/clip state.
   void Restore();
 
-  // Translates the coordinate origin by (dx, dy).
-  void Translate(float dx, float dy);
+  // Translates the coordinate origin by (delta_x, delta_y).
+  void Translate(float delta_x, float delta_y);
 
   // Sets a rectangular clip region (intersects with current clip).
   void ClipRect(const Rect& rect);

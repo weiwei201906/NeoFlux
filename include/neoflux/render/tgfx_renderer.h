@@ -48,13 +48,13 @@ class TgfxRenderer : public NonCopyable {
                     const Color& color, float font_size);
   void SaveImpl();
   void RestoreImpl();
-  void TranslateImpl(float dx, float dy);
+  void TranslateImpl(float delta_x, float delta_y);
   void ClipRectImpl(const Rect& rect);
 
-  int width_;
-  int height_;
-  bool initialized_;
-  void* tgfx_context_;
+  int width_ = 0;
+  int height_ = 0;
+  bool initialized_ = false;
+  void* tgfx_context_ = nullptr;
 };
 
 }  // namespace neoflux

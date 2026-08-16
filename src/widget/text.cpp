@@ -8,8 +8,10 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 
+#include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
 
 namespace neoflux {
@@ -71,14 +73,14 @@ Size Text::Layout(const LayoutConstraints& constraints) {
 }
 
 void Text::Paint(RenderContext& context) {
-  float x = 0.0F;
+  float text_x = 0.0F;
   if (alignment_ == HAlign::kCenter) {
-    x = (bounds_.width - EstimateTextWidth(text_, font_size_)) / 2.0F;
+    text_x = (bounds_.width - EstimateTextWidth(text_, font_size_)) / 2.0F;
   } else if (alignment_ == HAlign::kRight) {
-    x = bounds_.width - EstimateTextWidth(text_, font_size_);
+    text_x = bounds_.width - EstimateTextWidth(text_, font_size_);
   }
 
-  context.DrawText(text_, {.x=x, .y=font_size_}, text_color_, font_size_);
+  context.DrawText(text_, {.x=text_x, .y=font_size_}, text_color_, font_size_);
 }
 
 }  // namespace neoflux

@@ -73,13 +73,13 @@ struct LayoutConstraints {
 };
 
 // Horizontal alignment enumeration.
-enum class HAlign { kLeft, kCenter, kRight };
+enum class HAlign : std::uint8_t { kLeft, kCenter, kRight };
 
 // Vertical alignment enumeration.
-enum class VAlign { kTop, kCenter, kBottom };
+enum class VAlign : std::uint8_t { kTop, kCenter, kBottom };
 
 // Main axis direction for flex layouts.
-enum class Axis { kHorizontal, kVertical };
+enum class Axis : std::uint8_t { kHorizontal, kVertical };
 
 }  // namespace neoflux
 

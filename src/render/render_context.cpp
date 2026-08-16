@@ -6,8 +6,12 @@
 
 #include "neoflux/render/render_context.h"
 
+#include <cstddef>
 #include <string>
+#include <string_view>
 #include <utility>
+
+#include "neoflux/core/types.h"
 
 namespace neoflux {
 
@@ -31,8 +35,8 @@ void RenderContext::Restore() {
   commands_.push_back(RenderCommand::MakeRestore());
 }
 
-void RenderContext::Translate(float dx, float dy) {
-  commands_.push_back(RenderCommand::MakeTranslate(dx, dy));
+void RenderContext::Translate(float delta_x, float delta_y) {
+  commands_.push_back(RenderCommand::MakeTranslate(delta_x, delta_y));
 }
 
 void RenderContext::ClipRect(const Rect& rect) {
