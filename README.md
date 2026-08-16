@@ -190,6 +190,15 @@ A minimal counter app demonstrating `StatefulWidget` and `Button` callbacks.
 ./bin/counter
 ```
 
+### flex_demo
+
+A layout showcase demonstrating Taitank flex layout: row/column directions,
+center justification, flex grow, and row reverse with colored boxes.
+
+```bash
+./bin/flex_demo
+```
+
 ## Project Structure
 
 ```

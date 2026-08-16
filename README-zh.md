@@ -190,6 +190,10 @@ int main(int argc, char** argv) {
 
 极简计数器，演示 `StatefulWidget`、`Button` 回调、flex row/column 布局。
 
+### flex_demo
+
+布局展示示例，演示 Taitank flex 布局：row/column 方向、居中对齐、flex grow、row reverse，使用彩色方块可视化布局效果。
+
 ## 项目结构
 
 ```
