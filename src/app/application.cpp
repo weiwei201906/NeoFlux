@@ -20,14 +20,7 @@ DEFINE_bool(verbose_logging, false, "Enable verbose logging");
 
 namespace neoflux {
 
-Application::Application()
-    : event_loop_(),
-      render_layer_(nullptr),
-      navigation_stack_(),
-      render_context_(),
-      window_width_(800),
-      window_height_(600),
-      initialized_(false) {}
+Application::Application() = default;
 
 Application::~Application() { Stop(); }
 
@@ -61,7 +54,7 @@ bool Application::Init(int argc, char** argv, int window_width,
   return true;
 }
 
-void Application::Run() {
+void Application::Run() {  // NOLINT(readability-make-member-function-const)
   if (!initialized_) {
     LOG(ERROR) << "Application::Run called before Init()";
     return;
@@ -171,7 +164,7 @@ void Application::LayoutWidgetTree() {
   constraints.max_height = static_cast<float>(window_height_);
 
   const Size root_size = LayoutWidgetRecursive(*root, constraints);
-  root->SetBounds({0.0F, 0.0F, root_size.width, root_size.height});
+  root->SetBounds({.x = 0.0F, .y = 0.0F, .width = root_size.width, .height = root_size.height});
 }
 
 Size Application::LayoutWidgetRecursive(

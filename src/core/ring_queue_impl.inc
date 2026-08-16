@@ -1,18 +1,17 @@
 // =============================================================================
-// NeoFlux - ring_queue_internal.h
+// NeoFlux - ring_queue_impl.inc
 //
-// INTERNAL header: template method implementations for SpscRingQueue.
+// Template method implementations for SpscRingQueue.
 //
-// This file is NOT part of the public API. It is included by:
-//   - ring_queue.cpp (for framework explicit instantiations)
-//   - test files (for test-only instantiations)
+// This is NOT a header file. It is included by:
+//   - src/core/ring_queue.cpp        (framework explicit instantiations)
+//   - tests/ring_queue_test.cpp      (test-only instantiations)
 //
-// The public ring_queue.h contains only the declaration.
+// The public declaration is in include/neoflux/core/ring_queue.h.
 // =============================================================================
+#pragma once
 
-#ifndef NEOFLUX_CORE_RING_QUEUE_INTERNAL_H_
-#define NEOFLUX_CORE_RING_QUEUE_INTERNAL_H_
-
+#include <memory>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -22,7 +21,7 @@
 namespace neoflux {
 
 template <typename T, std::size_t Capacity>
-SpscRingQueue<T, Capacity>::SpscRingQueue() : head_(0), tail_(0) {
+SpscRingQueue<T, Capacity>::SpscRingQueue() : storage_{}, head_(0), tail_(0) {
   static_assert(std::is_move_constructible_v<T> ||
                     std::is_copy_constructible_v<T>,
                 "T must be move-constructible or copy-constructible");
@@ -89,10 +88,8 @@ constexpr std::size_t SpscRingQueue<T, Capacity>::CapacityValue() noexcept {
 }
 
 template <typename T, std::size_t Capacity>
-T* SpscRingQueue<T, Capacity>::Slot(std::size_t index) noexcept {
-  return std::launder(reinterpret_cast<T*>(storage_ + index * sizeof(T)));
+T* SpscRingQueue<T, Capacity>::Slot(const std::size_t index) noexcept {
+  return std::launder(reinterpret_cast<T*>(storage_ + (index * sizeof(T))));
 }
 
 }  // namespace neoflux
-
-#endif  // NEOFLUX_CORE_RING_QUEUE_INTERNAL_H_

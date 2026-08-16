@@ -82,15 +82,22 @@ FetchContent_MakeAvailable(taitank)
 
 # ---------------------------------------------------------------------------
 # tgfx - Tencent lightweight 2D graphics rendering library
+#
+# tgfx has a heavy dependency tree (managed via `depsync` + DEPS file,
+# including shaderc/freetype/libpng/libjpeg-turbo/libwebp/zlib/etc.).
+# It is OFF by default; when disabled, tgfx_renderer.cpp compiles a
+# lightweight stub so the rest of the framework builds and tests cleanly.
+# To enable: cmake -DNEOFLUX_USE_TGFX=ON ..
+#   Prerequisites: npm install -g depsync, then run tgfx's sync_deps.sh
 # ---------------------------------------------------------------------------
-FetchContent_Declare(
-  tgfx
-  GIT_REPOSITORY https://github.com/Tencent/tgfx.git
-  GIT_TAG        main
-  GIT_SHALLOW    TRUE
-)
-# tgfx has its own complex build; we declare it and link if available
-# On desktop, tgfx can use OpenGL backend; on mobile, Vulkan/Metal/GLES
-FetchContent_MakeAvailable(tgfx)
+if(NEOFLUX_USE_TGFX)
+  FetchContent_Declare(
+    tgfx
+    GIT_REPOSITORY https://github.com/Tencent/tgfx.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+  )
+  FetchContent_MakeAvailable(tgfx)
+endif()
 
 message(STATUS "NeoFlux third-party dependencies configured")

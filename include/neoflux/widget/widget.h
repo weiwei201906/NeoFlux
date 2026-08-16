@@ -2,10 +2,8 @@
 // NeoFlux - widget.h
 //
 // Base Widget class and BuildContext for the Flutter-like widget tree.
-// All non-template method implementations are in widget.cpp.
-//
-// Note: State<W> is a class template and must remain header-only (C++
-// template instantiation requirement).
+// All method implementations (including State<W> template methods) are in
+// widget.cpp with explicit instantiation for State<StatefulWidget>.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_WIDGET_H_
@@ -129,12 +127,14 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Paints all children with appropriate translation.
   void PaintChildren(RenderContext& context);
 
+  // Derived widgets may read their computed bounds directly.
+  Rect bounds_{};
+  Size desired_size_{};
+
  private:
-  std::vector<std::shared_ptr<Widget>> children_;
-  Widget* parent_;
-  Rect bounds_;
-  Size desired_size_;
-  bool needs_build_;
+  std::vector<std::shared_ptr<Widget>> children_{};
+  Widget* parent_ = nullptr;
+  bool needs_build_ = true;
 };
 
 // Mutable state for a StatefulWidget.

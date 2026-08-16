@@ -16,6 +16,7 @@ function(neoflux_add_test test_name)
   )
   target_include_directories(${test_name} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
   )
   gtest_discover_tests(${test_name})
 endfunction()

@@ -9,6 +9,7 @@
 #define NEOFLUX_APP_EVENT_LOOP_H_
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 
@@ -48,7 +49,7 @@ class EventLoop : public NonCopyable {
  private:
   // Sleeps for the remaining time in the current frame to maintain target FPS.
   void ThrottleFrame(
-      const std::chrono::steady_clock::time_point& frame_start);
+      const std::chrono::steady_clock::time_point& frame_start) const;
 
   std::atomic<bool> running_;
   std::atomic<bool> should_stop_;

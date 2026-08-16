@@ -22,15 +22,13 @@ void RouteRegistry::RegisterRoute(std::string_view route_name,
                  << route_name;
     return;
   }
-  const std::string key(route_name);
-  routes_[key] = std::move(builder);
+  routes_[std::string(route_name)] = std::move(builder);
   VLOG(1) << "Registered route: " << route_name;
 }
 
 std::shared_ptr<Widget> RouteRegistry::BuildRoute(
     std::string_view route_name, BuildContext& context) const {
-  const std::string key(route_name);
-  const auto it = routes_.find(key);
+  const auto it = routes_.find(std::string(route_name));
   if (it == routes_.end()) {
     LOG(ERROR) << "Route not found: " << route_name;
     return nullptr;
@@ -39,7 +37,7 @@ std::shared_ptr<Widget> RouteRegistry::BuildRoute(
 }
 
 bool RouteRegistry::HasRoute(std::string_view route_name) const {
-  return routes_.find(std::string(route_name)) != routes_.end();
+  return routes_.contains(std::string(route_name));
 }
 
 std::size_t RouteRegistry::GetRouteCount() const noexcept {

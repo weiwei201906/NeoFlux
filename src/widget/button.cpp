@@ -20,7 +20,7 @@ namespace {
 
 float EstimateLabelWidth(std::string_view label, float font_size) {
   constexpr float kAvgCharWidthRatio = 0.55F;
-  return static_cast<float>(label.size()) * font_size * kAvgCharWidthRatio;
+  return (static_cast<float>(label.size()) * font_size) * kAvgCharWidthRatio;
 }
 
 }  // namespace
@@ -28,9 +28,9 @@ float EstimateLabelWidth(std::string_view label, float font_size) {
 Button::Button(std::string label)
     : label_(std::move(label)),
       on_pressed_(),
-      background_color_{0x21, 0x96, 0xF3, 0xFF},
-      text_color_{0xFF, 0xFF, 0xFF, 0xFF},
-      pressed_color_{0x19, 0x76, 0xD2, 0xFF},
+      background_color_{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF},
+      text_color_{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF},
+      pressed_color_{.r = 0x19, .g = 0x76, .b = 0xD2, .a = 0xFF},
       font_size_(14.0F),
       horizontal_padding_(16.0F),
       vertical_padding_(8.0F),
@@ -89,27 +89,27 @@ void Button::HandleRelease(const Point& local_pos) {
 
 Size Button::Layout(const LayoutConstraints& constraints) {
   const float label_width = EstimateLabelWidth(label_, font_size_);
-  const float content_width = label_width + 2.0F * horizontal_padding_;
-  const float content_height = font_size_ * 1.2F + 2.0F * vertical_padding_;
+  const float content_width = label_width + (2.0F * horizontal_padding_);
+  const float content_height = (font_size_ * 1.2F) + (2.0F * vertical_padding_);
 
   float width =
       std::clamp(content_width, constraints.min_width, constraints.max_width);
   float height = std::clamp(content_height, constraints.min_height,
                             constraints.max_height);
 
-  SetBounds({bounds_.x, bounds_.y, width, height});
-  SetDesiredSize({width, height});
-  return {width, height};
+  SetBounds({.x = bounds_.x, .y = bounds_.y, .width = width, .height = height});
+  SetDesiredSize({.width = width, .height = height});
+  return {.width = width, .height = height};
 }
 
 void Button::Paint(RenderContext& context) {
   const Color bg = is_pressed_ ? pressed_color_ : background_color_;
-  context.DrawRect({0.0F, 0.0F, bounds_.width, bounds_.height}, bg);
+  context.DrawRect({.x=0.0F, .y=0.0F, .width=bounds_.width, .height=bounds_.height}, bg);
 
   const float label_width = EstimateLabelWidth(label_, font_size_);
-  const float label_x = (bounds_.width - label_width) / 2.0F;
+  const float label_x = (bounds_.width - label_width) / 2.0F;  // NOLINT(cppcoreguidelines-init-variables)
   const float label_y = vertical_padding_ + font_size_;
-  context.DrawText(label_, {label_x, label_y}, text_color_, font_size_);
+  context.DrawText(label_, {.x=label_x, .y=label_y}, text_color_, font_size_);
 }
 
 bool Button::ContainsPoint(const Point& point) const noexcept {

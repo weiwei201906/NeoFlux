@@ -239,18 +239,8 @@ void TgfxRenderer::BeginFrame(const Color& /*clear_color*/) {}
 
 void TgfxRenderer::EndFrame() {}
 
-void TgfxRenderer::Execute(const RenderCommand& command) {
-  switch (command.type) {
-    case RenderCommandType::kDrawRect:
-    case RenderCommandType::kDrawText:
-    case RenderCommandType::kSave:
-    case RenderCommandType::kRestore:
-    case RenderCommandType::kTranslate:
-    case RenderCommandType::kClipRect:
-      break;
-    default:
-      break;
-  }
+void TgfxRenderer::Execute(const RenderCommand& /*command*/) {
+  // Stub: no rendering when tgfx is not available.
 }
 
 void TgfxRenderer::Resize(int width, int height) {

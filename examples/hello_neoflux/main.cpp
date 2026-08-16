@@ -32,7 +32,7 @@ class CounterWidget : public StatefulWidget {
 // State for the CounterWidget.
 class CounterState : public State<StatefulWidget> {
  public:
-  [[nodiscard]] std::shared_ptr<Widget> Build(BuildContext& context) override {
+  [[nodiscard]] std::shared_ptr<Widget> Build(BuildContext& /*context*/) override {
     auto container = std::make_shared<Container>();
     container->SetBackgroundColor({240, 240, 240, 255})
         .SetPadding({20.0F, 20.0F, 20.0F, 20.0F});

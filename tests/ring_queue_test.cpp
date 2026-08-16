@@ -4,7 +4,7 @@
 // Unit tests for the SPSC lock-free ring queue.
 // =============================================================================
 
-#include <neoflux/core/ring_queue_internal.h>
+#include "core/ring_queue_impl.inc"
 
 #include <thread>
 #include <vector>

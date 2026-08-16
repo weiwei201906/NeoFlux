@@ -1,12 +1,13 @@
 // =============================================================================
 // NeoFlux - ring_queue.cpp
 //
-// Explicit instantiations of SpscRingQueue for types used by the framework.
-// Template method implementations are in ring_queue_internal.h.
+// Template implementation include + explicit instantiations of SpscRingQueue
+// for types used by the framework.
 // =============================================================================
 
-#include "neoflux/core/ring_queue_internal.h"
-#include "neoflux/render/render_command.h"
+#include "neoflux/render/render_layer.h"
+
+#include "ring_queue_impl.inc"
 
 namespace neoflux {
 

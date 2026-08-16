@@ -69,17 +69,17 @@ class RenderLayer : public NonCopyable {
   // Processes all pending commands from the ring queue.
   void ProcessPendingCommands();
 
-  SpscRingQueue<RenderCommand, kRenderQueueCapacity> command_queue_;
+  SpscRingQueue<RenderCommand, kRenderQueueCapacity> command_queue_{};
 
-  std::atomic<bool> running_;
-  std::atomic<bool> should_close_;
-  std::unique_ptr<std::thread> render_thread_;
+  std::atomic<bool> running_{false};
+  std::atomic<bool> should_close_{false};
+  std::unique_ptr<std::thread> render_thread_ = nullptr;
 
   std::unique_ptr<TgfxRenderer> renderer_;
   std::unique_ptr<GlfwBridge> glfw_bridge_;
 
-  int window_width_;
-  int window_height_;
+  int window_width_ = 800;
+  int window_height_ = 600;
 };
 
 }  // namespace neoflux

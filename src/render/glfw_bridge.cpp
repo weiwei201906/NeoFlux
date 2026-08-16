@@ -6,7 +6,7 @@
 
 #include "neoflux/render/glfw_bridge.h"
 
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
 
 #include <string>
 #include <utility>
@@ -38,7 +38,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
 
   glfwSetErrorCallback(ErrorCallback);
 
-  if (!glfwInit()) {
+  if (glfwInit() == GLFW_FALSE) {
     LOG(ERROR) << "Failed to initialize GLFW";
     return false;
   }
@@ -48,7 +48,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
-  const std::string title_str(title);
+  const std::string title_str(title);  // NOLINT(bugprone-unused-local-non-trivial-variable)
   window_ = glfwCreateWindow(width, height, title_str.c_str(), nullptr,
                              nullptr);
   if (window_ == nullptr) {
@@ -92,7 +92,7 @@ void GlfwBridge::Shutdown() {
   LOG(INFO) << "GLFW bridge shut down";
 }
 
-void GlfwBridge::PollEvents() {
+void GlfwBridge::PollEvents() const {
   if (initialized_) {
     glfwPollEvents();
   }
@@ -105,7 +105,7 @@ void GlfwBridge::SwapBuffers() {
 }
 
 bool GlfwBridge::ShouldClose() const {
-  return window_ != nullptr && glfwWindowShouldClose(window_);
+  return window_ != nullptr && glfwWindowShouldClose(window_) != 0;
 }
 
 void GlfwBridge::GetFramebufferSize(int& width, int& height) const {

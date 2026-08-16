@@ -25,7 +25,7 @@ float EstimateTextWidth(std::string_view text, float font_size) {
 
 Text::Text(std::string text)
     : text_(std::move(text)),
-      text_color_{0, 0, 0, 255},
+      text_color_{.r = 0, .g = 0, .b = 0, .a = 255},
       font_size_(14.0F),
       alignment_(HAlign::kLeft) {}
 
@@ -65,9 +65,9 @@ Size Text::Layout(const LayoutConstraints& constraints) {
   float height = std::clamp(text_height, constraints.min_height,
                             constraints.max_height);
 
-  SetBounds({bounds_.x, bounds_.y, width, height});
-  SetDesiredSize({width, height});
-  return {width, height};
+  SetBounds({.x = bounds_.x, .y = bounds_.y, .width = width, .height = height});
+  SetDesiredSize({.width = width, .height = height});
+  return {.width = width, .height = height};
 }
 
 void Text::Paint(RenderContext& context) {
@@ -78,7 +78,7 @@ void Text::Paint(RenderContext& context) {
     x = bounds_.width - EstimateTextWidth(text_, font_size_);
   }
 
-  context.DrawText(text_, {x, font_size_}, text_color_, font_size_);
+  context.DrawText(text_, {.x=x, .y=font_size_}, text_color_, font_size_);
 }
 
 }  // namespace neoflux

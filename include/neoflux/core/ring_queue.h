@@ -3,13 +3,12 @@
 //
 // Lock-free single-producer single-consumer (SPSC) bounded ring queue.
 //
-// This header contains ONLY the template class declaration. The method
-// implementations are in ring_queue_internal.h and are explicitly
-// instantiated in ring_queue.cpp for the types used by the framework.
+// This header contains ONLY the template class declaration. Method
+// implementations live in src/core/ring_queue_impl.inc and are explicitly
+// instantiated in src/core/ring_queue.cpp for framework types.
 //
-// To use this queue with a custom type in external code, include
-// neoflux/core/ring_queue_internal.h and explicitly instantiate the
-// required specialization, or rely on the framework's instantiations.
+// To use this queue with a custom type, include ring_queue_impl.inc and
+// explicitly instantiate the required specialization.
 // =============================================================================
 
 #ifndef NEOFLUX_CORE_RING_QUEUE_H_

@@ -18,19 +18,18 @@
 
 namespace neoflux {
 
-RenderLayer::RenderLayer()
-    : running_(false),
+RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init)
+    : command_queue_(),
+      running_(false),
       should_close_(false),
       render_thread_(nullptr),
       renderer_(nullptr),
-      glfw_bridge_(nullptr),
-      window_width_(800),
-      window_height_(600) {}
+      glfw_bridge_(nullptr) {}
 
 RenderLayer::~RenderLayer() { Stop(); }
 
 bool RenderLayer::Start(int width, int height, std::string_view title,
-                        void* platform_surface) {
+                        void* /*platform_surface*/) {
   if (running_.load()) {
     LOG(WARNING) << "RenderLayer already running";
     return false;
@@ -43,7 +42,7 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
 
   renderer_ = std::make_unique<TgfxRenderer>();
 
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
   // Desktop: create GLFW window + OpenGL context, tgfx renders into the
   // GLFW framebuffer. GLFW handles windowing, input, and buffer swap.
   glfw_bridge_ = std::make_unique<GlfwBridge>();
@@ -125,7 +124,7 @@ std::size_t RenderLayer::Submit(const RenderCommand* commands,
 bool RenderLayer::IsRunning() const noexcept { return running_.load(); }
 
 bool RenderLayer::ShouldClose() const {
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
   if (glfw_bridge_ != nullptr) {
     return glfw_bridge_->ShouldClose();
   }
@@ -134,7 +133,7 @@ bool RenderLayer::ShouldClose() const {
 }
 
 void RenderLayer::PollEvents() {
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
   if (glfw_bridge_ != nullptr) {
     glfw_bridge_->PollEvents();
   }
@@ -151,7 +150,7 @@ void RenderLayer::RenderLoop() {
       renderer_->EndFrame();
     }
 
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
     if (glfw_bridge_ != nullptr) {
       glfw_bridge_->SwapBuffers();
     }
@@ -170,6 +169,7 @@ void RenderLayer::ExecuteCommand(const RenderCommand& command) {
     return;
   }
 
+  // NOLINTBEGIN(bugprone-branch-clone)
   switch (command.type) {
     case RenderCommandType::kBeginFrame:
       renderer_->BeginFrame({245, 245, 245, 255});
@@ -181,6 +181,7 @@ void RenderLayer::ExecuteCommand(const RenderCommand& command) {
       renderer_->Execute(command);
       break;
   }
+  // NOLINTEND(bugprone-branch-clone)
 }
 
 void RenderLayer::ProcessPendingCommands() {

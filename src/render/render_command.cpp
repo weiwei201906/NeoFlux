@@ -14,7 +14,7 @@ RenderCommand RenderCommand::MakeDrawRect(const Rect& rect,
                                           const Color& color) {
   RenderCommand cmd;
   cmd.type = RenderCommandType::kDrawRect;
-  cmd.payload = DrawRectCommand{rect, color};
+  cmd.payload = DrawRectCommand{.rect = rect, .color = color};
   return cmd;
 }
 
@@ -44,7 +44,7 @@ RenderCommand RenderCommand::MakeRestore() {
 RenderCommand RenderCommand::MakeTranslate(float dx, float dy) {
   RenderCommand cmd;
   cmd.type = RenderCommandType::kTranslate;
-  cmd.payload = TranslateCommand{dx, dy};
+  cmd.payload = TranslateCommand{.dx = dx, .dy = dy};
   return cmd;
 }
 

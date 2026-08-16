@@ -74,13 +74,13 @@ class Application : public NonCopyable {
                              const LayoutConstraints& constraints);
   void PaintWidgetRecursive(Widget& widget, RenderContext& context);
 
-  EventLoop event_loop_;
-  std::unique_ptr<RenderLayer> render_layer_;
-  std::vector<std::shared_ptr<Widget>> navigation_stack_;
-  RenderContext render_context_;
-  int window_width_;
-  int window_height_;
-  bool initialized_;
+  EventLoop event_loop_{};
+  std::unique_ptr<RenderLayer> render_layer_ = nullptr;
+  std::vector<std::shared_ptr<Widget>> navigation_stack_{};
+  RenderContext render_context_{};
+  int window_width_ = 800;
+  int window_height_ = 600;
+  bool initialized_ = false;
 };
 
 }  // namespace neoflux

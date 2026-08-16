@@ -30,7 +30,7 @@ class GlfwBridge : public NonCopyable {
   void Shutdown();
 
   // Polls for window and input events (non-blocking).
-  void PollEvents();
+  void PollEvents() const;
 
   // Swaps the front and back buffers (presents the frame).
   void SwapBuffers();

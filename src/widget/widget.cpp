@@ -40,11 +40,7 @@ void BuildContext::PopRoute() {
 // Widget
 // ---------------------------------------------------------------------------
 
-Widget::Widget()
-    : parent_(nullptr),
-      bounds_(),
-      desired_size_(),
-      needs_build_(true) {}
+Widget::Widget() = default;
 
 Widget::~Widget() = default;
 
@@ -71,7 +67,7 @@ Size Widget::Layout(const LayoutConstraints& constraints) {
 
   bounds_.width = max_width;
   bounds_.height = max_height;
-  desired_size_ = {max_width, max_height};
+  desired_size_ = {.width = max_width, .height = max_height};
   return desired_size_;
 }
 
@@ -123,7 +119,7 @@ void Widget::ClearNeedsBuild() noexcept { needs_build_ = false; }
 Size Widget::LayoutChild(Widget& child,
                          const LayoutConstraints& constraints) {
   const Size size = child.Layout(constraints);
-  child.SetBounds({0.0F, 0.0F, size.width, size.height});
+  child.SetBounds({.x = 0.0F, .y = 0.0F, .width = size.width, .height = size.height});
   return size;
 }
 

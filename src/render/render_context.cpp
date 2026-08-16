@@ -13,8 +13,6 @@ namespace neoflux {
 
 RenderContext::RenderContext() = default;
 
-RenderContext::~RenderContext() = default;
-
 void RenderContext::DrawRect(const Rect& rect, const Color& color) {
   commands_.push_back(RenderCommand::MakeDrawRect(rect, color));
 }

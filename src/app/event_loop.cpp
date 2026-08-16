@@ -64,12 +64,11 @@ uint64_t EventLoop::GetFrameCount() const noexcept {
 }
 
 void EventLoop::ThrottleFrame(
-    const std::chrono::steady_clock::time_point& frame_start) {
+    const std::chrono::steady_clock::time_point& frame_start) const {
   const auto frame_duration = std::chrono::microseconds(
       static_cast<int64_t>(1'000'000.0 / static_cast<double>(target_fps_)));
-  const auto elapsed = std::chrono::steady_clock::now() - frame_start;
 
-  if (elapsed < frame_duration) {
+  if (const auto elapsed = std::chrono::steady_clock::now() - frame_start; elapsed < frame_duration) {
     std::this_thread::sleep_for(frame_duration - elapsed);
   }
 }

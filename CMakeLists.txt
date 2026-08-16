@@ -44,6 +44,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(NEOFLUX_BUILD_TESTS    "Build unit tests"         ON)
 option(NEOFLUX_BUILD_EXAMPLES "Build example applications" ON)
 option(NEOFLUX_ENABLE_CLANG_TIDY "Enable clang-tidy checks" ON)
+option(NEOFLUX_USE_TGFX      "Enable tgfx rendering backend (requires depsync + full tgfx deps)" OFF)
 
 # ---------------------------------------------------------------------------
 # Third-party dependencies
@@ -103,10 +104,16 @@ target_include_directories(neoflux
 target_link_libraries(neoflux
   PUBLIC
     taitank
-    tgfx
     glog::glog
     gflags
 )
+
+# tgfx is optional; when disabled, tgfx_renderer.cpp compiles a stub via
+# __has_include detection.
+if(NEOFLUX_USE_TGFX AND TARGET tgfx)
+  target_link_libraries(neoflux PUBLIC tgfx)
+  target_compile_definitions(neoflux PUBLIC NEOFLUX_HAVE_TGFX=1)
+endif()
 
 # GLFW is only available on desktop platforms.
 if(TARGET glfw)
@@ -149,16 +156,9 @@ endif()
 # Install rules
 # ---------------------------------------------------------------------------
 install(TARGETS neoflux
-  EXPORT neofluxTargets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
 install(DIRECTORY include/neoflux DESTINATION include)
-
-install(EXPORT neofluxTargets
-  FILE neofluxTargets.cmake
-  NAMESPACE neoflux::
-  DESTINATION lib/cmake/neoflux
-)

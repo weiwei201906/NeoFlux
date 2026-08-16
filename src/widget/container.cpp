@@ -79,10 +79,10 @@ Size Container::Layout(const LayoutConstraints& constraints) {
   float content_height = 0.0F;
 
   if (!GetChildren().empty() && GetChildren().front() != nullptr) {
-    auto& child = GetChildren().front();
-    const Size child_size = child->Layout(inner);
-    content_width = child_size.width;
-    content_height = child_size.height;
+    const auto& child = GetChildren().front();
+    const auto [width, height] = child->Layout(inner);
+    content_width = width;
+    content_height = height;
 
     float child_x = padding_.left;
     if (alignment_ == HAlign::kCenter) {
@@ -91,7 +91,7 @@ Size Container::Layout(const LayoutConstraints& constraints) {
     } else if (alignment_ == HAlign::kRight) {
       child_x = inner.max_width - content_width - padding_.right;
     }
-    child->SetBounds({child_x, padding_.top, content_width, content_height});
+    child->SetBounds({.x=child_x, .y=padding_.top, .width=content_width, .height=content_height});
   }
 
   float width = fixed_width_ > 0.0F
@@ -104,14 +104,14 @@ Size Container::Layout(const LayoutConstraints& constraints) {
   width = std::clamp(width, constraints.min_width, constraints.max_width);
   height = std::clamp(height, constraints.min_height, constraints.max_height);
 
-  SetBounds({bounds_.x, bounds_.y, width, height});
-  SetDesiredSize({width, height});
-  return {width, height};
+  SetBounds({.x = bounds_.x, .y = bounds_.y, .width = width, .height = height});
+  SetDesiredSize({.width = width, .height = height});
+  return {.width = width, .height = height};
 }
 
 void Container::Paint(RenderContext& context) {
   if (has_background_) {
-    context.DrawRect({0.0F, 0.0F, bounds_.width, bounds_.height},
+    context.DrawRect({.x=0.0F, .y=0.0F, .width=bounds_.width, .height=bounds_.height},
                      background_color_);
   }
   PaintChildren(context);

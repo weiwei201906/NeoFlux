@@ -24,7 +24,7 @@ namespace neoflux {
 class RenderContext {
  public:
   RenderContext();
-  ~RenderContext();
+  ~RenderContext() = default;
 
   // Draws a filled rectangle.
   void DrawRect(const Rect& rect, const Color& color);
