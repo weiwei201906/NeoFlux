@@ -5,13 +5,14 @@
 // for types used by the framework.
 // =============================================================================
 
-#include "neoflux/render/render_layer.h"
+#include "neoflux/render/render_command.h"
 
 #include "ring_queue_impl.inc"
 
 namespace neoflux {
 
 // Explicit instantiation for the render command queue used by RenderLayer.
-template class SpscRingQueue<RenderCommand, kRenderQueueCapacity>;
+// The capacity is configured at runtime via the render_queue_capacity gflag.
+template class SpscRingQueue<RenderCommand>;
 
 }  // namespace neoflux

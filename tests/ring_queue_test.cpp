@@ -14,21 +14,19 @@
 namespace neoflux {
 namespace {
 
-using TestQueue = SpscRingQueue<int, 16>;
-
 TEST(SpscRingQueueTest, InitiallyEmpty) {
-  TestQueue queue;
+  SpscRingQueue<int> queue(16);
   EXPECT_TRUE(queue.Empty());
   EXPECT_FALSE(queue.Full());
-  EXPECT_EQ(queue.Size(), 0u);
-  EXPECT_EQ(queue.CapacityValue(), 16u);
+  EXPECT_EQ(queue.Size(), 0U);
+  EXPECT_EQ(queue.CapacityValue(), 16U);
 }
 
 TEST(SpscRingQueueTest, PushAndPop) {
-  TestQueue queue;
+  SpscRingQueue<int> queue(16);
   EXPECT_TRUE(queue.TryPush(42));
   EXPECT_FALSE(queue.Empty());
-  EXPECT_EQ(queue.Size(), 1u);
+  EXPECT_EQ(queue.Size(), 1U);
 
   int value = 0;
   EXPECT_TRUE(queue.TryPop(value));
@@ -37,13 +35,13 @@ TEST(SpscRingQueueTest, PushAndPop) {
 }
 
 TEST(SpscRingQueueTest, PopFromEmptyReturnsFalse) {
-  TestQueue queue;
+  SpscRingQueue<int> queue(16);
   int value = 0;
   EXPECT_FALSE(queue.TryPop(value));
 }
 
 TEST(SpscRingQueueTest, FillToCapacity) {
-  SpscRingQueue<int, 4> queue;
+  SpscRingQueue<int> queue(4);
   // Capacity is 4, but one slot is reserved for the full/empty distinction,
   // so we can store Capacity - 1 = 3 elements.
   EXPECT_TRUE(queue.TryPush(1));
@@ -51,11 +49,11 @@ TEST(SpscRingQueueTest, FillToCapacity) {
   EXPECT_TRUE(queue.TryPush(3));
   EXPECT_TRUE(queue.Full());
   EXPECT_FALSE(queue.TryPush(4));
-  EXPECT_EQ(queue.Size(), 3u);
+  EXPECT_EQ(queue.Size(), 3U);
 }
 
 TEST(SpscRingQueueTest, FIFOOrder) {
-  SpscRingQueue<int, 8> queue;
+  SpscRingQueue<int> queue(8);
   for (int i = 0; i < 5; ++i) {
     EXPECT_TRUE(queue.TryPush(i));
   }
@@ -68,16 +66,17 @@ TEST(SpscRingQueueTest, FIFOOrder) {
 }
 
 TEST(SpscRingQueueTest, WrapAround) {
-  SpscRingQueue<int, 4> queue;
+  SpscRingQueue<int> queue(4);
   // Push and pop to advance indices past the buffer end.
   for (int cycle = 0; cycle < 3; ++cycle) {
-    EXPECT_TRUE(queue.TryPush(cycle * 10));
-    EXPECT_TRUE(queue.TryPush(cycle * 10 + 1));
-    int v1 = 0, v2 = 0;
+    EXPECT_TRUE(queue.TryPush((cycle * 10)));
+    EXPECT_TRUE(queue.TryPush((cycle * 10) + 1));
+    int v1 = 0;
+    int v2 = 0;
     EXPECT_TRUE(queue.TryPop(v1));
     EXPECT_TRUE(queue.TryPop(v2));
-    EXPECT_EQ(v1, cycle * 10);
-    EXPECT_EQ(v2, cycle * 10 + 1);
+    EXPECT_EQ(v1, (cycle * 10));
+    EXPECT_EQ(v2, (cycle * 10) + 1);
   }
   EXPECT_TRUE(queue.Empty());
 }
@@ -91,9 +90,10 @@ TEST(SpscRingQueueTest, MoveOnlyType) {
     MoveOnly& operator=(const MoveOnly&) = delete;
     MoveOnly(MoveOnly&&) = default;
     MoveOnly& operator=(MoveOnly&&) = default;
+    ~MoveOnly() = default;
   };
 
-  SpscRingQueue<MoveOnly, 8> queue;
+  SpscRingQueue<MoveOnly> queue(8);
   EXPECT_TRUE(queue.TryPush(MoveOnly(99)));
   MoveOnly out;
   EXPECT_TRUE(queue.TryPop(out));
@@ -101,10 +101,10 @@ TEST(SpscRingQueueTest, MoveOnlyType) {
 }
 
 TEST(SpscRingQueueTest, SingleProducerSingleConsumer) {
-  SpscRingQueue<int, 1024> queue;
+  SpscRingQueue<int> queue(1024);
   constexpr int kCount = 10000;
 
-  std::thread producer([&]() {
+  std::thread producer([&] {
     for (int i = 0; i < kCount; ++i) {
       while (!queue.TryPush(i)) {
         std::this_thread::yield();
@@ -112,7 +112,7 @@ TEST(SpscRingQueueTest, SingleProducerSingleConsumer) {
     }
   });
 
-  std::thread consumer([&]() {
+  std::thread consumer([&] {
     for (int i = 0; i < kCount; ++i) {
       int value = -1;
       while (!queue.TryPop(value)) {

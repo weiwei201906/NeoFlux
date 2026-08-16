@@ -36,7 +36,7 @@ TEST(WidgetTest, AddAndCountChildren) {
   parent->AddChild(child1);
   parent->AddChild(child2);
 
-  EXPECT_EQ(parent->GetChildCount(), 2u);
+  EXPECT_EQ(parent->GetChildCount(), 2U);
   EXPECT_EQ(child1->GetParent(), parent.get());
   EXPECT_EQ(child2->GetParent(), parent.get());
 }
@@ -47,12 +47,12 @@ TEST(WidgetTest, ClearChildren) {
   parent->AddChild(std::make_shared<TestWidget>());
 
   parent->ClearChildren();
-  EXPECT_EQ(parent->GetChildCount(), 0u);
+  EXPECT_EQ(parent->GetChildCount(), 0U);
 }
 
 TEST(WidgetTest, BoundsAccessors) {
   TestWidget widget;
-  Rect bounds{10.0F, 20.0F, 100.0F, 50.0F};
+  Rect bounds{.x = 10.0F, .y = 20.0F, .width = 100.0F, .height = 50.0F};
   widget.SetBounds(bounds);
 
   const auto& result = widget.GetBounds();
@@ -128,25 +128,29 @@ TEST(ButtonTest, LayoutProducesPositiveSize) {
 
 TEST(ButtonTest, PressAndRelease) {
   Button button("OK");
-  button.SetBounds({0.0F, 0.0F, 100.0F, 40.0F});
+  button.SetBounds(
+      Rect{.x = 0.0F, .y = 0.0F, .width = 100.0F, .height = 40.0F});
 
   bool pressed = false;
-  button.SetOnPressed([&]() { pressed = true; });
+  button.SetOnPressed([&] { pressed = true; });
 
-  EXPECT_TRUE(button.HandlePress({50.0F, 20.0F}));
-  button.HandleRelease({50.0F, 20.0F});
+  EXPECT_TRUE(
+      button.HandlePress(Point{.x = 50.0F, .y = 20.0F}));
+  button.HandleRelease(Point{.x = 50.0F, .y = 20.0F});
   EXPECT_TRUE(pressed);
 }
 
 TEST(ButtonTest, PressOutsideDoesNothing) {
   Button button("OK");
-  button.SetBounds({0.0F, 0.0F, 100.0F, 40.0F});
+  button.SetBounds(
+      Rect{.x = 0.0F, .y = 0.0F, .width = 100.0F, .height = 40.0F});
 
   bool pressed = false;
-  button.SetOnPressed([&]() { pressed = true; });
+  button.SetOnPressed([&] { pressed = true; });
 
-  EXPECT_FALSE(button.HandlePress({150.0F, 200.0F}));
-  button.HandleRelease({150.0F, 200.0F});
+  EXPECT_FALSE(
+      button.HandlePress(Point{.x = 150.0F, .y = 200.0F}));
+  button.HandleRelease(Point{.x = 150.0F, .y = 200.0F});
   EXPECT_FALSE(pressed);
 }
 

@@ -49,14 +49,14 @@ TEST_F(RouteRegistryTest, BuildUnknownRouteReturnsNull) {
 }
 
 TEST_F(RouteRegistryTest, RouteCount) {
-  EXPECT_EQ(RouteRegistry::Instance().GetRouteCount(), 0u);
+  EXPECT_EQ(RouteRegistry::Instance().GetRouteCount(), 0U);
 
   RouteRegistry::Instance().RegisterRoute(
       "/a", [](BuildContext&) { return nullptr; });
   RouteRegistry::Instance().RegisterRoute(
       "/b", [](BuildContext&) { return nullptr; });
 
-  EXPECT_EQ(RouteRegistry::Instance().GetRouteCount(), 2u);
+  EXPECT_EQ(RouteRegistry::Instance().GetRouteCount(), 2U);
 }
 
 TEST_F(RouteRegistryTest, OverwriteRoute) {
@@ -74,7 +74,8 @@ TEST_F(RouteRegistryTest, OverwriteRoute) {
       });
 
   BuildContext context(nullptr);
-  RouteRegistry::Instance().BuildRoute("/x", context);
+  auto result = RouteRegistry::Instance().BuildRoute("/x", context);
+  (void)result;
   EXPECT_EQ(call_count, 10);
 }
 

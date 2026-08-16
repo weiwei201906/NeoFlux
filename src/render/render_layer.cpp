@@ -11,15 +11,21 @@
 #include <thread>
 #include <utility>
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include "neoflux/render/glfw_bridge.h"
 #include "neoflux/render/tgfx_renderer.h"
 
+DEFINE_uint64(render_queue_capacity, 2048,
+              "Capacity of the render command SPSC ring queue. "
+              "One slot is reserved for full/empty distinction, so the "
+              "maximum storable commands are (capacity - 1).");
+
 namespace neoflux {
 
 RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init)
-    : command_queue_(),
+    : command_queue_(FLAGS_render_queue_capacity),
       running_(false),
       should_close_(false),
       render_thread_(nullptr),

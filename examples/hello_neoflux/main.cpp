@@ -41,8 +41,8 @@ class CounterState : public State<StatefulWidget> {
     text->SetFontSize(24.0F).SetTextColor({33, 33, 33, 255});
 
     auto button = std::make_shared<Button>("Increment");
-    button->SetOnPressed([this]() {
-      SetState([this]() { ++count_; });
+    button->SetOnPressed([this] {
+      SetState([this] { ++count_; });
     });
 
     container->AddChild(text);
@@ -74,7 +74,7 @@ std::shared_ptr<Widget> BuildHomePage(BuildContext& context) {
   auto counter = std::make_shared<CounterWidget>();
 
   auto nav_button = std::make_shared<Button>("Go to About Page");
-  nav_button->SetOnPressed([&context]() { context.PushRoute("/about"); });
+  nav_button->SetOnPressed([&context] { context.PushRoute("/about"); });
 
   root->AddChild(title);
   root->AddChild(subtitle);
@@ -100,7 +100,7 @@ std::shared_ptr<Widget> BuildAboutPage(BuildContext& context) {
   desc->SetFontSize(14.0F).SetTextColor({60, 60, 60, 255});
 
   auto back_button = std::make_shared<Button>("Back");
-  back_button->SetOnPressed([&context]() { context.PopRoute(); });
+  back_button->SetOnPressed([&context] { context.PopRoute(); });
 
   root->AddChild(title);
   root->AddChild(desc);
@@ -113,11 +113,12 @@ std::shared_ptr<Widget> BuildAboutPage(BuildContext& context) {
 }  // namespace neoflux
 
 int main(int argc, char** argv) {
-  using namespace neoflux;
+  using neoflux::Application;
+  using neoflux::RouteRegistry;
 
   // Register routes.
-  RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
-  RouteRegistry::Instance().RegisterRoute("/about", BuildAboutPage);
+  RouteRegistry::Instance().RegisterRoute("/", neoflux::BuildHomePage);
+  RouteRegistry::Instance().RegisterRoute("/about", neoflux::BuildAboutPage);
 
   // Create and run the application.
   Application app;

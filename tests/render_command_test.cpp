@@ -13,8 +13,8 @@ namespace neoflux {
 namespace {
 
 TEST(RenderCommandTest, MakeDrawRect) {
-  Rect rect{10.0F, 20.0F, 100.0F, 50.0F};
-  Color color{255, 0, 0, 255};
+  Rect rect{.x = 10.0F, .y = 20.0F, .width = 100.0F, .height = 50.0F};
+  Color color{.r = 255, .g = 0, .b = 0, .a = 255};
   auto cmd = RenderCommand::MakeDrawRect(rect, color);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kDrawRect);
@@ -25,8 +25,9 @@ TEST(RenderCommandTest, MakeDrawRect) {
 }
 
 TEST(RenderCommandTest, MakeDrawText) {
-  auto cmd =
-      RenderCommand::MakeDrawText("Hello", {5.0F, 10.0F}, {0, 0, 0, 255}, 16.0F);
+  auto cmd = RenderCommand::MakeDrawText(
+      "Hello", Point{.x = 5.0F, .y = 10.0F},
+      Color{.r = 0, .g = 0, .b = 0, .a = 255}, 16.0F);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kDrawText);
   const auto& payload = std::get<DrawTextCommand>(cmd.payload);
@@ -52,7 +53,7 @@ TEST(RenderCommandTest, MakeTranslate) {
 }
 
 TEST(RenderCommandTest, MakeClipRect) {
-  Rect rect{0.0F, 0.0F, 50.0F, 50.0F};
+  Rect rect{.x = 0.0F, .y = 0.0F, .width = 50.0F, .height = 50.0F};
   auto cmd = RenderCommand::MakeClipRect(rect);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kClipRect);
@@ -70,13 +71,15 @@ TEST(RenderCommandTest, MakeBeginEndFrame) {
 
 TEST(RenderContextTest, RecordsCommands) {
   RenderContext ctx;
-  ctx.DrawRect({0, 0, 100, 100}, {255, 0, 0, 255});
-  ctx.DrawText("Hi", {10, 10}, {0, 0, 0, 255}, 14.0F);
+  ctx.DrawRect(Rect{.x = 0, .y = 0, .width = 100, .height = 100},
+               Color{.r = 255, .g = 0, .b = 0, .a = 255});
+  ctx.DrawText("Hi", Point{.x = 10, .y = 10},
+               Color{.r = 0, .g = 0, .b = 0, .a = 255}, 14.0F);
   ctx.Save();
   ctx.Translate(5, 5);
   ctx.Restore();
 
-  EXPECT_EQ(ctx.GetCommandCount(), 5u);
+  EXPECT_EQ(ctx.GetCommandCount(), 5U);
   EXPECT_EQ(ctx.GetCommands()[0].type, RenderCommandType::kDrawRect);
   EXPECT_EQ(ctx.GetCommands()[1].type, RenderCommandType::kDrawText);
   EXPECT_EQ(ctx.GetCommands()[2].type, RenderCommandType::kSave);
@@ -86,11 +89,12 @@ TEST(RenderContextTest, RecordsCommands) {
 
 TEST(RenderContextTest, Clear) {
   RenderContext ctx;
-  ctx.DrawRect({0, 0, 10, 10}, {0, 0, 0, 255});
-  EXPECT_EQ(ctx.GetCommandCount(), 1u);
+  ctx.DrawRect(Rect{.x = 0, .y = 0, .width = 10, .height = 10},
+               Color{.r = 0, .g = 0, .b = 0, .a = 255});
+  EXPECT_EQ(ctx.GetCommandCount(), 1U);
 
   ctx.Clear();
-  EXPECT_EQ(ctx.GetCommandCount(), 0u);
+  EXPECT_EQ(ctx.GetCommandCount(), 0U);
   EXPECT_TRUE(ctx.GetCommands().empty());
 }
 

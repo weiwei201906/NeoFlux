@@ -26,9 +26,6 @@ namespace neoflux {
 class TgfxRenderer;
 class GlfwBridge;
 
-// Capacity of the render command ring queue.
-inline constexpr std::size_t kRenderQueueCapacity = 2048;
-
 // The render layer owns the render thread and executes render commands.
 class RenderLayer : public NonCopyable {
  public:
@@ -69,7 +66,7 @@ class RenderLayer : public NonCopyable {
   // Processes all pending commands from the ring queue.
   void ProcessPendingCommands();
 
-  SpscRingQueue<RenderCommand, kRenderQueueCapacity> command_queue_{};
+  SpscRingQueue<RenderCommand> command_queue_;
 
   std::atomic<bool> running_{false};
   std::atomic<bool> should_close_{false};

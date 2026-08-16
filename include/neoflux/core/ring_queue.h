@@ -16,6 +16,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <vector>
 
 namespace neoflux {
 
@@ -26,27 +27,27 @@ inline constexpr std::size_t kCacheLineSize = 64;
 
 }  // namespace detail
 
-// Lock-free SPSC bounded ring queue.
+// Lock-free SPSC bounded ring queue with runtime-configurable capacity.
 //
 // Template parameters:
-//   T        - Element type; must be movable (or copyable).
-//   Capacity - Maximum number of elements; must be a power of two >= 2.
+//   T - Element type; must be movable (or copyable).
+//
+// The capacity is specified at construction time. One slot is reserved
+// for the full/empty distinction, so the maximum number of storable
+// elements is (capacity - 1).
 //
 // Thread safety: Exactly one producer thread and one consumer thread.
-template <typename T, std::size_t Capacity>
+template <typename T>
 class SpscRingQueue {
-  static_assert(Capacity >= 2, "Capacity must be at least 2");
-  static_assert((Capacity & (Capacity - 1)) == 0,
-                "Capacity must be a power of two");
-
  public:
   using value_type = T;
   using size_type = std::size_t;
 
-  SpscRingQueue();
+  // Constructs a queue with the given capacity. capacity must be >= 2.
+  explicit SpscRingQueue(std::size_t capacity);
   ~SpscRingQueue();
 
-  // Non-copyable, non-movable.
+  // Non-copyable, non-movable (contains atomic members and raw storage).
   SpscRingQueue(const SpscRingQueue&) = delete;
   SpscRingQueue& operator=(const SpscRingQueue&) = delete;
   SpscRingQueue(SpscRingQueue&&) = delete;
@@ -67,17 +68,18 @@ class SpscRingQueue {
   // Returns current size (approximate).
   [[nodiscard]] std::size_t Size() const noexcept;
 
-  // Returns the maximum capacity.
-  [[nodiscard]] static constexpr std::size_t CapacityValue() noexcept;
+  // Returns the maximum capacity (including the reserved slot).
+  [[nodiscard]] std::size_t CapacityValue() const noexcept;
 
  private:
-  static constexpr std::size_t kMask = Capacity - 1;
-
   // Returns pointer to the raw storage slot at the given index.
   T* Slot(std::size_t index) noexcept;
 
-  // Raw storage for elements.
-  alignas(T) std::byte storage_[Capacity * sizeof(T)];
+  // Raw storage for elements (allocated to capacity * sizeof(T)).
+  std::vector<std::byte> storage_;
+
+  // Requested capacity (number of slots including the reserved one).
+  std::size_t capacity_;
 
   // Producer index (cache-line aligned).
   alignas(detail::kCacheLineSize) std::atomic<std::size_t> head_;
