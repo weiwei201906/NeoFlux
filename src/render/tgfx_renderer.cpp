@@ -208,7 +208,7 @@ class GlRendererImpl : public NonCopyable {
     transform_stack_.push_back({0.0F, 0.0F});
   }
 
-  void EndFrame() {}
+  void EndFrame() { /* buffer swap handled by GLFW bridge */ }
 
   void DrawRect(const Rect& rect, const Color& color) {
     if (!gl_ready_) return;
