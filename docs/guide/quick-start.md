@@ -79,6 +79,10 @@ int main(int argc, char** argv) {
 }
 ```
 
+> **Tip:** Even with a single route, you must call `RegisterRoute` then
+> `PushRoute`. `Init` only creates the window — it does not display any
+> widget until a route is pushed.
+
 ## 4. CMakeLists.txt
 
 ### With submodule

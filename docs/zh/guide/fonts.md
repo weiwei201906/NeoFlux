@@ -2,6 +2,8 @@
 
 NeoFlux 使用字体管理器，在启动时扫描 `thirdparty/fonts/` 目录。
 
+> **警告：** 如果 `thirdparty/fonts/` 为空或不存在，所有文本 Widget 都会渲染异常（乱码或空白）。发布应用时务必至少附带一个字体文件。渲染中文需包含 CJK 字体（如 NotoSansSC）。
+
 ## 支持格式
 
 - TrueType（`.ttf`）

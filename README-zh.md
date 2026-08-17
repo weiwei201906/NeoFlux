@@ -120,6 +120,8 @@ text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regu
 
 若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `thirdparty/fonts/` 目录即可通过名称引用，无需构建时拷贝。
 
+> **警告：** 如果 `thirdparty/fonts/` 为空，文本渲染会失败或显示乱码。发布前务必至少放入一个字体文件（如渲染中文需 CJK 字体）。
+
 ## 构建测试
 
 测试和示例默认禁用，通过 `NEOFLUX_BUILD_TESTS` CMake 选项启用：
@@ -217,6 +219,8 @@ app.PushRoute("/settings");  // 构建并显示设置页面
 app.PopRoute();              // 返回上一路由
 ```
 
+> **提示：** 哪怕只有一个路由，也必须先注册再调用 `PushRoute`——`Init` 不会自动显示任何内容。
+
 ## 示例
 
 ### hello_neoflux
@@ -284,6 +288,8 @@ neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
 ### 状态机 + 协程模式
 
 Widget 携带轻量 `WidgetState`（Idle、Hovering、Dragging 等）。状态迁移是协程的"条件锁"：指针按下时启动的协程在睡眠后检查 Widget 状态；如果状态已改变（如指针已释放），协程静默返回。无需显式取消机制——状态机本身就是执行的门控。
+
+> **警告：** 捕获 Widget 指针的协程必须使用 `std::weak_ptr`，并在每次 `co_await` 后重新 lock。Widget 可能在协程挂起于 `Sleep` 或 `Yield` 时被销毁；恢复后访问裸指针会导致 use-after-free。
 
 ## 移动端渲染
 

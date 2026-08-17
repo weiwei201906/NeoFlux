@@ -101,6 +101,10 @@ text->SetFont("NotoSansSC-Regular");  // loads thirdparty/fonts/NotoSansSC-Regul
 
 If no font is specified on a widget, the first discovered font is used as the default. Place your font files in `thirdparty/fonts/` and reference them by name — no build-time copying is required.
 
+> **Warning:** If `thirdparty/fonts/` is empty, text rendering will fail or
+> show garbled output. Always include at least one font file (e.g. a CJK font
+> for Chinese text) before shipping.
+
 ## Building Tests
 
 Tests and example are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` CMake option:
@@ -202,6 +206,9 @@ RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
 app.PushRoute("/settings");  // builds and displays the settings page
 app.PopRoute();              // returns to the previous route
 ```
+
+> **Tip:** Even with a single route, you must register it and call
+> `PushRoute` — `Init` does not display anything automatically.
 
 ## Examples
 
@@ -317,6 +324,11 @@ State transitions are the "condition lock" for coroutines: a coroutine
 launched on pointer-down checks the widget state after sleeping; if the
 state has changed (e.g. pointer released), the coroutine returns silently.
 No explicit cancellation is needed — the state machine gates execution.
+
+> **Warning:** Coroutines that capture widget pointers must use
+> `std::weak_ptr` and re-lock after each `co_await`. A widget can be
+> destroyed while a coroutine is suspended on `Sleep` or `Yield`; accessing
+> a raw pointer after resumption causes use-after-free.
 
 ## Mobile Rendering
 

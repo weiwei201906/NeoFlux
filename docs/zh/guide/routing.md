@@ -9,6 +9,8 @@ RouteRegistry::Instance().RegisterRoute("/home", BuildHome);
 RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
 ```
 
+> **提示：** 哪怕你的项目只有一个路由，也必须先通过 `RouteRegistry` 注册，再调用 `app.PushRoute("/")` 才能显示。`Application::Init` 不会自动推送任何路由——空的导航栈不会渲染任何内容。
+
 ## 导航
 
 ```cpp

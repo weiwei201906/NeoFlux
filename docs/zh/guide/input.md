@@ -26,6 +26,8 @@
 
 `Draggable` 组件重写 `OnPointerMove` 更新拖拽偏移。`ScrollView` 支持拖拽滚动。
 
+> **提示：** 拖拽进行中（`OnPointerDown` 后的移动事件），移动事件会直接发给被按下的 Widget，跳过命中测试。这确保 `Draggable` 在指针移出其布局边界时（因绘制时平移）仍能持续接收事件。
+
 ## 下一步
 
 - [Widget 系统](./widgets)

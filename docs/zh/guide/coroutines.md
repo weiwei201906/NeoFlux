@@ -59,6 +59,8 @@ neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
 }
 ```
 
+> **警告：** 切勿在协程中捕获裸 `Widget*`。始终使用 `std::weak_ptr`，并在每次 `co_await` 后重新 lock。协程挂起期间 Widget 可能被销毁。
+
 ## 生命周期管理
 
 事件循环维护四个协程集合：
