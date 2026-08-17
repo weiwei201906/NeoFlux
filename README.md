@@ -99,7 +99,7 @@ If no font is specified on a widget, the first discovered font is used as the de
 
 ## Building Tests
 
-Tests are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` CMake option:
+Tests and example are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` CMake option:
 
 ```bash
 cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -NEOFLUX_BUILD_EXAMPLES=ON
@@ -313,6 +313,22 @@ State transitions are the "condition lock" for coroutines: a coroutine
 launched on pointer-down checks the widget state after sleeping; if the
 state has changed (e.g. pointer released), the coroutine returns silently.
 No explicit cancellation is needed — the state machine gates execution.
+
+## Mobile Rendering
+
+On mobile, NeoFlux does not use GLFW. Instead, tgfx renders directly into a
+platform-provided surface:
+
+- **Android**: pass an `ANativeWindow*` as `platform_surface`
+- **iOS**: pass a `CAMetalLayer*` or `CAEAGLLayer*` as `platform_surface`
+
+```cpp
+// Mobile initialization example
+app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
+```
+
+On desktop, pass `nullptr` for `platform_surface` and the framework creates a
+GLFW window automatically.
 
 ## Project Structure
 

@@ -18,7 +18,7 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 |   (UI 线程)               |  Ring   |   (渲染线程)              |
 |                           |  Queue  |                           |
 |  - Widget Tree            | +-----> |  - tgfx Renderer          |
-|  - Taitank Layout Engine  |         |  - GLFW Bridge (桌面端)  |
+|  - Taitank Layout Engine  |         |  - PlatformBridge        |
 |  - Event Loop             |         |  - Command Execution      |
 |  - Route Navigation       |         |                           |
 +---------------------------+         +---------------------------+
@@ -35,9 +35,10 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 - Taitank flexbox 布局引擎（Container 支持 flex direction、padding、margin、justify/align）
 - 完整指针事件管道：OnPointerDown/Up/Move/Enter/Exit，命中测试缓存
 - 可拖拽 Widget（Draggable）与可滚动视图（ScrollView，支持滚轮与拖拽滚动）
-- C++20 协程：Task\<void\>、Yield()、Sleep()，事件循环驱动
+- C++20 协程：`Task<void>`、`Yield()`、`Sleep()`，事件循环驱动，`shared_ptr` 生命周期管理
 - 轻量状态机 + 协程"条件锁"模式
 - 跨平台：Windows / Linux / macOS（桌面），Android / iOS（移动）
+- 统一 PlatformBridge 接口：桌面端 GLFW，移动端 EGL/Metal
 - C++20 标准，使用 `std::string_view`、designated initializers 等现代特性
 - 遵循 Google C++ 编码规范，clang-tidy 静态分析，-Werror 零警告
 - GLog 日志 + GFlags 命令行参数解析
@@ -64,10 +65,10 @@ cmake --build .
 
 ### 运行测试
 
-测试默认禁用，需通过 CMake 选项启用：
+测试和示例默认禁用，需通过 CMake 选项启用：
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -NEOFLUX_BUILD_EXAMPLES=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON 
 cmake --build build
 cd build && ctest --output-on-failure
 ```
@@ -75,6 +76,10 @@ cd build && ctest --output-on-failure
 ### 运行示例
 
 ```bash
+cmake -S . -B build -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake --build build
+cd build
+
 ./bin/hello_neoflux   # 完整演示
 ./bin/counter         # 计数器
 ./bin/flex_demo       # flex 布局
@@ -109,6 +114,49 @@ text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regu
 ```
 
 若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `thirdparty/fonts/` 目录即可通过名称引用，无需构建时拷贝。
+
+## 构建测试
+
+测试和示例默认禁用，通过 `NEOFLUX_BUILD_TESTS` CMake 选项启用：
+
+```bash
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake --build build
+cd build && ctest --output-on-failure
+```
+
+## 最小示例
+
+```cpp
+#include <neoflux/neoflux.h>
+
+using namespace neoflux;
+
+std::shared_ptr<Widget> BuildHome(BuildContext& ctx) {
+  auto root = std::make_shared<Container>();
+  root->SetBackgroundColor({.r = 255, .g = 255, .b = 255, .a = 255});
+
+  auto text = std::make_shared<Text>("Hello NeoFlux!");
+  text->SetFontSize(24.0F);
+
+  auto button = std::make_shared<Button>("Click Me");
+  button->SetOnPressed([]() { /* 处理点击 */ });
+
+  root->AddChild(text);
+  root->AddChild(button);
+  return root;
+}
+
+int main(int argc, char** argv) {
+  RouteRegistry::Instance().RegisterRoute("/", BuildHome);
+
+  Application app;
+  app.Init(argc, argv, 800, 600, "NeoFlux");
+  app.PushRoute("/");
+  app.Run();
+  return 0;
+}
+```
 
 ## Widget 系统
 
@@ -146,7 +194,7 @@ col->SetFlexDirection(FlexDirection::kColumn)   // 子控件垂直排列
 
 鼠标/触摸事件从平台桥接流经 Widget 树：
 
-1. `GlfwBridge` 接收 GLFW 鼠标事件（按钮、移动、滚轮）并通过回调转发。
+1. `PlatformBridge` 接收平台输入事件（GLFW 鼠标 / 移动端触摸）并通过回调转发。
 2. `Application` 执行递归 `HitTest()` 找到光标下最深层的 Widget。命中测试缓存避免每次指针移动都遍历整棵树；布局变化时缓存自动失效。
 3. 调用命中 Widget 的事件处理函数，传入局部坐标：
    - `OnPointerDown()` / `OnPointerUp()` — 按下与释放
@@ -162,75 +210,6 @@ Widget 通过 `RouteRegistry` 注册，压入/弹出导航栈：
 RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
 app.PushRoute("/settings");  // 构建并显示设置页面
 app.PopRoute();              // 返回上一路由
-```
-
-## 协程
-
-NeoFlux 支持 C++20 协程用于异步工作。在事件循环上调度一个 `Task<void>`，它在就绪时的下一帧恢复：
-
-```cpp
-#include <neoflux/core/task.h>
-
-neoflux::Task<void> AnimateAsync() {
-  for (int i = 0; i < 60; ++i) {
-    co_await neoflux::Yield();  // 下一帧恢复
-    widget->SetOpacity(i / 60.0F);
-  }
-}
-
-event_loop.Schedule(AnimateAsync());
-```
-
-### Sleep
-
-使用 `co_await Sleep(duration)` 将协程挂起指定时长。事件循环维护一个定时器队列（`std::multimap`，时间点到协程句柄的映射），每帧检查并恢复到期的定时器：
-
-```cpp
-neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
-  co_await neoflux::Sleep(std::chrono::milliseconds(500));
-  auto btn = weak_btn.lock();
-  if (!btn) co_return;          // Widget 已销毁
-  if (btn->IsPressed()) {       // 状态机作为条件锁
-    btn->OnLongPress();
-  }
-}
-```
-
-### 状态机 + 协程模式
-
-Widget 携带轻量 `WidgetState`（Idle、Hovering、Dragging 等）。状态迁移是协程的"条件锁"：指针按下时启动的协程在睡眠后检查 Widget 状态；如果状态已改变（如指针已释放），协程静默返回。无需显式取消机制——状态机本身就是执行的门控。
-
-## 最小示例
-
-```cpp
-#include <neoflux/neoflux.h>
-
-using namespace neoflux;
-
-std::shared_ptr<Widget> BuildHome(BuildContext& ctx) {
-  auto root = std::make_shared<Container>();
-  root->SetBackgroundColor({.r = 255, .g = 255, .b = 255, .a = 255});
-
-  auto text = std::make_shared<Text>("Hello NeoFlux!");
-  text->SetFontSize(24.0F);
-
-  auto button = std::make_shared<Button>("Click Me");
-  button->SetOnPressed([]() { /* 处理点击 */ });
-
-  root->AddChild(text);
-  root->AddChild(button);
-  return root;
-}
-
-int main(int argc, char** argv) {
-  RouteRegistry::Instance().RegisterRoute("/", BuildHome);
-
-  Application app;
-  app.Init(argc, argv, 800, 600, "NeoFlux");
-  app.PushRoute("/");
-  app.Run();
-  return 0;
-}
 ```
 
 ## 示例
@@ -263,6 +242,58 @@ int main(int argc, char** argv) {
 
 演示 `Draggable` Widget 与指针事件，以及"状态机作为条件锁"模式。彩色方块可拖拽；状态标签显示当前状态（Idle/Hovering/Dragging）和偏移量。指针按下时启动长按检测协程；如果 500ms 内释放，协程观察到状态变化后静默返回；如果按住超过 500ms，显示 "[Long Press!]" 指示器。
 
+## 协程
+
+NeoFlux 支持 C++20 协程用于异步工作。在事件循环上调度一个 `Task<void>`，它在就绪时的下一帧恢复：
+
+```cpp
+#include <neoflux/core/task.h>
+
+neoflux::Task<void> AnimateAsync() {
+  for (int i = 0; i < 60; ++i) {
+    co_await neoflux::Yield();  // 下一帧恢复
+    widget->SetOpacity(i / 60.0F);
+  }
+}
+
+event_loop.Schedule(AnimateAsync());
+```
+
+协程由 `shared_ptr` 管理生命周期，`active_tasks_` map 保存所有活跃协程，确保定时器或 yield 等待中的句柄不会引用已销毁的 frame。
+
+### Sleep
+
+使用 `co_await Sleep(duration)` 将协程挂起指定时长。事件循环维护一个定时器队列（`std::multimap`，时间点到协程句柄的映射），每帧检查并恢复到期的定时器：
+
+```cpp
+neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
+  co_await neoflux::Sleep(std::chrono::milliseconds(500));
+  auto btn = weak_btn.lock();
+  if (!btn) co_return;          // Widget 已销毁
+  if (btn->IsPressed()) {       // 状态机作为条件锁
+    btn->OnLongPress();
+  }
+}
+```
+
+### 状态机 + 协程模式
+
+Widget 携带轻量 `WidgetState`（Idle、Hovering、Dragging 等）。状态迁移是协程的"条件锁"：指针按下时启动的协程在睡眠后检查 Widget 状态；如果状态已改变（如指针已释放），协程静默返回。无需显式取消机制——状态机本身就是执行的门控。
+
+## 移动端渲染
+
+移动端不使用 GLFW，tgfx 直接渲染到平台提供的 Surface：
+
+- **Android**：传入 `ANativeWindow*` 作为 `platform_surface`
+- **iOS**：传入 `CAMetalLayer*` 或 `CAEAGLLayer*` 作为 `platform_surface`
+
+```cpp
+// 移动端初始化示例
+app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
+```
+
+桌面端 `platform_surface` 传 `nullptr`，框架自动创建 GLFW 窗口。
+
 ## 项目结构
 
 ```
@@ -280,23 +311,9 @@ neoflux/
 │   ├── core/               # 环形队列、类型定义、协程、工具
 │   ├── widget/             # Widget 系统
 │   ├── app/                # Application、EventLoop
-│   └── render/             # 渲染层、命令、tgfx、GLFW
+│   └── render/             # 渲染层、命令、tgfx、PlatformBridge
 ├── src/                    # 实现（.cpp）
 ├── tests/                  # GTest 单元测试
 ├── examples/               # 示例应用
 └── docs/                   # VitePress 文档
 ```
-
-## 移动端渲染
-
-移动端不使用 GLFW，tgfx 直接渲染到平台提供的 Surface：
-
-- **Android**：传入 `ANativeWindow*` 作为 `platform_surface`
-- **iOS**：传入 `CAMetalLayer*` 或 `CAEAGLLayer*` 作为 `platform_surface`
-
-```cpp
-// 移动端初始化示例
-app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
-```
-
-桌面端 `platform_surface` 传 `nullptr`，框架自动创建 GLFW 窗口。
