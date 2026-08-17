@@ -111,16 +111,52 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 
 ## 字体系统
 
-NeoFlux 使用字体管理器，在启动时扫描 `thirdparty/fonts/` 目录下的 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。Widget 通过文件名（不含扩展名）引用字体：
+NeoFlux 使用字体管理器，在启动时扫描可配置的字体目录，支持 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。默认目录为 `thirdparty/fonts/`。
+
+**在 `Init()` 之前配置字体目录：**
+
+```cpp
+Application app;
+app.SetFontDir("assets/fonts");  // 可选：覆盖默认的 "thirdparty/fonts"
+app.Init(argc, argv, 800, 600, "NeoFlux");
+```
+
+Widget 通过文件名（不含扩展名）引用字体：
 
 ```cpp
 auto text = std::make_shared<Text>("Hello World");
-text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regular.ttf
+text->SetFont("NotoSansSC-Regular");  // 加载 <font_dir>/NotoSansSC-Regular.ttf
 ```
 
-若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `thirdparty/fonts/` 目录即可通过名称引用，无需构建时拷贝。
+若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。相对路径从工作目录解析，并自动向上回退（`../`、`../../`）以适配构建子目录。
 
-> **警告：** 如果 `thirdparty/fonts/` 为空，文本渲染会失败或显示乱码。发布前务必至少放入一个字体文件（如渲染中文需 CJK 字体）。
+> **警告：** 如果配置的字体目录为空，文本渲染会失败或显示乱码。发布前务必至少放入一个字体文件（如渲染中文需 CJK 字体）。在 `Init()` 之前调用 `SetFontDir()` 指定自定义目录。
+>
+> **注意：** 运行示例（example）前，确保 `thirdparty/fonts/` 目录下有字体文件，否则文本会显示为乱码或空白。
+
+### CMake 自动拷贝字体
+
+在你自己的工程中，将字体放在 `fonts/` 目录下，通过 CMake 在构建时自动拷贝到输出目录：
+
+```cmake
+# CMakeLists.txt
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE neoflux)
+
+# 构建时将 fonts/ 目录拷贝到可执行文件同级目录
+add_custom_command(TARGET my_app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+)
+```
+
+然后在代码中配置：
+
+```cpp
+Application app;
+app.SetFontDir("fonts");  // 对应拷贝到输出目录的 fonts/ 文件夹
+app.Init(argc, argv, 800, 600, "My App");
+```
 
 ## 构建测试
 

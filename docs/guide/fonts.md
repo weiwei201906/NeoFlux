@@ -3,12 +3,34 @@
 NeoFlux uses FreeType for font rasterization and a glyph texture atlas for
 efficient text rendering.
 
+## Configuring the Font Directory
+
+:::danger
+You must configure the font directory before calling `Application::Init()`.
+If no fonts are found, all text widgets will render as garbled or blank.
+:::
+
+By default, NeoFlux scans `thirdparty/fonts/` for font files. To use a
+different directory, call `Application::SetFontDir()` **before** `Init()`:
+
+```cpp
+Application app;
+app.SetFontDir("assets/fonts");  // scan assets/fonts/ instead of thirdparty/fonts/
+app.Init(argc, argv, 800, 600, "My App");
+app.PushRoute("/");
+app.Run();
+```
+
+`SetFontDir()` accepts a relative or absolute path. Relative paths are resolved
+from the working directory, with automatic upward fallback (`../`, `../../`) to
+handle build subdirectories.
+
 ## Adding Fonts
 
-Place font files (`.ttf`, `.otf`, `.ttc`) in the `thirdparty/fonts/` directory:
+Place font files (`.ttf`, `.otf`, `.ttc`) in your configured font directory:
 
 ```
-thirdparty/fonts/
+thirdparty/fonts/          (default, or your custom path)
   NotoSansSC-Regular.ttf
   Roboto-Bold.ttf
 ```
@@ -17,8 +39,8 @@ The `FontManager` scans this directory at startup and registers fonts by their
 filename (without extension).
 
 :::warning
-If `thirdparty/fonts/` is empty or missing, all text widgets will render
-incorrectly (garbled or blank). Ship at least one font file with your
+If the configured font directory is empty or missing, all text widgets will
+render incorrectly (garbled or blank). Ship at least one font file with your
 application. For CJK text, include a CJK-capable font such as NotoSansSC.
 :::
 
@@ -57,8 +79,8 @@ text->SetAlignment(HAlign::kCenter);  // within the Text widget's bounds
 
 ## How It Works
 
-1. **Font loading**: `FontManager` scans `thirdparty/fonts/` and loads each
-   font with FreeType.
+1. **Font loading**: `FontManager` scans the configured font directory and
+   loads each font with FreeType.
 2. **Glyph rasterization**: When a character is first rendered, FreeType
    rasterizes it to a grayscale bitmap.
 3. **Texture atlas**: The bitmap is uploaded to a 1024x1024 texture atlas.
@@ -78,14 +100,39 @@ text->SetFont("NotoSansSC-Regular");
 
 ## Font Search Paths
 
-`FontManager` searches the following paths (relative to the working directory):
+`FontManager` searches the configured directory (default: `thirdparty/fonts/`)
+relative to the working directory, then falls back upward:
 
-- `thirdparty/fonts/`
-- `../thirdparty/fonts/`
-- `../../thirdparty/fonts/`
+- `<font_dir>/`
+- `../<font_dir>/`
+- `../../<font_dir>/`
 
 This ensures fonts are found whether the application runs from the project root
-or the build output directory.
+or the build output directory. Configure the directory via
+`Application::SetFontDir()` before `Init()`.
+
+## CMake: Auto-Copy Fonts at Build Time
+
+In your own project, place fonts in a `fonts/` directory and use CMake to copy
+them next to the executable on every build:
+
+```cmake
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE neoflux)
+
+add_custom_command(TARGET my_app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+)
+```
+
+Then configure the directory in code:
+
+```cpp
+Application app;
+app.SetFontDir("fonts");  // matches the copied fonts/ folder
+app.Init(argc, argv, 800, 600, "My App");
+```
 
 ## Best Practices
 

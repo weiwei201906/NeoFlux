@@ -42,7 +42,9 @@ class RenderLayer : public NonCopyable {
   // On mobile, `platform_surface` must be the native surface handle
   // (ANativeWindow* on Android, CAMetalLayer* on iOS); tgfx renders
   // directly into this surface without any windowing bridge.
+  // `font_dir` is the directory to scan for font files (.ttf/.otf/.ttc).
   bool Start(int width, int height, std::string_view title,
+             std::string_view font_dir,
              void* platform_surface = nullptr);
 
   // Stops the render thread and shuts down the rendering backend.

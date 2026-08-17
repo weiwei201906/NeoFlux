@@ -66,6 +66,9 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 
   Application app;
+  // 在 Init() 之前配置字体目录。将 .ttf/.otf 文件放入 thirdparty/fonts/
+  // （或你自定义的目录）。详见字体系统文档。
+  app.SetFontDir("thirdparty/fonts");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
@@ -79,6 +82,10 @@ int main(int argc, char** argv) {
 
 :::tip
 哪怕只有一个路由，也必须先 `RegisterRoute` 再 `PushRoute`。`Init` 只创建窗口——在推送路由之前不会显示任何 Widget。
+:::
+
+:::warning
+文本 Widget 需要字体文件。运行前请在配置的字体目录（默认 `thirdparty/fonts/`）中至少放入一个 `.ttf`/`.otf` 字体。没有字体时，所有文本会显示为乱码或空白。
 :::
 
 ## 4. CMakeLists.txt
@@ -97,10 +104,19 @@ add_subdirectory(thirdparty/neoflux)
 
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
+
+# 每次构建时将 fonts/ 目录拷贝到可执行文件同级目录。
+# 将你的 .ttf/.otf 文件放入 ${CMAKE_SOURCE_DIR}/fonts/
+add_custom_command(TARGET my_app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+)
 ```
 
 > **注意：** NeoFlux 的示例和测试**默认关闭**。如需构建，在配置时传入
 > `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON`。
+>
+> **字体：** 运行示例需要 `thirdparty/fonts/` 目录下有字体文件。没有字体时，文本会显示为乱码或空白。
 
 ### 使用 FetchContent
 

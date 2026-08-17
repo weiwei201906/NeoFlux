@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -70,6 +71,15 @@ class Application : public NonCopyable {
   // Thread-safe; wakes the event loop if it is idle.
   void MarkFrameDirty() noexcept;
 
+  // Sets the directory to scan for font files (.ttf, .otf, .ttc). Must be
+  // called before Init(). Relative paths are resolved from the working
+  // directory, with upward fallback (../, ../../) for build subdirectories.
+  // Default: "thirdparty/fonts".
+  void SetFontDir(std::string_view dir) noexcept;
+
+  // Returns the configured font directory.
+  [[nodiscard]] std::string_view GetFontDir() const noexcept;
+
  private:
   void OnFrame();
   // Builds all dirty widgets. Returns true if at least one widget was
@@ -103,6 +113,9 @@ class Application : public NonCopyable {
   bool hit_cache_valid_ = false;
   int window_width_ = 800;
   int window_height_ = 600;
+  // Directory to scan for font files. Configured via SetFontDir() before
+  // Init(); default "thirdparty/fonts".
+  std::string font_dir_{"thirdparty/fonts"};
   bool initialized_ = false;
   // Set when the widget tree or window state changes; cleared after a full
   // frame is processed. When false, OnFrame skips build/layout/paint.

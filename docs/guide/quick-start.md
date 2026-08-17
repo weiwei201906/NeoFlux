@@ -68,6 +68,9 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 
   Application app;
+  // Configure the font directory before Init(). Place .ttf/.otf files in
+  // thirdparty/fonts/ (or your custom directory). See Font System docs.
+  app.SetFontDir("thirdparty/fonts");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
@@ -83,6 +86,12 @@ int main(int argc, char** argv) {
 Even with a single route, you must call `RegisterRoute` then `PushRoute`.
 `Init` only creates the window — it does not display any widget until a route
 is pushed.
+:::
+
+:::warning
+Text widgets require font files. Place at least one `.ttf`/`.otf` font in your
+configured font directory (`thirdparty/fonts/` by default) before running.
+Without fonts, all text renders as garbled or blank.
 :::
 
 ## 4. CMakeLists.txt
@@ -101,10 +110,20 @@ add_subdirectory(thirdparty/neoflux)
 
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
+
+# Copy fonts/ next to the executable on every build.
+# Place your .ttf/.otf files in ${CMAKE_SOURCE_DIR}/fonts/
+add_custom_command(TARGET my_app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+)
 ```
 
 > **Note:** NeoFlux examples and tests are **off by default**. To build them,
 > pass `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON` at configure time.
+>
+> **Fonts:** Examples require font files in `thirdparty/fonts/`. Without fonts,
+> text renders as garbled or blank.
 
 ### With FetchContent
 

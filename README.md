@@ -92,18 +92,61 @@ By default, logs are written to files in `./logs/` and no console window appears
 
 ## Font System
 
-NeoFlux uses a font manager that scans `thirdparty/fonts/` for TrueType (`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup. Widgets reference fonts by filename stem (without extension):
+NeoFlux uses a font manager that scans a configurable directory for TrueType
+(`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup.
+The default directory is `thirdparty/fonts/`.
+
+**Configure the font directory before `Init()`:**
+
+```cpp
+Application app;
+app.SetFontDir("assets/fonts");  // optional: override default "thirdparty/fonts"
+app.Init(argc, argv, 800, 600, "NeoFlux");
+```
+
+Widgets reference fonts by filename stem (without extension):
 
 ```cpp
 auto text = std::make_shared<Text>("Hello World");
-text->SetFont("NotoSansSC-Regular");  // loads thirdparty/fonts/NotoSansSC-Regular.ttf
+text->SetFont("NotoSansSC-Regular");  // loads <font_dir>/NotoSansSC-Regular.ttf
 ```
 
-If no font is specified on a widget, the first discovered font is used as the default. Place your font files in `thirdparty/fonts/` and reference them by name — no build-time copying is required.
+If no font is specified on a widget, the first discovered font is used as the
+default. Relative paths are searched from the working directory with upward
+fallback (`../`, `../../`) for build subdirectories.
 
-> **Warning:** If `thirdparty/fonts/` is empty, text rendering will fail or
-> show garbled output. Always include at least one font file (e.g. a CJK font
-> for Chinese text) before shipping.
+> **Warning:** If the configured font directory is empty, text rendering will
+> fail or show garbled output. Always include at least one font file (e.g. a
+> CJK font for Chinese text). Call `SetFontDir()` before `Init()` to specify a
+> custom directory.
+>
+> **Note:** Before running examples, ensure `thirdparty/fonts/` contains font
+> files, otherwise text will render as garbled or blank.
+
+### CMake: Auto-Copy Fonts at Build Time
+
+In your own project, place fonts in a `fonts/` directory and copy them to the
+output directory at build time:
+
+```cmake
+# CMakeLists.txt
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE neoflux)
+
+# Copy fonts/ next to the executable on every build
+add_custom_command(TARGET my_app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+)
+```
+
+Then configure in code:
+
+```cpp
+Application app;
+app.SetFontDir("fonts");  // matches the copied fonts/ folder
+app.Init(argc, argv, 800, 600, "My App");
+```
 
 ## Building Tests
 

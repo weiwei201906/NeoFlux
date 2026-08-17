@@ -46,6 +46,7 @@ RenderLayer::RenderLayer()
 RenderLayer::~RenderLayer() { Stop(); }
 
 bool RenderLayer::Start(int width, int height, std::string_view title,
+                        std::string_view font_dir,
                         void* platform_surface) {
   if (running_.load()) {
     LOG(WARNING) << "RenderLayer already running";
@@ -85,7 +86,8 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   // renderer_->Init() can load GL function pointers via glfwGetProcAddress.
   glfw_bridge->MakeContextCurrent();
 
-  if (!renderer_->Init(width, height, glfw_bridge->GetNativeHandle())) {
+  if (!renderer_->Init(width, height, font_dir,
+                       glfw_bridge->GetNativeHandle())) {
     LOG(ERROR) << "Failed to initialize tgfx renderer";
     GlfwBridge::ReleaseContext();
     glfw_bridge->Shutdown();
@@ -108,7 +110,7 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
     return false;
   }
 
-  if (!renderer_->Init(width, height, platform_surface)) {
+  if (!renderer_->Init(width, height, font_dir, platform_surface)) {
     LOG(ERROR) << "Failed to initialize tgfx renderer (mobile)";
     platform_bridge_.reset();
     return false;

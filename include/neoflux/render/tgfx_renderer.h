@@ -30,7 +30,9 @@ class TgfxRenderer : public NonCopyable {
 
   // Initializes the renderer for a surface of the given dimensions.
   // On desktop, `native_handle` is the GLFW window pointer.
-  bool Init(int width, int height, void* native_handle = nullptr);
+  // `font_dir` is the directory to scan for font files (.ttf/.otf/.ttc).
+  bool Init(int width, int height, std::string_view font_dir,
+            void* native_handle = nullptr);
 
   // Begins a new frame. Clears the background.
   void BeginFrame(const Color& clear_color = {255, 255, 255, 255});

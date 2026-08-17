@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // NeoFlux - tgfx_renderer.cpp
 //
 // Renderer backend. When tgfx is available (NEOFLUX_USE_TGFX), this file
@@ -208,13 +208,14 @@ class GlRendererImpl : public NonCopyable {
   GlRendererImpl(GlRendererImpl&&) = delete;
   GlRendererImpl& operator=(GlRendererImpl&&) = delete;
 
-  bool Init(int width, int height, void* native_handle) {
+  bool Init(int width, int height, std::string_view font_dir,
+            void* native_handle) {
     window_ = static_cast<GLFWwindow*>(native_handle);
     width_ = width;
     height_ = height;
     // GL initialization is deferred to BeginFrame, which runs on the render
     // thread where the GL context is current. FreeType does not need GL.
-    InitFonts();
+    InitFonts(font_dir);
     return true;
   }
 
@@ -623,20 +624,25 @@ class GlRendererImpl : public NonCopyable {
     return true;
   }
 
-  // Initializes FreeType and scans the default font directories.
-  void InitFonts() {
+  // Initializes FreeType and scans the configured font directory.
+  // `font_dir` is the directory to scan for .ttf/.otf/.ttc files. Relative
+  // paths are searched from the working directory, then upward (../, ../../)
+  // to handle build subdirectories.
+  void InitFonts(std::string_view font_dir) {
     if (FT_Init_FreeType(&ft_library_) != 0) {
       LOG(ERROR) << "Failed to initialize FreeType";
       return;
     }
-    // Scan common font locations. Developers place their fonts in
-    // thirdparty/fonts/ and reference them by filename stem.
-    font_manager_.ScanDirectory("thirdparty/fonts");
-    font_manager_.ScanDirectory("../thirdparty/fonts");
-    font_manager_.ScanDirectory("../../thirdparty/fonts");
+    const std::string dir(font_dir);
+    font_manager_.ScanDirectory(dir);
+    font_manager_.ScanDirectory("../" + dir);
+    font_manager_.ScanDirectory("../../" + dir);
     if (font_manager_.GetFontCount() == 0) {
-      LOG(WARNING) << "No fonts found in thirdparty/fonts/. "
-                   << "Text rendering will be disabled.";
+      LOG(WARNING) << "No fonts found in '" << dir
+                   << "' (or parent directories). "
+                   << "Text rendering will be disabled. "
+                   << "Call Application::SetFontDir() before Init() to specify "
+                   << "a font directory.";
     }
   }
 
@@ -834,13 +840,14 @@ TgfxRenderer::~TgfxRenderer() {
 #endif
 }
 
-bool TgfxRenderer::Init(int width, int height, void* native_handle) {
+bool TgfxRenderer::Init(int width, int height, std::string_view font_dir,
+                        void* native_handle) {
   if (initialized_) {
     return true;
   }
 #ifdef NEOFLUX_PLATFORM_DESKTOP
   auto* impl = new GlRendererImpl();
-  if (!impl->Init(width, height, native_handle)) {
+  if (!impl->Init(width, height, font_dir, native_handle)) {
     delete impl;
     return false;
   }

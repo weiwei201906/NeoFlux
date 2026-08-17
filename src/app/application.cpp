@@ -120,7 +120,7 @@ bool Application::Init(int argc, char** argv, int window_width,
 
   render_layer_ = std::make_unique<RenderLayer>();
   if (!render_layer_->Start(window_width, window_height, window_title,
-                            platform_surface)) {
+                            font_dir_, platform_surface)) {
     LOG(ERROR) << "Failed to start render layer";
     return false;
   }
@@ -230,6 +230,14 @@ int Application::GetWindowHeight() const noexcept { return window_height_; }
 void Application::MarkFrameDirty() noexcept {
   frame_dirty_.store(true);
   event_loop_.WakeUp();
+}
+
+void Application::SetFontDir(std::string_view dir) noexcept {
+  font_dir_ = std::string(dir);
+}
+
+std::string_view Application::GetFontDir() const noexcept {
+  return font_dir_;
 }
 
 void Application::OnFrame() {
