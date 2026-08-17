@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // NeoFlux - application.cpp
 //
 // Implementation of Application. Methods moved from header.
@@ -412,28 +412,40 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
     pos.y = raw_pos.y * static_cast<float>(window_height_) /
             static_cast<float>(actual_h);
   }
-  // Use cached hit-test result when valid; otherwise recompute and cache.
-  // Pointer-move fires at high frequency, so avoiding a full tree traversal
-  // per event is critical for large widget trees.
-  std::shared_ptr<Widget> hit;
-  if (hit_cache_valid_) {
-    hit = hit_cache_.lock();
-  }
+  // When a pointer is currently pressed (dragging), deliver move events
+  // directly to the pressed widget regardless of hit-test results. This
+  // ensures drag operations continue even when the cursor moves outside
+  // the widget's layout bounds (e.g. Draggable with paint-time offset).
+  std::shared_ptr<Widget> hit = pressed_widget_.lock();
   if (hit == nullptr) {
-    hit = root->HitTest(pos);
-    hit_cache_ = hit;
-    hit_cache_valid_ = true;
+    // Use cached hit-test result when valid; otherwise recompute and cache.
+    // Pointer-move fires at high frequency, so avoiding a full tree traversal
+    // per event is critical for large widget trees.
+    if (hit_cache_valid_) {
+      hit = hit_cache_.lock();
+    }
+    if (hit == nullptr) {
+      hit = root->HitTest(pos);
+      hit_cache_ = hit;
+      hit_cache_valid_ = true;
+    }
+  } else {
+    // Pressed widget takes precedence; invalidate hover cache since the
+    // cursor may be over a different widget during drag.
+    hit_cache_valid_ = false;
   }
-  // Detect enter/exit transitions.
-  auto previous = hovered_widget_.lock();
-  if (hit.get() != previous.get()) {
-    if (previous != nullptr) {
-      previous->OnPointerExit();
+  // Detect enter/exit transitions only when not dragging (no pressed widget).
+  if (pressed_widget_.expired()) {
+    auto previous = hovered_widget_.lock();
+    if (hit.get() != previous.get()) {
+      if (previous != nullptr) {
+        previous->OnPointerExit();
+      }
+      if (hit != nullptr) {
+        hit->OnPointerEnter();
+      }
+      hovered_widget_ = hit;
     }
-    if (hit != nullptr) {
-      hit->OnPointerEnter();
-    }
-    hovered_widget_ = hit;
   }
   // Deliver move event to the widget under the cursor.
   if (hit != nullptr) {
