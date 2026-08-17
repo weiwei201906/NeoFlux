@@ -102,7 +102,7 @@ If no font is specified on a widget, the first discovered font is used as the de
 Tests are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` CMake option:
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -NEOFLUX_BUILD_EXAMPLES=ON
 cmake --build build
 cd build && ctest --output-on-failure
 ```

@@ -67,7 +67,7 @@ cmake --build .
 测试默认禁用，需通过 CMake 选项启用：
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -NEOFLUX_BUILD_EXAMPLES=ON
 cmake --build build
 cd build && ctest --output-on-failure
 ```
