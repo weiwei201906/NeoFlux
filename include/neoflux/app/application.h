@@ -83,6 +83,7 @@ class Application : public NonCopyable {
   void PaintWidgetRecursive(Widget& widget, RenderContext& context);
   void DispatchPointerEvent(MouseButton button, InputAction action,
                             const Point& pos);
+  void DispatchScrollEvent(double xoffset, double yoffset);
 
   EventLoop event_loop_{};
   std::unique_ptr<RenderLayer> render_layer_ = nullptr;

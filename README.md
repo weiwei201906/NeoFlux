@@ -149,9 +149,12 @@ can contain children. Layout is computed by the Taitank flexbox engine.
 | Widget | Description |
 |--------|-------------|
 | `Widget` | Abstract base class. Override `Build()`, `OnMeasure()`, `Paint()`. |
-| `Container` | Flexbox container with padding, margin, background color, flex direction. |
+| `Container` | Flexbox container with padding, margin, background color, border radius, flex direction. |
 | `Text` | Single-line text with configurable font size, color, alignment. |
 | `Button` | Clickable button with label, press callback, and pressed-state styling. |
+| `ScrollView` | Scrollable viewport that clips and pans its content via mouse wheel / touch. |
+| `Expanded` | Container with `flex_grow` set; fills remaining space in a flex parent. |
+| `SizedBox` | Container with explicit width/height; useful for fixed-size spacing. |
 | `StatelessWidget` | Base for widgets that don't hold mutable state. |
 | `StatefulWidget` | Base for widgets with mutable state; paired with `State<W>`. |
 
@@ -227,6 +230,33 @@ multiple font sizes/colors, and CJK text rendering. Place fonts in
 
 ```bash
 ./bin/font_demo
+```
+
+### scroll_demo
+
+Demonstrates `ScrollView`: a header bar plus a scrollable list of colored
+items. Scroll with the mouse wheel; content is clipped to the viewport.
+
+```bash
+./bin/scroll_demo
+```
+
+## Coroutines
+
+NeoFlux supports C++20 coroutines for asynchronous work. Schedule a `Task<void>`
+on the event loop; it resumes on the next frame when ready:
+
+```cpp
+#include <neoflux/core/task.h>
+
+neoflux::Task<void> AnimateAsync() {
+  for (int i = 0; i < 60; ++i) {
+    co_await neoflux::Yield();  // resume next frame
+    widget->SetOpacity(i / 60.0F);
+  }
+}
+
+event_loop.Schedule(AnimateAsync());
 ```
 
 ## Project Structure

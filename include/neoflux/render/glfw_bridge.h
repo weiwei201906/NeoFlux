@@ -30,6 +30,10 @@ enum class InputAction : std::uint8_t { kPress = 1, kRelease = 0, kRepeat = 2 };
 using InputEventCallback =
     std::function<void(MouseButton button, InputAction action, const Point& pos)>;
 
+// Callback type for mouse scroll events. Receives the scroll delta in
+// normalized units (positive = up/right).
+using ScrollEventCallback = std::function<void(double xoffset, double yoffset)>;
+
 // Callback type for framebuffer resize events. Receives the new framebuffer
 // size in pixels.
 using ResizeCallback = std::function<void(int width, int height)>;
@@ -58,8 +62,15 @@ class GlfwBridge : public NonCopyable {
   // Returns the window's framebuffer size in pixels.
   void GetFramebufferSize(int& width, int& height) const;
 
+  // Returns the window client-area size in screen coordinates. This may
+  // differ from the requested size due to DPI virtualisation on Windows.
+  void GetWindowSize(int& width, int& height) const;
+
   // Returns the native window handle (GLFWwindow*).
   [[nodiscard]] GLFWwindow* GetNativeHandle() const noexcept;
+
+  // Returns the current cursor position in window coordinates.
+  [[nodiscard]] Point GetCursorPos() const noexcept;
 
   // Returns the OpenGL context (for tgfx initialization).
   [[nodiscard]] void* GetGlContext() const noexcept;
@@ -73,6 +84,9 @@ class GlfwBridge : public NonCopyable {
   // Sets the callback invoked for mouse button events.
   void SetInputCallback(InputEventCallback callback) noexcept;
 
+  // Sets the callback invoked for mouse scroll events.
+  void SetScrollCallback(ScrollEventCallback callback) noexcept;
+
   // Sets the callback invoked when the framebuffer is resized.
   void SetResizeCallback(ResizeCallback callback) noexcept;
 
@@ -85,10 +99,13 @@ class GlfwBridge : public NonCopyable {
   static void MouseButtonCallback(GLFWwindow* window, int button, int action,
                                   int mods);
   static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
+  static void ScrollCallback(GLFWwindow* window, double xoffset,
+                             double yoffset);
 
   GLFWwindow* window_;
   bool initialized_;
   InputEventCallback input_callback_{};
+  ScrollEventCallback scroll_callback_{};
   ResizeCallback resize_callback_{};
   double last_cursor_x_ = 0.0;
   double last_cursor_y_ = 0.0;

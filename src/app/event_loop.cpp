@@ -3,12 +3,14 @@
 //
 // Implementation of EventLoop. CV-driven frame scheduling: the loop blocks
 // on a condition variable when idle and is woken on demand via WakeUp().
+// Also supports C++20 coroutine scheduling via Schedule().
 // =============================================================================
 
 #include "neoflux/app/event_loop.h"
 
 #include <chrono>
 #include <cstdint>
+#include <utility>
 
 #include <glog/logging.h>
 
@@ -37,6 +39,7 @@ void EventLoop::Run(FrameCallback frame_callback) {
     if (frame_callback) {
       frame_callback();
     }
+    RunReadyCoroutines();
     frame_count_.fetch_add(1);
 
     // Block until woken by WakeUp() or until the frame interval elapses.
@@ -72,6 +75,39 @@ int EventLoop::GetTargetFps() const noexcept { return target_fps_; }
 
 uint64_t EventLoop::GetFrameCount() const noexcept {
   return frame_count_.load();
+}
+
+void EventLoop::Schedule(Task<void> task) {
+  {
+    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    pending_coroutines_.push_back(std::move(task));
+  }
+  WakeUp();
+}
+
+void EventLoop::RunReadyCoroutines() {
+  std::vector<Task<void>> ready;
+  {
+    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    ready.swap(pending_coroutines_);
+  }
+  if (ready.empty()) {
+    return;
+  }
+
+  for (auto& task : ready) {
+    if (!task.Done()) {
+      task.Resume();
+    }
+  }
+
+  // Re-queue tasks that are not yet done (e.g. waiting on YieldAwaitable).
+  for (auto& task : ready) {
+    if (!task.Done()) {
+      std::lock_guard<std::mutex> lock(coroutine_mutex_);
+      pending_coroutines_.push_back(std::move(task));
+    }
+  }
 }
 
 }  // namespace neoflux

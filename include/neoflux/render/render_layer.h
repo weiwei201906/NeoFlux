@@ -12,6 +12,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -80,6 +81,13 @@ class RenderLayer : public NonCopyable {
   std::atomic<bool> running_{false};
   std::atomic<bool> should_close_{false};
   std::unique_ptr<std::thread> render_thread_ = nullptr;
+
+  // Set by the render thread after it has made the GL context current and
+  // performed a preliminary BeginFrame/EndFrame to initialise GL resources.
+  // Start() blocks on this until the render thread is ready, so the first
+  // real frame submitted by the application never races GL initialisation.
+  std::promise<void> render_ready_;
+  std::future<void> render_ready_future_;
 
   std::unique_ptr<TgfxRenderer> renderer_;
   std::unique_ptr<GlfwBridge> glfw_bridge_;

@@ -153,6 +153,11 @@ Container& Container::SetFlexGrow(float grow) noexcept {
   return *this;
 }
 
+Container& Container::SetBorderRadius(float radius) noexcept {
+  border_radius_ = radius;
+  return *this;
+}
+
 Size Container::OnMeasure(float /*width*/, int /*width_mode*/,
                           float /*height*/, int /*height_mode*/) {
   return {.width = 0.0F, .height = 0.0F};
@@ -160,9 +165,17 @@ Size Container::OnMeasure(float /*width*/, int /*width_mode*/,
 
 void Container::Paint(RenderContext& context) {
   if (has_background_) {
-    context.DrawRect(
-        {.x = 0.0F, .y = 0.0F, .width = bounds_.width, .height = bounds_.height},
-        background_color_);
+    if (border_radius_ > 0.0F) {
+      context.DrawRoundedRect(
+          {.x = 0.0F, .y = 0.0F, .width = bounds_.width,
+           .height = bounds_.height},
+          background_color_, border_radius_);
+    } else {
+      context.DrawRect(
+          {.x = 0.0F, .y = 0.0F, .width = bounds_.width,
+           .height = bounds_.height},
+          background_color_);
+    }
   }
   PaintChildren(context);
 }

@@ -74,6 +74,12 @@ void BuildContext::PopRoute() {
 Widget::Widget() : taitank_node_(taitank::NodeCreate()) {
   if (taitank_node_ != nullptr) {
     taitank::SetContext(taitank_node_, this);
+    // Default to column layout (vertical stacking), matching the typical
+    // UI pattern. Containers may override with SetFlexDirection(kRow).
+    // Taitank's factory default is FLEX_DIRECTION_ROW (enum value 0),
+    // which would lay children horizontally — wrong for most widgets.
+    taitank::SetFlexDirection(taitank_node_, taitank::FLEX_DIRECTION_COLUMN);
+    taitank::SetAlignItems(taitank_node_, taitank::FLEX_ALIGN_STRETCH);
     // Note: measure function is NOT set here. Only leaf widgets (Text,
     // Button, etc.) set a measure function. Taitank forbids children on
     // nodes with a measure function, so layout containers must not have one.
@@ -94,6 +100,11 @@ std::shared_ptr<Widget> Widget::Build(BuildContext& /*context*/) {
 bool Widget::OnPointerDown(const Point& /*local_pos*/) { return false; }
 
 void Widget::OnPointerUp(const Point& /*local_pos*/) {}
+
+bool Widget::OnPointerScroll(const Point& /*local_pos*/, double /*xoffset*/,
+                             double /*yoffset*/) {
+  return false;
+}
 
 std::shared_ptr<Widget> Widget::HitTest(  // NOLINT(readability-make-member-function-const)
     const Point& parent_pos) {
@@ -134,6 +145,14 @@ void Widget::PerformLayout(float width, float height) {
     return;
   }
   SyncTaitankChildren();
+  // The root widget (no parent) must fill the entire viewport. Taitank
+  // nodes default to NaN (auto) sizing, which would make the root shrink
+  // to its content size instead of filling the window. Force the root's
+  // dimensions to the viewport size before layout.
+  if (parent_ == nullptr) {
+    taitank::SetWidth(taitank_node_, width);
+    taitank::SetHeight(taitank_node_, height);
+  }
   taitank::DoLayout(taitank_node_, width, height, taitank::DIRECTION_LTR);
   ReadLayoutRecursive();
 }

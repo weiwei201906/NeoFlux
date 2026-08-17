@@ -68,6 +68,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
   glfwSetKeyCallback(window_, KeyCallback);
   glfwSetMouseButtonCallback(window_, MouseButtonCallback);
   glfwSetCursorPosCallback(window_, CursorPosCallback);
+  glfwSetScrollCallback(window_, ScrollCallback);
 
   initialized_ = true;
   LOG(INFO) << "GLFW window created: " << width << "x" << height;
@@ -129,7 +130,26 @@ void GlfwBridge::GetFramebufferSize(int& width, int& height) const {
   }
 }
 
+void GlfwBridge::GetWindowSize(int& width, int& height) const {
+  if (window_ != nullptr) {
+    glfwGetWindowSize(window_, &width, &height);
+  } else {
+    width = 0;
+    height = 0;
+  }
+}
+
 GLFWwindow* GlfwBridge::GetNativeHandle() const noexcept { return window_; }
+
+Point GlfwBridge::GetCursorPos() const noexcept {
+  if (window_ == nullptr) {
+    return {.x = 0.0F, .y = 0.0F};
+  }
+  double xpos = 0.0;
+  double ypos = 0.0;
+  glfwGetCursorPos(window_, &xpos, &ypos);
+  return {.x = static_cast<float>(xpos), .y = static_cast<float>(ypos)};
+}
 
 void* GlfwBridge::GetGlContext() const noexcept {
   return static_cast<void*>(window_);
@@ -137,6 +157,10 @@ void* GlfwBridge::GetGlContext() const noexcept {
 
 void GlfwBridge::SetInputCallback(InputEventCallback callback) noexcept {
   input_callback_ = std::move(callback);
+}
+
+void GlfwBridge::SetScrollCallback(ScrollEventCallback callback) noexcept {
+  scroll_callback_ = std::move(callback);
 }
 
 void GlfwBridge::SetResizeCallback(ResizeCallback callback) noexcept {
@@ -203,6 +227,18 @@ void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,
   user_data->bridge->last_cursor_y_ = ypos;
 }
 
+void GlfwBridge::ScrollCallback(GLFWwindow* window, double xoffset,
+                                double yoffset) {
+  auto* user_data =
+      static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
+  if (user_data == nullptr || user_data->bridge == nullptr) {
+    return;
+  }
+  if (user_data->bridge->scroll_callback_ != nullptr) {
+    user_data->bridge->scroll_callback_(xoffset, yoffset);
+  }
+}
+
 }  // namespace neoflux
 
 #else  // !NEOFLUX_PLATFORM_DESKTOP
@@ -231,7 +267,16 @@ void GlfwBridge::GetFramebufferSize(int& width, int& height) const {
   height = 0;
 }
 
+void GlfwBridge::GetWindowSize(int& width, int& height) const {
+  width = 0;
+  height = 0;
+}
+
 GLFWwindow* GlfwBridge::GetNativeHandle() const noexcept { return nullptr; }
+
+Point GlfwBridge::GetCursorPos() const noexcept {
+  return {.x = 0.0F, .y = 0.0F};
+}
 
 void* GlfwBridge::GetGlContext() const noexcept { return nullptr; }
 
@@ -248,6 +293,9 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* /*window*/, int /*button*/,
 
 void GlfwBridge::CursorPosCallback(GLFWwindow* /*window*/, double /*xpos*/,
                                    double /*ypos*/) {}
+
+void GlfwBridge::ScrollCallback(GLFWwindow* /*window*/, double /*xoffset*/,
+                                double /*yoffset*/) {}
 
 }  // namespace neoflux
 

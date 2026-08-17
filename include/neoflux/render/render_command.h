@@ -22,6 +22,7 @@ namespace neoflux {
 enum class RenderCommandType : uint8_t {
   kNoop,
   kDrawRect,
+  kDrawRoundedRect,
   kDrawText,
   kSave,
   kRestore,
@@ -44,10 +45,16 @@ struct RenderCommand {
   float font_size = 14.0F;         // kDrawText
   float translate_x = 0.0F;        // kTranslate
   float translate_y = 0.0F;        // kTranslate
+  float corner_radius = 0.0F;      // kDrawRoundedRect
 
   // Factory: create a draw-rect command.
   [[nodiscard]] static RenderCommand MakeDrawRect(const Rect& rect,
                                                   const Color& color);
+
+  // Factory: create a draw-rounded-rect command.
+  [[nodiscard]] static RenderCommand MakeDrawRoundedRect(const Rect& rect,
+                                                         const Color& color,
+                                                         float radius);
 
   // Factory: create a draw-text command.
   [[nodiscard]] static RenderCommand MakeDrawText(std::string text,

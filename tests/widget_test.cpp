@@ -81,12 +81,14 @@ TEST(WidgetTest, NeedsBuildFlag) {
 }
 
 TEST(ContainerTest, LayoutWithFixedSize) {
-  Container container;
-  container.SetWidth(200.0F).SetHeight(100.0F);
+  auto parent = std::make_shared<Container>();
+  auto child = std::make_shared<Container>();
+  child->SetWidth(200.0F).SetHeight(100.0F);
+  parent->AddChild(child);
 
-  container.PerformLayout(800.0F, 600.0F);
+  parent->PerformLayout(800.0F, 600.0F);
 
-  const auto& bounds = container.GetBounds();
+  const auto& bounds = child->GetBounds();
   EXPECT_FLOAT_EQ(bounds.width, 200.0F);
   EXPECT_FLOAT_EQ(bounds.height, 100.0F);
 }

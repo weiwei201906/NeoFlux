@@ -25,6 +25,11 @@ DEFINE_uint64(render_queue_capacity, 2048,
               "One slot is reserved for full/empty distinction, so the "
               "maximum storable commands are (capacity - 1).");
 
+DEFINE_string(render_backend, "gl",
+              "Rendering backend to use. Options: 'gl' (OpenGL ES 3.0 / "
+              "OpenGL 3.3 core, default), 'vulkan' (Vulkan — currently a "
+              "compile-time stub, falls back to GL with a warning).");
+
 namespace neoflux {
 
 RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, modernize-use-equals-default)
@@ -33,7 +38,8 @@ RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, mo
       should_close_(false),
       render_thread_(nullptr),
       renderer_(nullptr),
-      glfw_bridge_(nullptr) {}
+      glfw_bridge_(nullptr),
+      render_ready_future_(render_ready_.get_future()) {}
 
 RenderLayer::~RenderLayer() { Stop(); }
 
@@ -47,7 +53,16 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   window_width_ = width;
   window_height_ = height;
 
-  LOG(INFO) << "RenderLayer starting: " << width << "x" << height;
+  LOG(INFO) << "RenderLayer starting: " << width << "x" << height
+            << " backend=" << FLAGS_render_backend;
+
+  if (FLAGS_render_backend != "gl" && FLAGS_render_backend != "vulkan") {
+    LOG(WARNING) << "Unknown render_backend '" << FLAGS_render_backend
+                 << "', falling back to 'gl'";
+  }
+  if (FLAGS_render_backend == "vulkan") {
+    LOG(WARNING) << "Vulkan backend is not yet implemented; falling back to GL";
+  }
 
   renderer_ = std::make_unique<TgfxRenderer>();
 
@@ -80,6 +95,13 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   // Release the context from the main thread; the render thread will
   // acquire it exclusively via MakeContextCurrent() in RenderLoop().
   glfw_bridge_->ReleaseContext();
+
+  // Note: renderer_->Init() already stored the logical window size for
+  // u_resolution (shader layout coordinates). The actual framebuffer size
+  // (which may differ due to DPI scaling) is queried each frame in
+  // TgfxRenderer::BeginFrame() and used only for glViewport. Do NOT call
+  // Resize() here with the framebuffer size — that would corrupt u_resolution
+  // and make layout coordinates mismatch the shader.
 #else
   // Mobile: tgfx renders directly into the platform surface provided by
   // the OS (ANativeWindow / CAMetalLayer). No windowing bridge is needed;
@@ -97,6 +119,17 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
 
   running_.store(true);
   render_thread_ = std::make_unique<std::thread>([this]() { RenderLoop(); });
+
+  // Block until the render thread has made the GL context current and
+  // performed a preliminary frame to initialise GL resources (shaders,
+  // FBOs, font textures). Without this, the first real frame submitted by
+  // the application can race GL initialisation and render partially or
+  // not at all until an input event triggers a second frame.
+  if (render_ready_future_.wait_for(std::chrono::seconds(5)) ==
+      std::future_status::timeout) {
+    LOG(WARNING) << "Render thread did not become ready within 5s; "
+                    "continuing anyway (first frame may be incomplete)";
+  }
 
   LOG(INFO) << "RenderLayer started successfully";
   return true;
@@ -183,6 +216,12 @@ GlfwBridge* RenderLayer::GetGlfwBridge() const noexcept {
 }
 
 void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+  if (glfw_bridge_ != nullptr) {
+    glfw_bridge_->GetWindowSize(width, height);
+    return;
+  }
+#endif
   width = window_width_;
   height = window_height_;
 }
@@ -198,6 +237,12 @@ void RenderLayer::RenderLoop() {
     glfw_bridge_->MakeContextCurrent();
   }
 #endif
+
+  // Signal readiness immediately: the GL context is current and the renderer
+  // has been initialised in Start(). The first real frame from the
+  // application will trigger BeginFrame() which lazily initialises GL
+  // resources (shaders, FBOs, font textures) on this thread.
+  render_ready_.set_value();
 
   // Frame state machine: only render commands between kBeginFrame and
   // kEndFrame are drawn. This eliminates flicker caused by rendering

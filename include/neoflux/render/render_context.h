@@ -29,6 +29,9 @@ class RenderContext {
   // Draws a filled rectangle.
   void DrawRect(const Rect& rect, const Color& color);
 
+  // Draws a filled rounded rectangle.
+  void DrawRoundedRect(const Rect& rect, const Color& color, float radius);
+
   // Draws text at the given position.
   void DrawText(std::string_view text, const Point& position,
                 const Color& color, float font_size,

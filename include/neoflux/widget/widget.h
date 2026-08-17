@@ -101,6 +101,12 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Handles a pointer up event at the given local coordinates.
   virtual void OnPointerUp(const Point& local_pos);
 
+  // Handles a mouse scroll event at the given local coordinates.
+  // xoffset/yoffset are in normalized units (positive = up/right).
+  // Returns true if the event was consumed.
+  virtual bool OnPointerScroll(const Point& local_pos, double xoffset,
+                               double yoffset);
+
   // Performs a hit test at the given global coordinates.
   //
   // Returns the deepest widget that contains the point, or nullptr if no
@@ -171,7 +177,7 @@ class Widget : public std::enable_shared_from_this<Widget> {
   void SyncTaitankChildren();
 
   // Recursively reads computed bounds from Taitank nodes into widgets.
-  void ReadLayoutRecursive();
+  virtual void ReadLayoutRecursive();
 
   // Enables the Taitank measure function on this widget's node. Must be
   // called by leaf widgets (Text, Button, etc.) in their constructors.

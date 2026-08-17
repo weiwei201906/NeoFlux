@@ -22,6 +22,17 @@ RenderCommand RenderCommand::MakeDrawRect(const Rect& rect,
   return cmd;
 }
 
+RenderCommand RenderCommand::MakeDrawRoundedRect(const Rect& rect,
+                                                 const Color& color,
+                                                 float radius) {
+  RenderCommand cmd;
+  cmd.type = RenderCommandType::kDrawRoundedRect;
+  cmd.rect = rect;
+  cmd.color = color;
+  cmd.corner_radius = radius;
+  return cmd;
+}
+
 RenderCommand RenderCommand::MakeDrawText(std::string text,
                                           const Point& position,
                                           const Color& color,

@@ -13,12 +13,16 @@
 #include "neoflux/core/macros.h"
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/ring_queue.h"
+#include "neoflux/core/task.h"
 #include "neoflux/core/types.h"
 
 // Widget system.
 #include "neoflux/widget/button.h"
 #include "neoflux/widget/container.h"
+#include "neoflux/widget/expanded.h"
 #include "neoflux/widget/route_registry.h"
+#include "neoflux/widget/scroll_view.h"
+#include "neoflux/widget/sized_box.h"
 #include "neoflux/widget/text.h"
 #include "neoflux/widget/widget.h"
 

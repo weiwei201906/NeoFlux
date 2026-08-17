@@ -14,10 +14,12 @@
 #include "neoflux/render/tgfx_renderer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <cctype>
 #include <filesystem>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -49,6 +51,7 @@ using GlSizei = int;
 using GlFloat = float;
 using GlVoid = void;
 using GlSizeiptr = long long;  // NOLINT
+using GlIntptr = long long;    // NOLINT
 
 // ---------------------------------------------------------------------------
 // OpenGL function loader. Loads all required entry points via
@@ -56,6 +59,7 @@ using GlSizeiptr = long long;  // NOLINT
 // ---------------------------------------------------------------------------
 struct GlLoader {
   void(APIENTRY* glEnable)(GlEnum) = nullptr;
+  void(APIENTRY* glDisable)(GlEnum) = nullptr;
   void(APIENTRY* glBlendFunc)(GlEnum, GlEnum) = nullptr;
   void(APIENTRY* glViewport)(GlInt, GlInt, GlSizei, GlSizei) = nullptr;
   void(APIENTRY* glClearColor)(GlFloat, GlFloat, GlFloat, GlFloat) = nullptr;
@@ -85,6 +89,7 @@ struct GlLoader {
   void(APIENTRY* glVertexAttribPointer)(GlUint, GlInt, GlEnum, unsigned char,
                                         GlSizei, const GlVoid*) = nullptr;
   void(APIENTRY* glBufferData)(GlEnum, GlSizeiptr, const GlVoid*, GlEnum) = nullptr;
+  void(APIENTRY* glBufferSubData)(GlEnum, GlIntptr, GlSizeiptr, const GlVoid*) = nullptr;
   void(APIENTRY* glDrawArrays)(GlEnum, GlInt, GlSizei) = nullptr;
   void(APIENTRY* glGenTextures)(GlSizei, GlUint*) = nullptr;
   void(APIENTRY* glBindTexture)(GlEnum, GlUint) = nullptr;
@@ -95,10 +100,12 @@ struct GlLoader {
                                   GlEnum, GlEnum, const GlVoid*) = nullptr;
   void(APIENTRY* glActiveTexture)(GlEnum) = nullptr;
   void(APIENTRY* glPixelStorei)(GlEnum, GlInt) = nullptr;
+  void(APIENTRY* glScissor)(GlInt, GlInt, GlSizei, GlSizei) = nullptr;
   void(APIENTRY* glDeleteTextures)(GlSizei, const GlUint*) = nullptr;
   void(APIENTRY* glDeleteBuffers)(GlSizei, const GlUint*) = nullptr;
   void(APIENTRY* glDeleteVertexArrays)(GlSizei, const GlUint*) = nullptr;
   void(APIENTRY* glDeleteProgram)(GlUint) = nullptr;
+  GlEnum(APIENTRY* glGetError)() = nullptr;
 
   bool Load() {
 // NOLINTBEGIN(bugprone-macro-parentheses)
@@ -111,6 +118,7 @@ struct GlLoader {
   // NOLINTEND(bugprone-macro-parentheses)
   // NOLINTBEGIN(bugprone-macro-parentheses)
   NEOFLUX_LOAD_GL(glEnable)
+  NEOFLUX_LOAD_GL(glDisable)
   NEOFLUX_LOAD_GL(glBlendFunc)
     NEOFLUX_LOAD_GL(glViewport)
     NEOFLUX_LOAD_GL(glClearColor)
@@ -138,6 +146,7 @@ struct GlLoader {
     NEOFLUX_LOAD_GL(glEnableVertexAttribArray)
     NEOFLUX_LOAD_GL(glVertexAttribPointer)
     NEOFLUX_LOAD_GL(glBufferData)
+    NEOFLUX_LOAD_GL(glBufferSubData)
     NEOFLUX_LOAD_GL(glDrawArrays)
     NEOFLUX_LOAD_GL(glGenTextures)
     NEOFLUX_LOAD_GL(glBindTexture)
@@ -146,10 +155,12 @@ struct GlLoader {
     NEOFLUX_LOAD_GL(glTexSubImage2D)
     NEOFLUX_LOAD_GL(glActiveTexture)
     NEOFLUX_LOAD_GL(glPixelStorei)
+    NEOFLUX_LOAD_GL(glScissor)
     NEOFLUX_LOAD_GL(glDeleteTextures)
     NEOFLUX_LOAD_GL(glDeleteBuffers)
     NEOFLUX_LOAD_GL(glDeleteVertexArrays)
     NEOFLUX_LOAD_GL(glDeleteProgram)
+    NEOFLUX_LOAD_GL(glGetError)
   // NOLINTEND(bugprone-macro-parentheses)
 #undef NEOFLUX_LOAD_GL
     return true;
@@ -158,6 +169,10 @@ struct GlLoader {
 
 // Vertex format: position (x, y) + texcoord (u, v), 4 floats per vertex.
 constexpr int kVertexSize = 4;
+
+// Pre-allocated VBO capacity in bytes. Large enough for a full rounded-rect
+// fan (~42 vertices) or a long text string (~256 glyphs).
+constexpr GlSizeiptr kMaxVboBytes = 64LL * 1024;
 
 // Texture atlas dimensions for glyph caching.
 constexpr int kAtlasSize = 1024;
@@ -218,11 +233,27 @@ class GlRendererImpl : public NonCopyable {
       fb_height = height_;
     }
     gl.glViewport(0, 0, fb_width, fb_height);
+    // Query the logical window size every frame so resizes are reflected in
+    // the shader's u_resolution without a separate callback.
+    int win_width = 0;
+    int win_height = 0;
+    glfwGetWindowSize(window_, &win_width, &win_height);
+    if (win_width > 0 && win_height > 0) {
+      width_ = win_width;
+      height_ = win_height;
+    }
     gl.glClearColor(clear.r / 255.0F, clear.g / 255.0F, clear.b / 255.0F,
                     clear.a / 255.0F);
     gl.glClear(0x00004000U | 0x00000100U);
+    // Update u_resolution every frame so window resizes take effect
+    // without re-initializing GL. u_resolution uses logical (layout) size,
+    // not physical framebuffer size.
+    gl.glUseProgram(program_);
+    gl.glUniform2f(u_resolution_, static_cast<float>(width_),
+                   static_cast<float>(height_));
     transform_stack_.clear();
     transform_stack_.push_back({0.0F, 0.0F});
+    clip_stack_.clear();
   }
 
   void EndFrame() { /* buffer swap handled by GLFW bridge */ }
@@ -250,8 +281,79 @@ class GlRendererImpl : public NonCopyable {
     gl.glUniform1i(u_use_texture_, 0);
     gl.glBindVertexArray(vao_);
     gl.glBindBuffer(0x8892, vbo_);
-    gl.glBufferData(0x8892, sizeof(vertices), vertices, 0x88E8);
+    gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
     gl.glDrawArrays(0x0004, 0, 6);
+  }
+
+  // Draws a filled rounded rectangle using a triangle fan. The boundary
+  // is sampled at kRoundedSegments points per corner; interior is filled
+  // from the rectangle centre. Coordinates use y-down (screen space), so
+  // the y-component of each arc uses -sin(angle).
+  void DrawRoundedRect(const Rect& rect, const Color& color, float radius) {
+    if (!gl_ready_) {
+      return;
+    }
+    if (radius <= 0.0F || rect.width <= 0.0F || rect.height <= 0.0F) {
+      DrawRect(rect, color);
+      return;
+    }
+    const float r = std::min(radius, std::min(rect.width, rect.height) * 0.5F);
+    const Transform& t = transform_stack_.back();
+    constexpr int kSeg = 10;
+    // 1 centre + 4 corners * kSeg boundary points (last point of each
+    // corner is shared with first point of next, so we skip the duplicate
+    // on corners 1-3 and add a final closing point).
+    constexpr int kBoundary = (4 * kSeg) + 1;
+    constexpr int kVertexCount = 1 + kBoundary;
+    float vertices[kVertexCount * 4];
+    const float cx = rect.x + (rect.width * 0.5F);
+    const float cy = rect.y + (rect.height * 0.5F);
+    int idx = 0;
+    vertices[idx++] = cx;
+    vertices[idx++] = cy;
+    vertices[idx++] = 0.0F;
+    vertices[idx++] = 0.0F;
+    // Corner centres in order TL, TR, BR, BL. Each corner sweeps a
+    // quarter-circle clockwise (visually CCW in y-down space).
+    constexpr float kPi = std::numbers::pi_v<float>;
+    struct Corner {
+      float cxy[2];
+      float a0;
+    };
+    const Corner corners[4] = {
+        {.cxy = {rect.x + r, rect.y + r}, .a0 = kPi},
+        {.cxy = {rect.x + rect.width - r, rect.y + r}, .a0 = kPi * 0.5F},
+        {.cxy = {rect.x + rect.width - r, rect.y + rect.height - r}, .a0 = 0.0F},
+        {.cxy = {rect.x + r, rect.y + rect.height - r}, .a0 = -kPi * 0.5F},
+    };
+    for (const Corner& corner : corners) {
+      for (int s = 0; s < kSeg; ++s) {
+        const float a = corner.a0 -
+                        ((kPi * 0.5F) * static_cast<float>(s) /
+                         static_cast<float>(kSeg));
+        const float px = corner.cxy[0] + (r * std::cos(a));
+        const float py = corner.cxy[1] - (r * std::sin(a));
+        vertices[idx++] = px;
+        vertices[idx++] = py;
+        vertices[idx++] = 0.0F;
+        vertices[idx++] = 0.0F;
+      }
+    }
+    // Closing point = first boundary point (TL left end).
+    vertices[idx++] = rect.x;
+    vertices[idx++] = rect.y + r;
+    vertices[idx++] = 0.0F;
+    vertices[idx++] = 0.0F;
+
+    gl.glUseProgram(program_);
+    gl.glUniform2f(u_translate_, t.x, t.y);
+    gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
+                   color.b / 255.0F, color.a / 255.0F);
+    gl.glUniform1i(u_use_texture_, 0);
+    gl.glBindVertexArray(vao_);
+    gl.glBindBuffer(0x8892, vbo_);
+    gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
+    gl.glDrawArrays(0x0006, 0, kVertexCount);  // GL_TRIANGLE_FAN
   }
 
   void DrawText(std::string_view text, const Point& position,
@@ -260,11 +362,11 @@ class GlRendererImpl : public NonCopyable {
     if (!gl_ready_) {
       return;
     }
+    const Transform& t = transform_stack_.back();
     FT_Face face = GetFontFace(font_name);
     if (face == nullptr) {
       return;
     }
-    const Transform& t = transform_stack_.back();
     float cursor_x = position.x;
     const float baseline_y = position.y;
 
@@ -318,7 +420,7 @@ class GlRendererImpl : public NonCopyable {
         x1, y1, glyph->u1, glyph->v1, x0, y1, glyph->u0, glyph->v1,
       };
 
-      gl.glBufferData(0x8892, sizeof(vertices), vertices, 0x88E8);
+      gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
       gl.glDrawArrays(0x0004, 0, 6);
 
       cursor_x += glyph->advance;
@@ -329,11 +431,19 @@ class GlRendererImpl : public NonCopyable {
     transform_stack_.push_back(transform_stack_.empty()
                                    ? Transform{0.0F, 0.0F}
                                    : transform_stack_.back());
+    // Save current clip rect (width < 0 means no clipping).
+    clip_stack_.push_back(clip_stack_.empty()
+                              ? Rect{.x = 0, .y = 0, .width = -1.0F, .height = -1.0F}
+                              : clip_stack_.back());
   }
 
   void Restore() {
     if (transform_stack_.size() > 1) {
       transform_stack_.pop_back();
+    }
+    if (clip_stack_.size() > 1) {
+      clip_stack_.pop_back();
+      ApplyClip(clip_stack_.back());
     }
   }
 
@@ -344,7 +454,41 @@ class GlRendererImpl : public NonCopyable {
     }
   }
 
-  void ClipRect(const Rect& /*rect*/) {}
+  void ClipRect(const Rect& rect) {  // NOLINT(readability-make-member-function-const)
+    // Intersect with current clip (if any) and apply.
+    Rect result = rect;
+    if (!clip_stack_.empty() && clip_stack_.back().width >= 0.0F) {
+      const Rect& cur = clip_stack_.back();
+      const float x1 = std::max(cur.x, rect.x);
+      const float y1 = std::max(cur.y, rect.y);
+      const float x2 = std::min(cur.x + cur.width, rect.x + rect.width);
+      const float y2 = std::min(cur.y + cur.height, rect.y + rect.height);
+      result = {.x = x1, .y = y1, .width = std::max(0.0F, x2 - x1),
+                .height = std::max(0.0F, y2 - y1)};
+    }
+    // NOLINTNEXTLINE(bugprone-branch-clone)
+    if (clip_stack_.empty()) {
+      clip_stack_.push_back(result);
+    } else {
+      clip_stack_.back() = result;
+    }
+    ApplyClip(result);
+  }
+
+  // Applies a clip rect via glScissor. rect.width < 0 disables scissor.
+  void ApplyClip(const Rect& rect) const {
+    if (rect.width < 0.0F || rect.height < 0.0F) {
+      gl.glDisable(0x0C11);  // GL_SCISSOR_TEST
+      return;
+    }
+    gl.glEnable(0x0C11);  // GL_SCISSOR_TEST
+    // glScissor uses bottom-left origin; our coords are top-left.
+    gl.glScissor(static_cast<GlInt>(rect.x),
+                 static_cast<GlInt>(static_cast<float>(height_) - rect.y -
+                                    rect.height),
+                 static_cast<GlSizei>(rect.width),
+                 static_cast<GlSizei>(rect.height));
+  }
 
   void Resize(int width, int height) {
     width_ = width;
@@ -436,6 +580,10 @@ class GlRendererImpl : public NonCopyable {
     gl.glGenBuffers(1, &vbo_);
     gl.glBindVertexArray(vao_);
     gl.glBindBuffer(0x8892, vbo_);
+    // Pre-allocate VBO storage. Using glBufferSubData per-draw avoids
+    // repeated reallocation (which can stall on first use) and is the
+    // recommended path for dynamic vertex data.
+    gl.glBufferData(0x8892, kMaxVboBytes, nullptr, 0x88E8);
     gl.glEnableVertexAttribArray(0);
     gl.glVertexAttribPointer(0, kVertexSize, 0x1406, 0,
                              kVertexSize * static_cast<GlSizei>(sizeof(float)),
@@ -450,6 +598,15 @@ class GlRendererImpl : public NonCopyable {
     // GL_R8 internal format: 8-bit single-channel grayscale for glyph coverage.
     gl.glTexImage2D(0x0DE1, 0, 0x8229, kAtlasSize, kAtlasSize, 0, 0x1903,
                     0x1401, nullptr);
+    // Clear the atlas to zero (transparent). glTexImage2D with nullptr
+    // leaves the texture contents undefined, which can cause garbage
+    // pixels (white squares) on first frame before any glyph is uploaded.
+    {
+      std::vector<unsigned char> zeros(
+          static_cast<std::size_t>(kAtlasSize) * kAtlasSize, 0);
+      gl.glTexSubImage2D(0x0DE1, 0, 0, 0, kAtlasSize, kAtlasSize, 0x1903,
+                         0x1401, zeros.data());
+    }
 
     gl.glEnable(0x0BE2);
     gl.glBlendFunc(0x0302, 0x0303);
@@ -657,6 +814,7 @@ class GlRendererImpl : public NonCopyable {
   int atlas_row_height_ = 0;
 
   std::vector<Transform> transform_stack_{};
+  std::vector<Rect> clip_stack_{};
 };
 
 }  // namespace
@@ -725,6 +883,10 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
   switch (command.type) {
     case RenderCommandType::kDrawRect:
       impl->DrawRect(command.rect, command.color);
+      break;
+    case RenderCommandType::kDrawRoundedRect:
+      impl->DrawRoundedRect(command.rect, command.color,
+                            command.corner_radius);
       break;
     case RenderCommandType::kDrawText:
       impl->DrawText(command.text, command.point, command.color,

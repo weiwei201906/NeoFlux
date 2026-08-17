@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -132,6 +133,9 @@ bool Application::Init(int argc, char** argv, int window_width,
       DispatchPointerEvent(button, action, pos);
       MarkFrameDirty();
     });
+    bridge->SetScrollCallback([this](double xoffset, double yoffset) {
+      DispatchScrollEvent(xoffset, yoffset);
+    });
     // Update layout dimensions when the window is resized so the widget
     // tree re-lays-out at the new size on the next frame.
     bridge->SetResizeCallback([this](int width, int height) {
@@ -154,6 +158,16 @@ void Application::Run() {  // NOLINT(readability-make-member-function-const)
 
   LOG(INFO) << "Starting application event loop";
 
+  // Pre-build the widget tree and perform an initial layout pass before
+  // entering the event loop. This ensures Taitank nodes are fully
+  // inserted and measured before the first paint.
+  BuildDirtyWidgets();
+  if (auto* root = GetRootWidget(); root != nullptr) {
+    root->PerformLayout(static_cast<float>(window_width_),
+                        static_cast<float>(window_height_));
+  }
+
+  frame_dirty_.store(true);
   event_loop_.Run([this]() { OnFrame(); });
 
   LOG(INFO) << "Application event loop ended";
@@ -223,10 +237,10 @@ void Application::OnFrame() {
   // Always process dirty widgets: MarkNeedsBuild may be called without
   // going through MarkFrameDirty (e.g. from State::SetState).
   const bool rebuilt = BuildDirtyWidgets();
-
+  const bool dirty = frame_dirty_.exchange(false);
   // Skip layout/paint when nothing changed: no explicit dirty flag and
   // no widget was rebuilt.
-  if (!frame_dirty_.exchange(false) && !rebuilt) {
+  if (!dirty && !rebuilt) {
     return;
   }
 
@@ -332,14 +346,30 @@ void Application::DispatchPointerEvent(  // NOLINT(readability-make-member-funct
     return;
   }
 
+  // Scale cursor coordinates from actual window size to layout size.
+  // On Windows with DPI virtualisation, glfwGetCursorPos returns logical
+  // coordinates that may differ from the requested layout size.
+  Point scaled_pos = pos;
+  if (render_layer_ != nullptr) {
+    int actual_w = 0;
+    int actual_h = 0;
+    render_layer_->GetWindowSize(actual_w, actual_h);
+    if (actual_w > 0 && actual_h > 0) {
+      scaled_pos.x =
+          pos.x * static_cast<float>(window_width_) / static_cast<float>(actual_w);
+      scaled_pos.y = pos.y * static_cast<float>(window_height_) /
+                     static_cast<float>(actual_h);
+    }
+  }
+
   if (action == InputAction::kPress) {
-    std::shared_ptr<Widget> hit = root->HitTest(pos);
-    VLOG(1) << "Pointer press at (" << pos.x << "," << pos.y
+    std::shared_ptr<Widget> hit = root->HitTest(scaled_pos);
+    VLOG(1) << "Pointer press at (" << scaled_pos.x << "," << scaled_pos.y
             << ") hit: " << (hit ? hit->GetWidgetName() : "null");
     if (hit != nullptr) {
       const Point global_pos = hit->GetGlobalPosition();
-      const Point local{.x = pos.x - global_pos.x,
-                        .y = pos.y - global_pos.y,};
+      const Point local{.x = scaled_pos.x - global_pos.x,
+                        .y = scaled_pos.y - global_pos.y,};
       if (hit->OnPointerDown(local)) {
         // Store a weak_ptr so a widget-tree rebuild between press and release
         // does not leave a dangling pointer.
@@ -349,15 +379,52 @@ void Application::DispatchPointerEvent(  // NOLINT(readability-make-member-funct
     }
   } else if (action == InputAction::kRelease) {
     auto pressed = pressed_widget_.lock();
-    VLOG(1) << "Pointer release at (" << pos.x << "," << pos.y
+    VLOG(1) << "Pointer release at (" << scaled_pos.x << "," << scaled_pos.y
             << ") pressed_widget valid: " << (pressed != nullptr);
     if (pressed != nullptr) {
       const Point global_pos = pressed->GetGlobalPosition();
-      const Point local{.x = pos.x - global_pos.x,
-                        .y = pos.y - global_pos.y,};
+      const Point local{.x = scaled_pos.x - global_pos.x,
+                        .y = scaled_pos.y - global_pos.y,};
       pressed->OnPointerUp(local);
     }
     pressed_widget_.reset();
+  }
+}
+
+void Application::DispatchScrollEvent(  // NOLINT(readability-make-member-function-const)
+    double xoffset, double yoffset) {
+  Widget* root = GetRootWidget();
+  if (root == nullptr || render_layer_ == nullptr) {
+    return;
+  }
+  auto* bridge = render_layer_->GetGlfwBridge();
+  if (bridge == nullptr) {
+    return;
+  }
+  const Point raw_pos = bridge->GetCursorPos();
+  // Scale cursor coordinates from actual window size to layout size.
+  Point pos = raw_pos;
+  int actual_w = 0;
+  int actual_h = 0;
+  render_layer_->GetWindowSize(actual_w, actual_h);
+  if (actual_w > 0 && actual_h > 0) {
+    pos.x = raw_pos.x * static_cast<float>(window_width_) /
+            static_cast<float>(actual_w);
+    pos.y = raw_pos.y * static_cast<float>(window_height_) /
+            static_cast<float>(actual_h);
+  }
+  std::shared_ptr<Widget> hit = root->HitTest(pos);
+  // Scroll events bubble up: try the hit widget first, then each ancestor
+  // until one consumes the event.
+  while (hit != nullptr) {
+    const Point global_pos = hit->GetGlobalPosition();
+    const Point local{.x = pos.x - global_pos.x, .y = pos.y - global_pos.y};
+    if (hit->OnPointerScroll(local, xoffset, yoffset)) {
+      MarkFrameDirty();
+      return;
+    }
+    Widget* parent = hit->GetParent();
+    hit = (parent != nullptr) ? parent->shared_from_this() : nullptr;
   }
 }
 

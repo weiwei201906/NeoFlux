@@ -11,11 +11,14 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <coroutine>
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <vector>
 
 #include "neoflux/core/noncopyable.h"
+#include "neoflux/core/task.h"
 
 namespace neoflux {
 
@@ -25,6 +28,9 @@ namespace neoflux {
 // on a CV when no work is pending, and is woken immediately when WakeUp()
 // is called (e.g. when a widget is marked dirty or an input event arrives).
 // A maximum wait timeout enforces the target frame rate.
+//
+// Also supports C++20 coroutine scheduling: Schedule() accepts a Task<T>
+// and resumes it on the event-loop thread, enabling async-style code.
 class EventLoop : public NonCopyable {
  public:
   // Frame callback invoked once per frame.
@@ -55,7 +61,15 @@ class EventLoop : public NonCopyable {
   // Returns the number of frames processed since Run() started.
   [[nodiscard]] uint64_t GetFrameCount() const noexcept;
 
+  // Schedules a coroutine task to be resumed on the event-loop thread.
+  // The task is moved into the loop and resumed on the next frame tick.
+  // Thread-safe.
+  void Schedule(Task<void> task);
+
  private:
+  // Resumes all ready coroutines. Called once per frame.
+  void RunReadyCoroutines();
+
   std::atomic<bool> running_{false};
   std::atomic<bool> should_stop_{false};
   std::atomic<uint64_t> frame_count_{0};
@@ -64,6 +78,10 @@ class EventLoop : public NonCopyable {
   // CV used to block the loop when idle and wake it on demand.
   std::condition_variable frame_cv_{};
   std::mutex frame_mutex_{};
+
+  // Pending coroutines to resume. Guarded by coroutine_mutex_.
+  std::mutex coroutine_mutex_{};
+  std::vector<Task<void>> pending_coroutines_{};
 };
 
 }  // namespace neoflux

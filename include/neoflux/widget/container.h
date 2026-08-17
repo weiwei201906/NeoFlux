@@ -65,6 +65,9 @@ class Container : public Widget {
   // available space in its parent).
   Container& SetFlexGrow(float grow) noexcept;
 
+  // Sets the corner radius in pixels (0 = sharp corners).
+  Container& SetBorderRadius(float radius) noexcept;
+
   void Paint(RenderContext& context) override;
 
   // Container has no intrinsic size; its size is determined by layout and
@@ -81,6 +84,7 @@ class Container : public Widget {
   EdgeInsets margin_{};
   float fixed_width_ = 0.0F;
   float fixed_height_ = 0.0F;
+  float border_radius_ = 0.0F;
   bool has_background_ = false;
 };
 

@@ -21,6 +21,11 @@ void RenderContext::DrawRect(const Rect& rect, const Color& color) {
   commands_.push_back(RenderCommand::MakeDrawRect(rect, color));
 }
 
+void RenderContext::DrawRoundedRect(const Rect& rect, const Color& color,
+                                    float radius) {
+  commands_.push_back(RenderCommand::MakeDrawRoundedRect(rect, color, radius));
+}
+
 void RenderContext::DrawText(std::string_view text, const Point& position,
                              const Color& color, float font_size,
                              std::string_view font_name) {
