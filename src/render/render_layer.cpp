@@ -1,7 +1,8 @@
-﻿// =============================================================================
+// =============================================================================
 // NeoFlux - render_layer.cpp
 //
-// Implementation of RenderLayer. Methods moved from header.
+// Implementation of RenderLayer. Owns the render thread, platform bridge
+// (GLFW on desktop, MobileBridge on Android/iOS), and tgfx renderer.
 // =============================================================================
 
 #include "neoflux/render/render_layer.h"
@@ -17,6 +18,7 @@
 #include <glog/logging.h>
 
 #include "neoflux/render/glfw_bridge.h"
+#include "neoflux/render/mobile_bridge.h"
 #include "neoflux/render/render_command.h"
 #include "neoflux/render/tgfx_renderer.h"
 
@@ -32,19 +34,19 @@ DEFINE_string(render_backend, "vulkan",
 
 namespace neoflux {
 
-RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, modernize-use-equals-default)
+RenderLayer::RenderLayer()
     : command_queue_(FLAGS_render_queue_capacity),
       running_(false),
       should_close_(false),
       render_thread_(nullptr),
       render_ready_future_(render_ready_.get_future()),
       renderer_(nullptr),
-      glfw_bridge_(nullptr) {}
+      platform_bridge_(nullptr) {}
 
 RenderLayer::~RenderLayer() { Stop(); }
 
 bool RenderLayer::Start(int width, int height, std::string_view title,
-                        void* /*platform_surface*/) {
+                        void* platform_surface) {
   if (running_.load()) {
     LOG(WARNING) << "RenderLayer already running";
     return false;
@@ -70,28 +72,23 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   renderer_ = std::make_unique<TgfxRenderer>();
 
 #ifdef NEOFLUX_PLATFORM_DESKTOP
+  (void)platform_surface;  // Desktop creates its own GLFW window.
   // Desktop: create GLFW window + OpenGL context, tgfx renders into the
   // GLFW framebuffer. GLFW handles windowing, input, and buffer swap.
-  glfw_bridge_ = std::make_unique<GlfwBridge>();
-  if (!glfw_bridge_->Init(width, height, title)) {
+  auto glfw_bridge = std::make_unique<GlfwBridge>();
+  if (!glfw_bridge->Init(width, height, title)) {
     LOG(ERROR) << "Failed to initialize GLFW bridge";
-    glfw_bridge_.reset();
     return false;
   }
 
   // Temporarily make the GL context current on the main thread so that
   // renderer_->Init() can load GL function pointers via glfwGetProcAddress.
-  // On Windows, wglGetProcAddress requires a current context; without it
-  // all function pointers resolve to NULL and the first frame renders
-  // nothing (window appears black until an input event triggers a re-render
-  // after the render thread has made the context current).
-  glfw_bridge_->MakeContextCurrent();
+  glfw_bridge->MakeContextCurrent();
 
-  if (!renderer_->Init(width, height, glfw_bridge_->GetNativeHandle())) {
+  if (!renderer_->Init(width, height, glfw_bridge->GetNativeHandle())) {
     LOG(ERROR) << "Failed to initialize tgfx renderer";
     GlfwBridge::ReleaseContext();
-    glfw_bridge_->Shutdown();
-    glfw_bridge_.reset();
+    glfw_bridge->Shutdown();
     return false;
   }
 
@@ -99,23 +96,21 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   // acquire it exclusively via MakeContextCurrent() in RenderLoop().
   GlfwBridge::ReleaseContext();
 
-  // Note: renderer_->Init() already stored the logical window size for
-  // u_resolution (shader layout coordinates). The actual framebuffer size
-  // (which may differ due to DPI scaling) is queried each frame in
-  // TgfxRenderer::BeginFrame() and used only for glViewport. Do NOT call
-  // Resize() here with the framebuffer size -- that would corrupt u_resolution
-  // and make layout coordinates mismatch the shader.
+  platform_bridge_ = std::move(glfw_bridge);
 #else
-  // Mobile: tgfx renders directly into the platform surface provided by
-  // the OS (ANativeWindow / CAMetalLayer). No windowing bridge is needed;
-  // the platform manages surface lifecycle and display refresh.
-  if (platform_surface == nullptr) {
-    LOG(ERROR) << "Mobile platform surface is required for tgfx initialization";
+  // Mobile: create a platform bridge wrapping the native surface provided
+  // by the OS (ANativeWindow on Android, CAMetalLayer/EAGLLayer on iOS).
+  // tgfx renders directly into this surface; the platform manages display
+  // refresh and surface lifecycle.
+  platform_bridge_ = CreateMobileBridge(platform_surface, width, height);
+  if (platform_bridge_ == nullptr) {
+    LOG(ERROR) << "Failed to create mobile platform bridge";
     return false;
   }
 
   if (!renderer_->Init(width, height, platform_surface)) {
     LOG(ERROR) << "Failed to initialize tgfx renderer (mobile)";
+    platform_bridge_.reset();
     return false;
   }
 #endif
@@ -123,11 +118,8 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   running_.store(true);
   render_thread_ = std::make_unique<std::thread>([this]() { RenderLoop(); });
 
-  // Block until the render thread has made the GL context current and
-  // performed a preliminary frame to initialise GL resources (shaders,
-  // FBOs, font textures). Without this, the first real frame submitted by
-  // the application can race GL initialisation and render partially or
-  // not at all until an input event triggers a second frame.
+  // Block until the render thread has made the context current and performed
+  // a preliminary frame to initialise GL resources.
   if (render_ready_future_.wait_for(std::chrono::seconds(5)) ==
       std::future_status::timeout) {
     LOG(WARNING) << "Render thread did not become ready within 5s; "
@@ -145,7 +137,6 @@ void RenderLayer::Stop() {
 
   LOG(INFO) << "RenderLayer stopping";
 
-  // Wake the render thread so it can exit the wait loop.
   {
     std::lock_guard<std::mutex> lock(frame_mutex_);
     frame_ready_ = true;
@@ -158,11 +149,7 @@ void RenderLayer::Stop() {
   render_thread_.reset();
 
   renderer_.reset();
-
-  if (glfw_bridge_ != nullptr) {
-    glfw_bridge_->Shutdown();
-    glfw_bridge_.reset();
-  }
+  platform_bridge_.reset();
 
   LOG(INFO) << "RenderLayer stopped";
 }
@@ -184,7 +171,6 @@ std::size_t RenderLayer::Submit(const RenderCommand* commands,
     ++submitted;
   }
 
-  // Wake the render thread: a new frame (or partial frame) is available.
   if (submitted > 0) {
     {
       std::lock_guard<std::mutex> lock(frame_mutex_);
@@ -198,33 +184,35 @@ std::size_t RenderLayer::Submit(const RenderCommand* commands,
 bool RenderLayer::IsRunning() const noexcept { return running_.load(); }
 
 bool RenderLayer::ShouldClose() const {
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (glfw_bridge_ != nullptr) {
-    return glfw_bridge_->ShouldClose();
+  if (platform_bridge_ != nullptr) {
+    return platform_bridge_->ShouldClose();
   }
-#endif
   return should_close_.load();
 }
 
 void RenderLayer::PollEvents() {
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (glfw_bridge_ != nullptr) {
-    glfw_bridge_->PollEvents();
+  if (platform_bridge_ != nullptr) {
+    platform_bridge_->PollEvents();
   }
-#endif
 }
 
-GlfwBridge* RenderLayer::GetGlfwBridge() const noexcept {
-  return glfw_bridge_.get();
+PlatformBridge* RenderLayer::GetPlatformBridge() const noexcept {
+  return platform_bridge_.get();
 }
 
 void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (glfw_bridge_ != nullptr) {
-    glfw_bridge_->GetWindowSize(width, height);
+  if (platform_bridge_ != nullptr) {
+    static_cast<GlfwBridge*>(platform_bridge_.get())
+        ->GetWindowSize(width, height);
     return;
   }
 #endif
+  if (platform_bridge_ != nullptr) {
+    width = platform_bridge_->GetWidth();
+    height = platform_bridge_->GetHeight();
+    return;
+  }
   width = window_width_;
   height = window_height_;
 }
@@ -232,31 +220,20 @@ void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
 void RenderLayer::RenderLoop() {
   LOG(INFO) << "Render thread started";
 
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-  // Make the OpenGL context current on the render thread. The context was
-  // created in GlfwBridge::Init but not bound, so this thread owns it
-  // exclusively for all rendering and buffer swap operations.
-  if (glfw_bridge_ != nullptr) {
-    glfw_bridge_->MakeContextCurrent();
+  // Make the rendering context current on the render thread. On desktop this
+  // is the GLFW OpenGL context; on mobile it is the EAGL/Metal context owned
+  // by the platform bridge.
+  if (platform_bridge_ != nullptr) {
+    platform_bridge_->MakeContextCurrent();
   }
-#endif
 
-  // Signal readiness immediately: the GL context is current and the renderer
-  // has been initialised in Start(). The first real frame from the
-  // application will trigger BeginFrame() which lazily initialises GL
-  // resources (shaders, FBOs, font textures) on this thread.
   render_ready_.set_value();
 
-  // Frame state machine: only render commands between kBeginFrame and
-  // kEndFrame are drawn. This eliminates flicker caused by rendering
-  // partial frames while the main thread is still submitting commands.
   bool in_frame = false;
   std::uint64_t frames_rendered = 0;
   constexpr Color kClearColor{.r = 245, .g = 245, .b = 245, .a = 255};
 
   while (running_.load()) {
-    // Wait for a frame to be submitted (or stop signal). Uses a condition
-    // variable instead of busy-polling to avoid wasting CPU cycles.
     {
       std::unique_lock<std::mutex> lock(frame_mutex_);
       frame_cv_.wait_for(lock, std::chrono::milliseconds(16), [this] {
@@ -265,7 +242,6 @@ void RenderLayer::RenderLoop() {
       frame_ready_ = false;
     }
 
-    // Drain all available commands for this frame.
     RenderCommand cmd;
     while (running_.load() && command_queue_.TryPop(cmd)) {
       switch (cmd.type) {
@@ -278,11 +254,9 @@ void RenderLayer::RenderLoop() {
         case RenderCommandType::kEndFrame:
           if (in_frame && renderer_ != nullptr) {
             renderer_->EndFrame();
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-            if (glfw_bridge_ != nullptr) {
-              glfw_bridge_->SwapBuffers();
+            if (platform_bridge_ != nullptr) {
+              platform_bridge_->SwapBuffers();
             }
-#endif
             ++frames_rendered;
             if (frames_rendered % 60 == 0) {
               LOG(INFO) << "Rendered " << frames_rendered << " frames";

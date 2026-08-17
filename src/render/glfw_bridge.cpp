@@ -1,7 +1,7 @@
 // =============================================================================
 // NeoFlux - glfw_bridge.cpp
 //
-// Implementation of GlfwBridge. Methods moved from header.
+// Implementation of GlfwBridge (desktop PlatformBridge via GLFW).
 // =============================================================================
 
 #include "neoflux/render/glfw_bridge.h"
@@ -25,9 +25,40 @@ struct WindowUserData {
   GlfwBridge* bridge = nullptr;
 };
 
+// Convert GLFW mouse button constant to PlatformBridge MouseButton.
+MouseButton ConvertMouseButton(int glfw_button) {
+  switch (glfw_button) {
+    case GLFW_MOUSE_BUTTON_LEFT:
+      return MouseButton::kLeft;
+    case GLFW_MOUSE_BUTTON_RIGHT:
+      return MouseButton::kRight;
+    case GLFW_MOUSE_BUTTON_MIDDLE:
+      return MouseButton::kMiddle;
+    default:
+      return MouseButton::kLeft;
+  }
+}
+
+// Convert GLFW action constant to PlatformBridge InputAction.
+// GLFW: RELEASE=0, PRESS=1, REPEAT=2
+// PlatformBridge: kPress=0, kRelease=1, kMove=2
+InputAction ConvertInputAction(int glfw_action) {
+  switch (glfw_action) {
+    case GLFW_PRESS:
+      return InputAction::kPress;
+    case GLFW_RELEASE:
+      return InputAction::kRelease;
+    case GLFW_REPEAT:
+      // Treat repeat as press for compatibility.
+      return InputAction::kPress;
+    default:
+      return InputAction::kRelease;
+  }
+}
+
 }  // namespace
 
-GlfwBridge::GlfwBridge() : window_(nullptr), initialized_(false) {}
+GlfwBridge::GlfwBridge() = default;
 
 GlfwBridge::~GlfwBridge() { Shutdown(); }
 
@@ -49,7 +80,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
 
-  const std::string title_str(title);  // NOLINT(bugprone-unused-local-non-trivial-variable)
+  const std::string title_str(title);
   window_ = glfwCreateWindow(width, height, title_str.c_str(), nullptr,
                              nullptr);
   if (window_ == nullptr) {
@@ -60,9 +91,6 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
 
   auto* user_data = new WindowUserData{this};
   glfwSetWindowUserPointer(window_, user_data);
-
-  // Context is made current later in the render thread via MakeContextCurrent().
-  // This allows the render thread to own the GL context exclusively.
 
   glfwSetFramebufferSizeCallback(window_, FramebufferSizeCallback);
   glfwSetKeyCallback(window_, KeyCallback);
@@ -94,7 +122,7 @@ void GlfwBridge::Shutdown() {
   LOG(INFO) << "GLFW bridge shut down";
 }
 
-void GlfwBridge::PollEvents() const {
+void GlfwBridge::PollEvents() {
   if (initialized_) {
     glfwPollEvents();
   }
@@ -117,9 +145,29 @@ void GlfwBridge::ReleaseContext() {
   glfwMakeContextCurrent(nullptr);
 }
 
-bool GlfwBridge::ShouldClose() const {
+bool GlfwBridge::ShouldClose() const noexcept {
   return window_ != nullptr && glfwWindowShouldClose(window_) != 0;
 }
+
+int GlfwBridge::GetWidth() const noexcept {
+  int width = 0;
+  int height = 0;
+  GetWindowSize(width, height);
+  return width;
+}
+
+int GlfwBridge::GetHeight() const noexcept {
+  int width = 0;
+  int height = 0;
+  GetWindowSize(width, height);
+  return height;
+}
+
+void* GlfwBridge::GetNativeHandle() const noexcept {
+  return static_cast<void*>(window_);
+}
+
+GLFWwindow* GlfwBridge::GetGlfwWindow() const noexcept { return window_; }
 
 void GlfwBridge::GetFramebufferSize(int& width, int& height) const {
   if (window_ != nullptr) {
@@ -139,8 +187,6 @@ void GlfwBridge::GetWindowSize(int& width, int& height) const {
   }
 }
 
-GLFWwindow* GlfwBridge::GetNativeHandle() const noexcept { return window_; }
-
 Point GlfwBridge::GetCursorPos() const noexcept {
   if (window_ == nullptr) {
     return {.x = 0.0F, .y = 0.0F};
@@ -155,7 +201,7 @@ void* GlfwBridge::GetGlContext() const noexcept {
   return static_cast<void*>(window_);
 }
 
-void GlfwBridge::SetInputCallback(InputEventCallback callback) noexcept {
+void GlfwBridge::SetInputCallback(InputEventCallback callback) {
   input_callback_ = std::move(callback);
 }
 
@@ -205,19 +251,14 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
   if (!bridge->input_callback_) {
     return;
   }
-  // Query cursor position directly instead of relying on the cached value from
-  // CursorPosCallback, which may be stale if the button is pressed without
-  // prior mouse movement.
   double cursor_x = 0.0;
   double cursor_y = 0.0;
   glfwGetCursorPos(window, &cursor_x, &cursor_y);
   bridge->last_cursor_x_ = cursor_x;
   bridge->last_cursor_y_ = cursor_y;
-  const auto btn = static_cast<MouseButton>(button);
-  const auto act = static_cast<InputAction>(action);
-  bridge->input_callback_(btn, act,
-                          {.x = static_cast<float>(cursor_x),
-                           .y = static_cast<float>(cursor_y),});
+  bridge->input_callback_(
+      ConvertMouseButton(button), ConvertInputAction(action),
+      {.x = static_cast<float>(cursor_x), .y = static_cast<float>(cursor_y)});
 }
 
 void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,
@@ -253,55 +294,46 @@ void GlfwBridge::ScrollCallback(GLFWwindow* window, double xoffset,
 
 namespace neoflux {
 
-GlfwBridge::GlfwBridge() : window_(nullptr), initialized_(false) {}
-
+GlfwBridge::GlfwBridge() = default;
 GlfwBridge::~GlfwBridge() = default;
 
 bool GlfwBridge::Init(int /*width*/, int /*height*/,
                       std::string_view /*title*/) {
   return false;
 }
-
 void GlfwBridge::Shutdown() {}
-
 void GlfwBridge::PollEvents() {}
-
 void GlfwBridge::SwapBuffers() {}
-
-bool GlfwBridge::ShouldClose() const { return false; }
-
+void GlfwBridge::MakeContextCurrent() {}
+void GlfwBridge::ReleaseContext() {}
+bool GlfwBridge::ShouldClose() const noexcept { return false; }
+int GlfwBridge::GetWidth() const noexcept { return 0; }
+int GlfwBridge::GetHeight() const noexcept { return 0; }
+void* GlfwBridge::GetNativeHandle() const noexcept { return nullptr; }
+GLFWwindow* GlfwBridge::GetGlfwWindow() const noexcept { return nullptr; }
 void GlfwBridge::GetFramebufferSize(int& width, int& height) const {
-  width = 0;
-  height = 0;
+  width = 0; height = 0;
 }
-
 void GlfwBridge::GetWindowSize(int& width, int& height) const {
-  width = 0;
-  height = 0;
+  width = 0; height = 0;
 }
-
-GLFWwindow* GlfwBridge::GetNativeHandle() const noexcept { return nullptr; }
-
 Point GlfwBridge::GetCursorPos() const noexcept {
   return {.x = 0.0F, .y = 0.0F};
 }
-
 void* GlfwBridge::GetGlContext() const noexcept { return nullptr; }
-
+void GlfwBridge::SetInputCallback(InputEventCallback /*callback*/) {}
+void GlfwBridge::SetScrollCallback(ScrollEventCallback /*callback*/) noexcept {}
+void GlfwBridge::SetResizeCallback(ResizeCallback /*callback*/) noexcept {}
+void GlfwBridge::SetMouseMoveCallback(MouseMoveCallback /*callback*/) noexcept {}
 void GlfwBridge::ErrorCallback(int /*error*/, const char* /*description*/) {}
-
 void GlfwBridge::FramebufferSizeCallback(GLFWwindow* /*window*/, int /*width*/,
                                          int /*height*/) {}
-
 void GlfwBridge::KeyCallback(GLFWwindow* /*window*/, int /*key*/,
                              int /*scancode*/, int /*action*/, int /*mods*/) {}
-
 void GlfwBridge::MouseButtonCallback(GLFWwindow* /*window*/, int /*button*/,
                                      int /*action*/, int /*mods*/) {}
-
 void GlfwBridge::CursorPosCallback(GLFWwindow* /*window*/, double /*xpos*/,
                                    double /*ypos*/) {}
-
 void GlfwBridge::ScrollCallback(GLFWwindow* /*window*/, double /*xoffset*/,
                                 double /*yoffset*/) {}
 

@@ -201,4 +201,20 @@ std::unique_ptr<PlatformBridge> CreateMobileBridge(void* native_surface,
 
 }  // namespace neoflux
 
+#else  // !ANDROID && !TARGET_OS_IPHONE
+
+#include <glog/logging.h>
+
+namespace neoflux {
+
+// Desktop stub: mobile bridge is not available on desktop.
+std::unique_ptr<PlatformBridge> CreateMobileBridge(void* /*native_surface*/,
+                                                    int /*width*/,
+                                                    int /*height*/) {
+  LOG(WARNING) << "CreateMobileBridge called on desktop platform; returning null";
+  return nullptr;
+}
+
+}  // namespace neoflux
+
 #endif  // ANDROID || TARGET_OS_IPHONE

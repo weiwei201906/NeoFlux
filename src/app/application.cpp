@@ -21,6 +21,7 @@
 #include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
 #include "neoflux/render/render_layer.h"
+#include "neoflux/render/glfw_bridge.h"
 #include "neoflux/widget/route_registry.h"
 #include "neoflux/widget/widget.h"
 
@@ -126,26 +127,29 @@ bool Application::Init(int argc, char** argv, int window_width,
 
   event_loop_.SetTargetFps(FLAGS_target_fps);
 
-  // Wire up input events from the GLFW bridge to the widget tree.
-  if (auto* bridge = render_layer_->GetGlfwBridge(); bridge != nullptr) {
+  // Wire up input events from the platform bridge to the widget tree.
+  if (auto* bridge = render_layer_->GetPlatformBridge(); bridge != nullptr) {
     bridge->SetInputCallback([this](MouseButton button, InputAction action,
                                     const Point& pos) {
       DispatchPointerEvent(button, action, pos);
       MarkFrameDirty();
     });
-    bridge->SetScrollCallback([this](double xoffset, double yoffset) {
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+    // Desktop-only callbacks: scroll and resize are GLFW-specific.
+    // Mobile delivers these via the platform touch/lifecycle system.
+    auto* glfw = static_cast<GlfwBridge*>(bridge);
+    glfw->SetScrollCallback([this](double xoffset, double yoffset) {
       DispatchScrollEvent(xoffset, yoffset);
     });
-    // Update layout dimensions when the window is resized so the widget
-    // tree re-lays-out at the new size on the next frame.
-    bridge->SetResizeCallback([this](int width, int height) {
+    glfw->SetResizeCallback([this](int width, int height) {
       window_width_ = width;
       window_height_ = height;
       MarkFrameDirty();
     });
-    bridge->SetMouseMoveCallback([this](const Point& pos) {
+    glfw->SetMouseMoveCallback([this](const Point& pos) {
       DispatchPointerMove(pos);
     });
+#endif
   }
 
   initialized_ = true;
@@ -461,20 +465,22 @@ void Application::DispatchScrollEvent(
   if (root == nullptr || render_layer_ == nullptr) {
     return;
   }
-  auto* bridge = render_layer_->GetGlfwBridge();
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+  // Scroll (mouse wheel) is desktop-only; mobile uses touch dragging.
+  auto* bridge = static_cast<GlfwBridge*>(render_layer_->GetPlatformBridge());
   if (bridge == nullptr) {
     return;
   }
-  const Point raw_pos = bridge->GetCursorPos();
+  const Point cursor_pos = bridge->GetCursorPos();
   // Scale cursor coordinates from actual window size to layout size.
-  Point pos = raw_pos;
+  Point pos = cursor_pos;
   int actual_w = 0;
   int actual_h = 0;
   render_layer_->GetWindowSize(actual_w, actual_h);
   if (actual_w > 0 && actual_h > 0) {
-    pos.x = raw_pos.x * static_cast<float>(window_width_) /
+    pos.x = cursor_pos.x * static_cast<float>(window_width_) /
             static_cast<float>(actual_w);
-    pos.y = raw_pos.y * static_cast<float>(window_height_) /
+    pos.y = cursor_pos.y * static_cast<float>(window_height_) /
             static_cast<float>(actual_h);
   }
   std::shared_ptr<Widget> hit = root->HitTest(pos);
@@ -490,6 +496,7 @@ void Application::DispatchScrollEvent(
     Widget* parent = hit->GetParent();
     hit = (parent != nullptr) ? parent->shared_from_this() : nullptr;
   }
+#endif
 }
 
 }  // namespace neoflux
