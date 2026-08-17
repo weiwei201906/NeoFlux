@@ -101,14 +101,17 @@ struct GlLoader {
   void(APIENTRY* glDeleteProgram)(GlUint) = nullptr;
 
   bool Load() {
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define NEOFLUX_LOAD_GL(name)                                       \
   name = reinterpret_cast<decltype(name)>(glfwGetProcAddress(#name)); \
   if (name == nullptr) {                                            \
     LOG(ERROR) << "Failed to load " << #name;                       \
     return false;                                                   \
   }
-    NEOFLUX_LOAD_GL(glEnable)
-    NEOFLUX_LOAD_GL(glBlendFunc)
+  // NOLINTEND(bugprone-macro-parentheses)
+  // NOLINTBEGIN(bugprone-macro-parentheses)
+  NEOFLUX_LOAD_GL(glEnable)
+  NEOFLUX_LOAD_GL(glBlendFunc)
     NEOFLUX_LOAD_GL(glViewport)
     NEOFLUX_LOAD_GL(glClearColor)
     NEOFLUX_LOAD_GL(glClear)
@@ -147,6 +150,7 @@ struct GlLoader {
     NEOFLUX_LOAD_GL(glDeleteBuffers)
     NEOFLUX_LOAD_GL(glDeleteVertexArrays)
     NEOFLUX_LOAD_GL(glDeleteProgram)
+  // NOLINTEND(bugprone-macro-parentheses)
 #undef NEOFLUX_LOAD_GL
     return true;
   }
@@ -549,7 +553,7 @@ class GlRendererImpl : public NonCopyable {
     if (w == 0 || h == 0) {
       GlyphInfo info;
       info.advance = static_cast<float>(
-          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);
+          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);  // NOLINT(bugprone-signed-bitwise)
       glyph_cache_[key] = info;
       return &glyph_cache_[key];
     }
@@ -597,7 +601,7 @@ class GlRendererImpl : public NonCopyable {
     info.bearing_x = static_cast<float>(face->glyph->bitmap_left);
     info.bearing_y = static_cast<float>(face->glyph->bitmap_top);
     info.advance = static_cast<float>(
-        static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);
+        static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);  // NOLINT(bugprone-signed-bitwise)
     info.width = w;
     info.height = h;
     glyph_cache_[key] = info;
