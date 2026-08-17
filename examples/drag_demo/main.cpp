@@ -186,9 +186,15 @@ class DragDemoRoot : public Container {
 
 }  // namespace
 
+std::shared_ptr<Widget> BuildDragPage(BuildContext& context) {
+  auto root = std::make_shared<DragDemoRoot>(context.GetApplication());
+  return root;
+}
+
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  google::InitGoogleLogging(argv[0]);
+
+  RouteRegistry::Instance().RegisterRoute("/", BuildDragPage);
 
   Application app;
   if (!app.Init(argc, argv, 420, 480, "NeoFlux Drag Demo")) {
@@ -196,9 +202,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  auto root = std::make_shared<DragDemoRoot>(&app);
-  app.GetRootWidget()->AddChild(root);
-
+  app.PushRoute("/");
   app.Run();
   return 0;
 }

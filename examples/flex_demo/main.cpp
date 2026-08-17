@@ -24,8 +24,8 @@ namespace neoflux {
 namespace {
 
 // Creates a labeled colored box for layout demonstration.
-std::shared_ptr<Container> MakeBox(std::string_view label, const Color& bg,
-                                   float width, float height) {
+std::shared_ptr<Container> MakeBox(const std::string_view label, const Color& bg,
+                                   const float width, const float height) {
   auto box = std::make_shared<Container>();
   box->SetBackgroundColor(bg)
       .SetWidth(width)
