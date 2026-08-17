@@ -21,6 +21,7 @@
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/ring_queue.h"
 #include "neoflux/core/types.h"
+#include "neoflux/render/platform_bridge.h"
 #include "neoflux/render/render_command.h"
 
 namespace neoflux {
@@ -53,14 +54,15 @@ class RenderLayer : public NonCopyable {
   // Returns true if the render thread is running.
   [[nodiscard]] bool IsRunning() const noexcept;
 
-  // Returns true if the window should close (desktop only).
+  // Returns true if the window should close (desktop only; mobile always
+  // returns false -- app lifecycle is managed by the OS).
   [[nodiscard]] bool ShouldClose() const;
 
   // Polls window events (desktop only; called from UI thread).
   void PollEvents();
 
-  // Returns the GLFW bridge (desktop only, may be nullptr before Start).
-  [[nodiscard]] GlfwBridge* GetGlfwBridge() const noexcept;
+  // Returns the platform bridge (may be nullptr before Start).
+  [[nodiscard]] PlatformBridge* GetPlatformBridge() const noexcept;
 
   // Returns the actual window/framebuffer size in pixels (may differ from
   // the requested size due to DPI scaling).
@@ -90,7 +92,7 @@ class RenderLayer : public NonCopyable {
   std::future<void> render_ready_future_;
 
   std::unique_ptr<TgfxRenderer> renderer_;
-  std::unique_ptr<GlfwBridge> glfw_bridge_;
+  std::unique_ptr<PlatformBridge> platform_bridge_;
 
   int window_width_ = 800;
   int window_height_ = 600;

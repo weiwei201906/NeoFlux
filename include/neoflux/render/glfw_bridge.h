@@ -1,8 +1,9 @@
 // =============================================================================
 // NeoFlux - glfw_bridge.h
 //
-// GLFW bridge for desktop platforms. All method implementations are in
-// glfw_bridge.cpp.
+// GLFW bridge for desktop platforms. Implements the PlatformBridge interface
+// for window/context management on Windows, Linux, and macOS.
+// All method implementations are in glfw_bridge.cpp.
 // =============================================================================
 
 #ifndef NEOFLUX_RENDER_GLFW_BRIDGE_H_
@@ -11,24 +12,13 @@
 #include <functional>
 #include <string_view>
 
-#include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
+#include "neoflux/render/platform_bridge.h"
 
 // Forward declaration of GLFW window to avoid including GLFW headers here.
 struct GLFWwindow;
 
 namespace neoflux {
-
-// Mouse button identifiers (matches GLFW constants).
-enum class MouseButton : std::uint8_t { kLeft = 0, kRight = 1, kMiddle = 2 };
-
-// Input action identifiers (matches GLFW constants).
-enum class InputAction : std::uint8_t { kPress = 1, kRelease = 0, kRepeat = 2 };
-
-// Callback type for input events. Receives button, action, and cursor position
-// in window coordinates (pixels, origin at top-left).
-using InputEventCallback =
-    std::function<void(MouseButton button, InputAction action, const Point& pos)>;
 
 // Callback type for mouse scroll events. Receives the scroll delta in
 // normalized units (positive = up/right).
@@ -43,10 +33,12 @@ using ResizeCallback = std::function<void(int width, int height)>;
 using MouseMoveCallback = std::function<void(const Point& pos)>;
 
 // Desktop window and input bridge using GLFW.
-class GlfwBridge : public NonCopyable {
+// Implements PlatformBridge so the render layer can treat desktop and mobile
+// uniformly.
+class GlfwBridge final : public PlatformBridge {
  public:
   GlfwBridge();
-  ~GlfwBridge();
+  ~GlfwBridge() override;
 
   // Initializes GLFW and creates a window.
   bool Init(int width, int height, std::string_view title);
@@ -54,14 +46,17 @@ class GlfwBridge : public NonCopyable {
   // Destroys the window and shuts down GLFW.
   void Shutdown();
 
-  // Polls for window and input events (non-blocking).
-  void PollEvents() const;
+  // --- PlatformBridge overrides ---
+  void MakeContextCurrent() override;
+  void SwapBuffers() override;
+  [[nodiscard]] int GetWidth() const noexcept override;
+  [[nodiscard]] int GetHeight() const noexcept override;
+  [[nodiscard]] void* GetNativeHandle() const noexcept override;
+  void SetInputCallback(InputEventCallback callback) override;
+  void PollEvents() override;
+  [[nodiscard]] bool ShouldClose() const noexcept override;
 
-  // Swaps the front and back buffers (presents the frame).
-  void SwapBuffers();
-
-  // Returns true if the window has been requested to close.
-  [[nodiscard]] bool ShouldClose() const;
+  // --- GLFW-specific methods ---
 
   // Returns the window's framebuffer size in pixels.
   void GetFramebufferSize(int& width, int& height) const;
@@ -70,8 +65,8 @@ class GlfwBridge : public NonCopyable {
   // differ from the requested size due to DPI virtualisation on Windows.
   void GetWindowSize(int& width, int& height) const;
 
-  // Returns the native window handle (GLFWwindow*).
-  [[nodiscard]] GLFWwindow* GetNativeHandle() const noexcept;
+  // Returns the GLFW window handle (typed, desktop-only).
+  [[nodiscard]] GLFWwindow* GetGlfwWindow() const noexcept;
 
   // Returns the current cursor position in window coordinates.
   [[nodiscard]] Point GetCursorPos() const noexcept;
@@ -79,14 +74,8 @@ class GlfwBridge : public NonCopyable {
   // Returns the OpenGL context (for tgfx initialization).
   [[nodiscard]] void* GetGlContext() const noexcept;
 
-  // Makes the OpenGL context current on the calling thread.
-  void MakeContextCurrent();
-
   // Releases the OpenGL context from the calling thread.
   static void ReleaseContext();
-
-  // Sets the callback invoked for mouse button events.
-  void SetInputCallback(InputEventCallback callback) noexcept;
 
   // Sets the callback invoked for mouse scroll events.
   void SetScrollCallback(ScrollEventCallback callback) noexcept;
@@ -109,8 +98,8 @@ class GlfwBridge : public NonCopyable {
   static void ScrollCallback(GLFWwindow* window, double xoffset,
                              double yoffset);
 
-  GLFWwindow* window_;
-  bool initialized_;
+  GLFWwindow* window_ = nullptr;
+  bool initialized_ = false;
   InputEventCallback input_callback_{};
   ScrollEventCallback scroll_callback_{};
   ResizeCallback resize_callback_{};
