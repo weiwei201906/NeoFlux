@@ -4,13 +4,14 @@
 
 ## 1. 项目结构
 
-为项目创建新目录：
+为项目创建新目录。NeoFlux 应放在 `thirdparty/` 下，将依赖与源码隔离：
 
 ```
 my_app/
 ├── CMakeLists.txt
 ├── main.cpp
-└── neoflux/          # NeoFlux 源码（git submodule 或拷贝）
+└── thirdparty/
+    └── neoflux/      # NeoFlux 源码（git submodule 或拷贝）
 ```
 
 ## 2. 获取 NeoFlux
@@ -19,12 +20,12 @@ my_app/
 
 ```bash
 git init
-git submodule add https://github.com/weiwei201906/NeoFlux.git neoflux
+git submodule add https://github.com/weiwei201906/NeoFlux.git thirdparty/neoflux
 ```
 
 ### 方式 B：FetchContent（无需 submodule）
 
-在 `CMakeLists.txt` 中添加（见下文）——NeoFlux 在配置时自动下载。
+在 `CMakeLists.txt` 中添加（见下文）——NeoFlux 在配置时自动下载到 `thirdparty/`。
 
 ## 3. main.cpp
 
@@ -87,11 +88,15 @@ project(my_app LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(neoflux)
+# NeoFlux 放在 thirdparty/ 下，隔离依赖。
+add_subdirectory(thirdparty/neoflux)
 
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 ```
+
+> **注意：** NeoFlux 的示例和测试**默认关闭**。如需构建，在配置时传入
+> `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON`。
 
 ### 使用 FetchContent
 
@@ -107,6 +112,8 @@ FetchContent_Declare(
   neoflux
   GIT_REPOSITORY https://github.com/weiwei201906/NeoFlux.git
   GIT_TAG main
+  SOURCE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/neoflux
+)
 )
 FetchContent_MakeAvailable(neoflux)
 

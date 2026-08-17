@@ -4,13 +4,15 @@ This guide walks through creating your first NeoFlux application from scratch.
 
 ## 1. Project Structure
 
-Create a new directory for your project:
+Create a new directory for your project. NeoFlux should live under
+`thirdparty/` to keep dependencies separate from your source code:
 
 ```
 my_app/
 ├── CMakeLists.txt
 ├── main.cpp
-└── neoflux/          # NeoFlux source (git submodule or copy)
+└── thirdparty/
+    └── neoflux/      # NeoFlux source (git submodule or copy)
 ```
 
 ## 2. Get NeoFlux
@@ -19,13 +21,13 @@ my_app/
 
 ```bash
 git init
-git submodule add https://github.com/weiwei201906/NeoFlux.git neoflux
+git submodule add https://github.com/weiwei201906/NeoFlux.git thirdparty/neoflux
 ```
 
 ### Option B: FetchContent (no submodule)
 
 Add this to your `CMakeLists.txt` (see below) — NeoFlux is downloaded
-automatically at configure time.
+automatically at configure time into `thirdparty/`.
 
 ## 3. main.cpp
 
@@ -88,11 +90,15 @@ project(my_app LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(neoflux)
+# NeoFlux lives under thirdparty/ to keep dependencies isolated.
+add_subdirectory(thirdparty/neoflux)
 
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 ```
+
+> **Note:** NeoFlux examples and tests are **off by default**. To build them,
+> pass `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON` at configure time.
 
 ### With FetchContent
 
@@ -108,6 +114,7 @@ FetchContent_Declare(
   neoflux
   GIT_REPOSITORY https://github.com/weiwei201906/NeoFlux.git
   GIT_TAG main
+  SOURCE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/neoflux
 )
 FetchContent_MakeAvailable(neoflux)
 

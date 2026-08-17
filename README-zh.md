@@ -75,18 +75,23 @@ cd build && ctest --output-on-failure
 
 ### 运行示例
 
+示例**默认关闭**，需在配置时启用：
+
 ```bash
 cmake -S . -B build -DNEOFLUX_BUILD_EXAMPLES=ON
 cmake --build build
-cd build
+./build/bin/hello_neoflux
+```
 
-./bin/hello_neoflux   # 完整演示
-./bin/counter         # 计数器
-./bin/flex_demo       # flex 布局
-./bin/font_demo       # 字体系统
-./bin/scroll_demo     # 滚动视图
-./bin/loading_demo    # 状态机 + 协程动画
-./bin/drag_demo       # 可拖拽 Widget
+其他示例：
+
+```bash
+./build/bin/counter         # 计数器
+./build/bin/flex_demo       # flex 布局
+./build/bin/font_demo       # 字体系统
+./build/bin/scroll_demo     # 滚动视图
+./build/bin/loading_demo    # 状态机 + 协程动画
+./build/bin/drag_demo       # 可拖拽 Widget
 ```
 
 ## 配置（gflags）

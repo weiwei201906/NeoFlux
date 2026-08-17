@@ -67,8 +67,12 @@ ctest --output-on-failure
 
 ### Run Example
 
+Examples are **off by default**. Enable them at configure time:
+
 ```bash
-./bin/hello_neoflux
+cmake -S . -B build -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake --build build
+./build/bin/hello_neoflux
 ```
 
 ## Configuration (gflags)
