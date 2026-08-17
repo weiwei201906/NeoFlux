@@ -89,6 +89,7 @@ add_library(neoflux STATIC
   src/widget/scroll_view.cpp
   src/widget/sized_box.cpp
   src/widget/expanded.cpp
+  src/widget/draggable.cpp
   src/widget/route_registry.cpp
   src/app/application.cpp
   src/app/event_loop.cpp
@@ -144,6 +145,13 @@ if(TARGET glfw)
 endif()
 
 target_compile_features(neoflux PUBLIC cxx_std_20)
+
+# Strict warnings for neoflux code only (not third-party deps).
+# -Wno-conversion: glog/gflags headers trigger implicit conversion warnings.
+# -Wno-sign-conversion: render code mixes int coords with size_t indices.
+target_compile_options(neoflux PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror -Wno-conversion -Wno-sign-conversion>
+)
 
 # Platform-specific definitions
 if(WIN32)

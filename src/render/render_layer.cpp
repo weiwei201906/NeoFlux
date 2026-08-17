@@ -27,7 +27,7 @@ DEFINE_uint64(render_queue_capacity, 2048,
 
 DEFINE_string(render_backend, "gl",
               "Rendering backend to use. Options: 'gl' (OpenGL ES 3.0 / "
-              "OpenGL 3.3 core, default), 'vulkan' (Vulkan — currently a "
+              "OpenGL 3.3 core, default), 'vulkan' (Vulkan 鈥?currently a "
               "compile-time stub, falls back to GL with a warning).");
 
 namespace neoflux {
@@ -37,9 +37,9 @@ RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, mo
       running_(false),
       should_close_(false),
       render_thread_(nullptr),
+      render_ready_future_(render_ready_.get_future()),
       renderer_(nullptr),
-      glfw_bridge_(nullptr),
-      render_ready_future_(render_ready_.get_future()) {}
+      glfw_bridge_(nullptr) {}
 
 RenderLayer::~RenderLayer() { Stop(); }
 
@@ -56,12 +56,15 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   LOG(INFO) << "RenderLayer starting: " << width << "x" << height
             << " backend=" << FLAGS_render_backend;
 
-  if (FLAGS_render_backend != "gl" && FLAGS_render_backend != "vulkan") {
+  if (FLAGS_render_backend != "gl" && FLAGS_render_backend != "vulkan" &&
+      FLAGS_render_backend != "cpu") {
     LOG(WARNING) << "Unknown render_backend '" << FLAGS_render_backend
-                 << "', falling back to 'gl'";
+                 << "', falling back to 'vulkan'";
   }
   if (FLAGS_render_backend == "vulkan") {
     LOG(WARNING) << "Vulkan backend is not yet implemented; falling back to GL";
+  } else if (FLAGS_render_backend == "cpu") {
+    LOG(WARNING) << "CPU software rasterizer not yet implemented; falling back to GL";
   }
 
   renderer_ = std::make_unique<TgfxRenderer>();
@@ -100,7 +103,7 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   // u_resolution (shader layout coordinates). The actual framebuffer size
   // (which may differ due to DPI scaling) is queried each frame in
   // TgfxRenderer::BeginFrame() and used only for glViewport. Do NOT call
-  // Resize() here with the framebuffer size — that would corrupt u_resolution
+  // Resize() here with the framebuffer size 鈥?that would corrupt u_resolution
   // and make layout coordinates mismatch the shader.
 #else
   // Mobile: tgfx renders directly into the platform surface provided by

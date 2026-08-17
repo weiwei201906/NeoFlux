@@ -738,7 +738,8 @@ class GlRendererImpl : public NonCopyable {
     } else {
       // Negative pitch: bitmap is bottom-up. Read from bottom row.
       for (int row = 0; row < h; ++row) {
-        std::memcpy(packed.data() + static_cast<std::size_t>(row) * w,
+        std::memcpy(packed.data() + static_cast<std::size_t>(row) *
+                                        static_cast<std::size_t>(w),
                     bitmap.buffer + (h - 1 - row) * (-pitch),
                     static_cast<std::size_t>(w));
       }

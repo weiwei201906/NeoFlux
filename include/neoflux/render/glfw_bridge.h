@@ -38,6 +38,10 @@ using ScrollEventCallback = std::function<void(double xoffset, double yoffset)>;
 // size in pixels.
 using ResizeCallback = std::function<void(int width, int height)>;
 
+// Callback type for mouse cursor move events. Receives the new cursor position
+// in window coordinates (pixels, origin at top-left).
+using MouseMoveCallback = std::function<void(const Point& pos)>;
+
 // Desktop window and input bridge using GLFW.
 class GlfwBridge : public NonCopyable {
  public:
@@ -90,6 +94,9 @@ class GlfwBridge : public NonCopyable {
   // Sets the callback invoked when the framebuffer is resized.
   void SetResizeCallback(ResizeCallback callback) noexcept;
 
+  // Sets the callback invoked when the mouse cursor moves.
+  void SetMouseMoveCallback(MouseMoveCallback callback) noexcept;
+
  private:
   static void ErrorCallback(int error, const char* description);
   static void FramebufferSizeCallback(GLFWwindow* window, int width,
@@ -107,6 +114,7 @@ class GlfwBridge : public NonCopyable {
   InputEventCallback input_callback_{};
   ScrollEventCallback scroll_callback_{};
   ResizeCallback resize_callback_{};
+  MouseMoveCallback mouse_move_callback_{};
   double last_cursor_x_ = 0.0;
   double last_cursor_y_ = 0.0;
 };

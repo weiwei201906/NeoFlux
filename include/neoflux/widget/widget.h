@@ -107,6 +107,18 @@ class Widget : public std::enable_shared_from_this<Widget> {
   virtual bool OnPointerScroll(const Point& local_pos, double xoffset,
                                double yoffset);
 
+  // Handles a pointer move event at the given local coordinates.
+  // Called when the cursor moves over the widget. Default returns false.
+  virtual bool OnPointerMove(const Point& local_pos);
+
+  // Called when the pointer enters the widget's bounds.
+  // Default implementation does nothing.
+  virtual void OnPointerEnter();
+
+  // Called when the pointer exits the widget's bounds.
+  // Default implementation does nothing.
+  virtual void OnPointerExit();
+
   // Performs a hit test at the given global coordinates.
   //
   // Returns the deepest widget that contains the point, or nullptr if no

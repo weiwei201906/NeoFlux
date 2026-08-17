@@ -3,7 +3,8 @@
 //
 // Implementation of EventLoop. CV-driven frame scheduling: the loop blocks
 // on a condition variable when idle and is woken on demand via WakeUp().
-// Also supports C++20 coroutine scheduling via Schedule().
+// Also supports C++20 coroutine scheduling via Schedule() and Sleep() via
+// a timer queue.
 // =============================================================================
 
 #include "neoflux/app/event_loop.h"
@@ -16,16 +17,26 @@
 
 namespace neoflux {
 
+// Thread-local pointer to the active event loop. Set at the start of Run()
+// and cleared at the end. Used by Sleep() to resolve the loop without
+// passing it explicitly.
+thread_local EventLoop* EventLoop::current_loop_ = nullptr;
+
 EventLoop::EventLoop()
     : running_(false), should_stop_(false), frame_count_(0), target_fps_(60) {}
 
 EventLoop::~EventLoop() { Stop(); }
+
+EventLoop* EventLoop::Current() noexcept { return current_loop_; }
 
 void EventLoop::Run(FrameCallback frame_callback) {
   if (running_.exchange(true)) {
     LOG(WARNING) << "EventLoop::Run called while already running";
     return;
   }
+
+  // Set thread-local current pointer so Sleep() can find this loop.
+  current_loop_ = this;
 
   should_stop_.store(false);
   frame_count_.store(0);
@@ -49,6 +60,7 @@ void EventLoop::Run(FrameCallback frame_callback) {
                        [this] { return should_stop_.load(); });
   }
 
+  current_loop_ = nullptr;
   running_.store(false);
   LOG(INFO) << "EventLoop stopped after " << frame_count_.load() << " frames";
 }
@@ -85,16 +97,35 @@ void EventLoop::Schedule(Task<void> task) {
   WakeUp();
 }
 
+void EventLoop::ScheduleSleep(std::chrono::steady_clock::duration duration,
+                              std::coroutine_handle<> continuation) {
+  const auto wake_time = std::chrono::steady_clock::now() + duration;
+  {
+    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    timer_queue_.emplace(wake_time, continuation);
+  }
+  WakeUp();
+}
+
+void SleepAwaitable::await_suspend(std::coroutine_handle<> h) {
+  EventLoop* loop = EventLoop::Current();
+  if (loop != nullptr) {
+    loop->ScheduleSleep(duration, h);
+  } else {
+    // No active loop: resume immediately (cannot schedule a timer).
+    h.resume();
+  }
+}
+
 void EventLoop::RunReadyCoroutines() {
+  // Move pending coroutines out of the shared vector.
   std::vector<Task<void>> ready;
   {
     std::lock_guard<std::mutex> lock(coroutine_mutex_);
     ready.swap(pending_coroutines_);
   }
-  if (ready.empty()) {
-    return;
-  }
 
+  // Resume all pending coroutines.
   for (auto& task : ready) {
     if (!task.Done()) {
       task.Resume();
@@ -106,6 +137,23 @@ void EventLoop::RunReadyCoroutines() {
     if (!task.Done()) {
       std::lock_guard<std::mutex> lock(coroutine_mutex_);
       pending_coroutines_.push_back(std::move(task));
+    }
+  }
+
+  // Resume expired sleep timers.
+  const auto now = std::chrono::steady_clock::now();
+  std::vector<std::coroutine_handle<>> expired;
+  {
+    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    auto it = timer_queue_.begin();
+    while (it != timer_queue_.end() && it->first <= now) {
+      expired.push_back(it->second);
+      it = timer_queue_.erase(it);
+    }
+  }
+  for (auto& handle : expired) {
+    if (!handle.done()) {
+      handle.resume();
     }
   }
 }

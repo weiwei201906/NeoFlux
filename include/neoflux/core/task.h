@@ -18,13 +18,14 @@
 #ifndef NEOFLUX_CORE_TASK_H_
 #define NEOFLUX_CORE_TASK_H_
 
+#include <chrono>
 #include <coroutine>
 #include <exception>
 #include <utility>
 
 namespace neoflux {
 
-// Forward declaration.
+// Forward declaration to avoid circular include (event_loop.h includes task.h).
 class EventLoop;
 
 // A simple awaitable that suspends the coroutine and resumes it on the next
@@ -38,18 +39,26 @@ struct YieldAwaitable {
 // Convenience factory: co_await Yield() suspends and resumes next frame.
 [[nodiscard]] inline YieldAwaitable Yield() noexcept { return {}; }
 
-// A time-based awaitable. The EventLoop is responsible for resuming the
-// coroutine after the specified duration.
-template <typename Rep, typename Period>
+// A time-based awaitable. Resumes the coroutine after the specified duration
+// using the EventLoop's timer queue. The loop is resolved via
+// EventLoop::Current() (thread-local), so Sleep() only works inside a
+// coroutine running on an EventLoop.
 struct SleepAwaitable {
-  std::chrono::duration<Rep, Period> duration;
-  EventLoop* loop = nullptr;
-  std::coroutine_handle<> continuation;
+  std::chrono::steady_clock::duration duration;
 
   bool await_ready() const noexcept { return duration.count() <= 0; }
   void await_suspend(std::coroutine_handle<> h);
   void await_resume() const noexcept {}
 };
+
+// Convenience factory: co_await Sleep(500ms) suspends for 500ms.
+// Accepts any std::chrono duration type; converted to steady_clock duration.
+template <typename Rep, typename Period>
+[[nodiscard]] SleepAwaitable Sleep(
+    std::chrono::duration<Rep, Period> duration) noexcept {
+  return {std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+      duration)};
+}
 
 // Task<T> — a coroutine that produces a value of type T.
 // Tasks are lazy: they do not start until awaited or explicitly scheduled.

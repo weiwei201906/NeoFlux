@@ -20,6 +20,7 @@
 #include "neoflux/widget/button.h"
 #include "neoflux/widget/container.h"
 #include "neoflux/widget/expanded.h"
+#include "neoflux/widget/draggable.h"
 #include "neoflux/widget/route_registry.h"
 #include "neoflux/widget/scroll_view.h"
 #include "neoflux/widget/sized_box.h"

@@ -83,7 +83,10 @@ class Application : public NonCopyable {
   void PaintWidgetRecursive(Widget& widget, RenderContext& context);
   void DispatchPointerEvent(MouseButton button, InputAction action,
                             const Point& pos);
+  void DispatchPointerMove(const Point& pos);
   void DispatchScrollEvent(double xoffset, double yoffset);
+  // Invalidates the hit-test cache. Called after layout or tree changes.
+  void InvalidateHitCache() noexcept;
 
   EventLoop event_loop_{};
   std::unique_ptr<RenderLayer> render_layer_ = nullptr;
@@ -92,6 +95,12 @@ class Application : public NonCopyable {
   // Widget that received pointer-down. Stored as weak_ptr to avoid dangling
   // references if the widget tree is rebuilt between press and release.
   std::weak_ptr<Widget> pressed_widget_{};
+  // Widget currently under the cursor (for enter/exit detection).
+  std::weak_ptr<Widget> hovered_widget_{};
+  // Cached hit-test result. Invalidated on layout/tree changes; reused for
+  // high-frequency pointer-move events to avoid full-tree traversal.
+  std::weak_ptr<Widget> hit_cache_{};
+  bool hit_cache_valid_ = false;
   int window_width_ = 800;
   int window_height_ = 600;
   bool initialized_ = false;

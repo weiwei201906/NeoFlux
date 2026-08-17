@@ -14,6 +14,7 @@
 #include <coroutine>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <vector>
 
@@ -66,8 +67,18 @@ class EventLoop : public NonCopyable {
   // Thread-safe.
   void Schedule(Task<void> task);
 
+  // Schedules a coroutine handle to resume after the given duration.
+  // Used by SleepAwaitable. Thread-safe.
+  void ScheduleSleep(std::chrono::steady_clock::duration duration,
+                     std::coroutine_handle<> continuation);
+
+  // Returns the event loop running on the current thread, or nullptr.
+  // Set at the start of Run(); used by Sleep() to find the active loop.
+  [[nodiscard]] static EventLoop* Current() noexcept;
+
  private:
-  // Resumes all ready coroutines. Called once per frame.
+  // Resumes all ready coroutines and expired sleep timers. Called once per
+  // frame.
   void RunReadyCoroutines();
 
   std::atomic<bool> running_{false};
@@ -82,6 +93,15 @@ class EventLoop : public NonCopyable {
   // Pending coroutines to resume. Guarded by coroutine_mutex_.
   std::mutex coroutine_mutex_{};
   std::vector<Task<void>> pending_coroutines_{};
+
+  // Timer queue: wake-up time -> coroutine handle to resume.
+  // Guarded by coroutine_mutex_.
+  std::multimap<std::chrono::steady_clock::time_point,
+                std::coroutine_handle<>>
+      timer_queue_{};
+
+  // Thread-local pointer to the running event loop, set during Run().
+  static thread_local EventLoop* current_loop_;
 };
 
 }  // namespace neoflux

@@ -89,6 +89,33 @@ bool ScrollView::OnPointerScroll(const Point& /*local_pos*/, double xoffset,
   return true;
 }
 
+bool ScrollView::OnPointerDown(const Point& local_pos) {
+  scroll_state_ = ScrollState::kDragging;
+  drag_start_pos_ = local_pos;
+  drag_start_scroll_y_ = scroll_y_;
+  last_move_y_ = local_pos.y;
+  last_velocity_ = 0.0F;
+  return true;
+}
+
+void ScrollView::OnPointerUp(const Point& /*local_pos*/) {
+  scroll_state_ = ScrollState::kIdle;
+}
+
+bool ScrollView::OnPointerMove(const Point& local_pos) {
+  if (scroll_state_ != ScrollState::kDragging) {
+    return false;
+  }
+  // Drag content: pointer moves up -> content moves up (scroll_y increases).
+  const float delta = local_pos.y - drag_start_pos_.y;
+  scroll_y_ = drag_start_scroll_y_ - delta;
+  // Track velocity for potential inertia (simple finite difference).
+  last_velocity_ = local_pos.y - last_move_y_;
+  last_move_y_ = local_pos.y;
+  ClampScroll();
+  return true;
+}
+
 void ScrollView::ReadLayoutRecursive() {
   Widget::ReadLayoutRecursive();
   // Compute content size from the first (and only) child after layout.

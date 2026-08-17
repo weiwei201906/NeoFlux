@@ -143,6 +143,9 @@ bool Application::Init(int argc, char** argv, int window_width,
       window_height_ = height;
       MarkFrameDirty();
     });
+    bridge->SetMouseMoveCallback([this](const Point& pos) {
+      DispatchPointerMove(pos);
+    });
   }
 
   initialized_ = true;
@@ -245,6 +248,7 @@ void Application::OnFrame() {
   }
 
   LayoutWidgetTree();
+  InvalidateHitCache();
   PaintAndSubmit();
 }
 
@@ -388,6 +392,55 @@ void Application::DispatchPointerEvent(  // NOLINT(readability-make-member-funct
       pressed->OnPointerUp(local);
     }
     pressed_widget_.reset();
+  }
+}
+
+void Application::InvalidateHitCache() noexcept { hit_cache_valid_ = false; }
+
+void Application::DispatchPointerMove(const Point& raw_pos) {
+  Widget* root = GetRootWidget();
+  if (root == nullptr || render_layer_ == nullptr) {
+    return;
+  }
+  // Scale cursor coordinates from actual window size to layout size.
+  Point pos = raw_pos;
+  int actual_w = 0;
+  int actual_h = 0;
+  render_layer_->GetWindowSize(actual_w, actual_h);
+  if (actual_w > 0 && actual_h > 0) {
+    pos.x = raw_pos.x * static_cast<float>(window_width_) /
+            static_cast<float>(actual_w);
+    pos.y = raw_pos.y * static_cast<float>(window_height_) /
+            static_cast<float>(actual_h);
+  }
+  // Use cached hit-test result when valid; otherwise recompute and cache.
+  // Pointer-move fires at high frequency, so avoiding a full tree traversal
+  // per event is critical for large widget trees.
+  std::shared_ptr<Widget> hit;
+  if (hit_cache_valid_) {
+    hit = hit_cache_.lock();
+  }
+  if (hit == nullptr) {
+    hit = root->HitTest(pos);
+    hit_cache_ = hit;
+    hit_cache_valid_ = true;
+  }
+  // Detect enter/exit transitions.
+  auto previous = hovered_widget_.lock();
+  if (hit.get() != previous.get()) {
+    if (previous != nullptr) {
+      previous->OnPointerExit();
+    }
+    if (hit != nullptr) {
+      hit->OnPointerEnter();
+    }
+    hovered_widget_ = hit;
+  }
+  // Deliver move event to the widget under the cursor.
+  if (hit != nullptr) {
+    const Point global_pos = hit->GetGlobalPosition();
+    const Point local{.x = pos.x - global_pos.x, .y = pos.y - global_pos.y};
+    hit->OnPointerMove(local);
   }
 }
 

@@ -167,6 +167,10 @@ void GlfwBridge::SetResizeCallback(ResizeCallback callback) noexcept {
   resize_callback_ = std::move(callback);
 }
 
+void GlfwBridge::SetMouseMoveCallback(MouseMoveCallback callback) noexcept {
+  mouse_move_callback_ = std::move(callback);
+}
+
 void GlfwBridge::ErrorCallback(int error, const char* description) {
   LOG(ERROR) << "GLFW error " << error << ": "
              << (description != nullptr ? description : "unknown");
@@ -225,6 +229,10 @@ void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,
   }
   user_data->bridge->last_cursor_x_ = xpos;
   user_data->bridge->last_cursor_y_ = ypos;
+  if (user_data->bridge->mouse_move_callback_ != nullptr) {
+    user_data->bridge->mouse_move_callback_(
+        {.x = static_cast<float>(xpos), .y = static_cast<float>(ypos)});
+  }
 }
 
 void GlfwBridge::ScrollCallback(GLFWwindow* window, double xoffset,

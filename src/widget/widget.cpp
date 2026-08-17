@@ -106,6 +106,12 @@ bool Widget::OnPointerScroll(const Point& /*local_pos*/, double /*xoffset*/,
   return false;
 }
 
+bool Widget::OnPointerMove(const Point& /*local_pos*/) { return false; }
+
+void Widget::OnPointerEnter() {}
+
+void Widget::OnPointerExit() {}
+
 std::shared_ptr<Widget> Widget::HitTest(  // NOLINT(readability-make-member-function-const)
     const Point& parent_pos) {
   // parent_pos is relative to this widget's parent. bounds_ is also relative

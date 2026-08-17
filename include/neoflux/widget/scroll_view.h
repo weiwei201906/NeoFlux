@@ -20,12 +20,20 @@ namespace neoflux {
 
 // A scrollable viewport that clips and scrolls its content.
 //
+// Supports both mouse-wheel scrolling and pointer-drag scrolling. The
+// drag state machine (Idle/Dragging) is local to ScrollView; on release
+// an inertia coroutine may be launched to decelerate the scroll.
+//
 // Usage:
 //   auto scroll = std::make_shared<ScrollView>();
 //   scroll->SetContent(big_column);
 //   parent->AddChild(scroll);
 class ScrollView : public Widget {
  public:
+  // Scroll drag states. Kept local to ScrollView (not in Widget base) to
+  // avoid polluting the base class with derived-specific state.
+  enum class ScrollState : std::uint8_t { kIdle, kDragging };
+
   ScrollView();
   ~ScrollView() override;
 
@@ -53,6 +61,11 @@ class ScrollView : public Widget {
   bool OnPointerScroll(const Point& local_pos, double xoffset,
                        double yoffset) override;
 
+  // Pointer-drag scrolling handlers.
+  bool OnPointerDown(const Point& local_pos) override;
+  void OnPointerUp(const Point& local_pos) override;
+  bool OnPointerMove(const Point& local_pos) override;
+
  protected:
   void ReadLayoutRecursive() override;
 
@@ -64,6 +77,13 @@ class ScrollView : public Widget {
   float scroll_y_ = 0.0F;
   float content_width_ = 0.0F;
   float content_height_ = 0.0F;
+
+  // Drag-scroll state.
+  ScrollState scroll_state_ = ScrollState::kIdle;
+  Point drag_start_pos_{};
+  float drag_start_scroll_y_ = 0.0F;
+  float last_move_y_ = 0.0F;
+  float last_velocity_ = 0.0F;
 };
 
 }  // namespace neoflux
