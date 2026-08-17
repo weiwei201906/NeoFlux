@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <cctype>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -474,6 +475,10 @@ class GlRendererImpl : public NonCopyable {
       name = font_manager_.GetDefaultFont();
     }
     if (name.empty()) return nullptr;
+    // Normalize to lowercase for case-insensitive cache lookup (matches
+    // FontManager's internal keying).
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
     const auto it = font_faces_.find(name);
     if (it != font_faces_.end()) {

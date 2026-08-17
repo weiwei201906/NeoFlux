@@ -204,6 +204,14 @@ int main(int argc, char** argv) {
 
 布局展示示例，演示 Taitank flex 布局：row/column 方向、居中对齐、flex grow、row reverse，使用彩色方块可视化布局效果。
 
+### font_demo
+
+字体系统演示：默认字体、显式 `SetFont()` 选择字体、多种字号/颜色、CJK 文本渲染。将字体放入 `thirdparty/fonts/` 后按名称引用即可。
+
+```bash
+./bin/font_demo
+```
+
 ## 项目结构
 
 ```

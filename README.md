@@ -219,6 +219,16 @@ center justification, flex grow, and row reverse with colored boxes.
 ./bin/flex_demo
 ```
 
+### font_demo
+
+Demonstrates the font system: default font, explicit `SetFont()` selection,
+multiple font sizes/colors, and CJK text rendering. Place fonts in
+`thirdparty/fonts/` and reference them by name.
+
+```bash
+./bin/font_demo
+```
+
 ## Project Structure
 
 ```

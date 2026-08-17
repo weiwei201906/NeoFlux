@@ -15,9 +15,9 @@ namespace neoflux {
 namespace {
 
 TEST(RenderCommandTest, MakeDrawRect) {
-  Rect rect{.x = 10.0F, .y = 20.0F, .width = 100.0F, .height = 50.0F};
-  Color color{.r = 255, .g = 0, .b = 0, .a = 255};
-  auto cmd = RenderCommand::MakeDrawRect(rect, color);
+  constexpr Rect rect{.x = 10.0F, .y = 20.0F, .width = 100.0F, .height = 50.0F};
+  constexpr Color color{.r = 255, .g = 0, .b = 0, .a = 255};
+  const auto cmd = RenderCommand::MakeDrawRect(rect, color);
 
   EXPECT_EQ(cmd.type, RenderCommandType::kDrawRect);
   EXPECT_FLOAT_EQ(cmd.rect.x, 10.0F);
