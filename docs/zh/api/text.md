@@ -24,12 +24,12 @@ text->SetFontSize(24.0F)
 | `GetText() -> std::string_view` | 获取文本内容 |
 | `SetFontSize(size)` | 设置字体大小 |
 | `SetTextColor(color)` | 设置文本颜色 |
-| `SetFont(font_name)` | 设置字体名称（对应 thirdparty/fonts/ 下的文件名） |
+| `SetFont(font_name)` | 设置字体名称（对应配置的字体目录下的文件名，默认 `fonts/`） |
 | `SetAlignment(align)` | 设置水平对齐（kLeft / kCenter / kRight） |
 
 ## 字体系统
 
-字体文件放在 `thirdparty/fonts/` 目录，通过文件名（不含扩展名）引用。未指定字体时使用第一个被发现的字体。
+字体文件放在配置的字体目录（默认 `fonts/`，或通过 `SetFontDir()` 设置），通过文件名（不含扩展名）引用。未指定字体时使用第一个被发现的字体。
 
 ## 另见
 

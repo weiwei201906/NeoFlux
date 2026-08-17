@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - Counter example
 //
 // A minimal counter application demonstrating:
@@ -99,6 +99,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildCounterPage);
 
   Application app;
+  app.SetFontDir("thirdparty/fonts");
   if (!app.Init(argc, argv, 400, 300, "NeoFlux Counter")) {
     return 1;
   }

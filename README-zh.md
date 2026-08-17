@@ -111,13 +111,13 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 
 ## 字体系统
 
-NeoFlux 使用字体管理器，在启动时扫描可配置的字体目录，支持 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。默认目录为 `thirdparty/fonts/`。
+NeoFlux 使用字体管理器，在启动时扫描可配置的字体目录，支持 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。默认目录为 `fonts/`。
 
 **在 `Init()` 之前配置字体目录：**
 
 ```cpp
 Application app;
-app.SetFontDir("assets/fonts");  // 可选：覆盖默认的 "thirdparty/fonts"
+app.SetFontDir("assets/fonts");  // 可选：覆盖默认的 "fonts"
 app.Init(argc, argv, 800, 600, "NeoFlux");
 ```
 

@@ -24,7 +24,7 @@ namespace neoflux {
 //
 // Usage:
 //   FontManager fonts;
-//   fonts.ScanDirectory("thirdparty/fonts");
+//   fonts.ScanDirectory("fonts");
 //   std::string path = fonts.GetPath("NotoSansSC-Regular");
 class FontManager : public NonCopyable {
  public:

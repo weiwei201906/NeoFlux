@@ -108,6 +108,52 @@ cmake --build build
 cd build && ctest --output-on-failure
 ```
 
+## Before You Submit
+
+:::danger
+Do not submit a PR until you have verified everything locally.
+:::
+
+### Code Quality
+
+- **Clean and optimal**: Review your code for unnecessary allocations,
+  redundant copies, and missed optimization opportunities. Prefer
+  `std::string_view` over `std::string` for non-owning parameters, use
+  designated initializers for structs, and leverage C++20 ranges/views where
+  appropriate.
+- **No raw owning pointers**: Use `std::unique_ptr` / `std::shared_ptr` /
+  `std::weak_ptr`. Never use `new`/`delete` in new code.
+- **RAII**: All resources (file handles, GPU contexts, memory) must be
+  managed by RAII wrappers.
+- **Pure ASCII**: All source code, comments, log messages, and string literals
+  must be ASCII. No non-ASCII characters (including Chinese) in `.h`/`.cpp`.
+- **Headers are declarations only**: All implementations go in `.cpp`. Template
+  classes use `.inc` + explicit instantiation.
+
+### Local Reproduction (Required)
+
+Before opening a PR, you **must** verify locally:
+
+1. **Clean build**: Delete your build directory and configure from scratch:
+   ```bash
+   rm -rf build
+   cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
+   cmake --build build
+   ```
+2. **Zero warnings**: Build must pass with `-Werror` (enabled by default).
+3. **clang-tidy**: Run clang-tidy and fix all warnings:
+   ```bash
+   clang-tidy -p build src/**/*.cpp
+   ```
+4. **Tests pass**: All unit tests must pass:
+   ```bash
+   cd build && ctest --output-on-failure
+   ```
+5. **Examples run**: At minimum, run `hello_neoflux` and the example most
+   relevant to your change to confirm it works at runtime, not just compiles.
+
+PRs that fail any of these checks will be requested changes before review.
+
 ## Pull Request Workflow
 
 1. Fork the repository and create a feature branch
@@ -115,7 +161,8 @@ cd build && ctest --output-on-failure
 3. Run clang-tidy and fix all warnings
 4. Build with `-Werror` and ensure zero warnings
 5. Run the test suite
-6. Submit a PR with a clear description of the change
+6. Verify examples run locally
+7. Submit a PR with a clear description of the change
 
 ## Commit Messages
 

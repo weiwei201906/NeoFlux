@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - Scroll View Demo
 //
 // Demonstrates the ScrollView widget:
@@ -89,6 +89,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildScrollPage);
 
   Application app;
+  app.SetFontDir("thirdparty/fonts");
   if (!app.Init(argc, argv, 360, 480, "NeoFlux Scroll Demo")) {
     return 1;
   }

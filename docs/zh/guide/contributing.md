@@ -101,6 +101,43 @@ cmake --build build
 cd build && ctest --output-on-failure
 ```
 
+## 提交前必读
+
+:::danger
+在本地验证所有内容之前，请勿提交 PR。
+:::
+
+### 代码质量
+
+- **干净且最优**：审查代码中不必要的分配、冗余拷贝和遗漏的优化机会。非持有参数优先用 `std::string_view` 而非 `std::string`，结构体用 designated initializers，适当场景使用 C++20 ranges/views。
+- **禁止裸持有指针**：使用 `std::unique_ptr` / `std::shared_ptr` / `std::weak_ptr`。新代码中绝不使用 `new`/`delete`。
+- **RAII**：所有资源（文件句柄、GPU 上下文、内存）必须由 RAII 包装管理。
+- **纯 ASCII**：所有源代码、注释、日志消息和字符串字面量必须为 ASCII。`.h`/`.cpp` 中不允许出现非 ASCII 字符（包括中文）。
+- **头文件仅含声明**：所有实现放在 `.cpp`。模板类使用 `.inc` + 显式实例化。
+
+### 本地复现（必须）
+
+开启 PR 之前，你**必须**在本地验证：
+
+1. **干净构建**：删除构建目录，从头配置：
+   ```bash
+   rm -rf build
+   cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
+   cmake --build build
+   ```
+2. **零警告**：构建必须通过 `-Werror`（默认启用）。
+3. **clang-tidy**：运行 clang-tidy 并修复所有警告：
+   ```bash
+   clang-tidy -p build src/**/*.cpp
+   ```
+4. **测试通过**：所有单元测试必须通过：
+   ```bash
+   cd build && ctest --output-on-failure
+   ```
+5. **示例运行**：至少运行 `hello_neoflux` 和与你改动最相关的示例，确认运行时正常工作，而不仅仅是编译通过。
+
+未通过以上任何一项检查的 PR 将在 review 前被要求修改。
+
 ## Pull Request 工作流程
 
 1. Fork 仓库并创建功能分支
@@ -108,6 +145,8 @@ cd build && ctest --output-on-failure
 3. 运行 clang-tidy 并修复所有警告
 4. 使用 `-Werror` 构建并确保零警告
 5. 运行测试套件
+6. 本地验证示例运行
+7. 提交 PR，清晰描述变更内容
 6. 提交 PR，清晰描述变更内容
 
 ## 提交信息

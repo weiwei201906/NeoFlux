@@ -69,8 +69,8 @@ int main(int argc, char** argv) {
 
   Application app;
   // Configure the font directory before Init(). Place .ttf/.otf files in
-  // thirdparty/fonts/ (or your custom directory). See Font System docs.
-  app.SetFontDir("thirdparty/fonts");
+  // fonts/ (or your custom directory). See Font System docs.
+  app.SetFontDir("fonts");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
@@ -90,7 +90,7 @@ is pushed.
 
 :::warning
 Text widgets require font files. Place at least one `.ttf`/`.otf` font in your
-configured font directory (`thirdparty/fonts/` by default) before running.
+configured font directory (`fonts/` by default) before running.
 Without fonts, all text renders as garbled or blank.
 :::
 
@@ -122,7 +122,8 @@ add_custom_command(TARGET my_app POST_BUILD
 > **Note:** NeoFlux examples and tests are **off by default**. To build them,
 > pass `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON` at configure time.
 >
-> **Fonts:** Examples require font files in `thirdparty/fonts/`. Without fonts,
+> **Fonts:** Examples require font files in `thirdparty/fonts/` (examples
+> explicitly call SetFontDir("thirdparty/fonts")). Without fonts,
 > text renders as garbled or blank.
 
 ### With FetchContent

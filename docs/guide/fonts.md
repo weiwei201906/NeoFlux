@@ -10,12 +10,12 @@ You must configure the font directory before calling `Application::Init()`.
 If no fonts are found, all text widgets will render as garbled or blank.
 :::
 
-By default, NeoFlux scans `thirdparty/fonts/` for font files. To use a
+By default, NeoFlux scans `fonts/` for font files. To use a
 different directory, call `Application::SetFontDir()` **before** `Init()`:
 
 ```cpp
 Application app;
-app.SetFontDir("assets/fonts");  // scan assets/fonts/ instead of thirdparty/fonts/
+app.SetFontDir("assets/fonts");  // scan assets/fonts/ instead of fonts/
 app.Init(argc, argv, 800, 600, "My App");
 app.PushRoute("/");
 app.Run();
@@ -30,7 +30,7 @@ handle build subdirectories.
 Place font files (`.ttf`, `.otf`, `.ttc`) in your configured font directory:
 
 ```
-thirdparty/fonts/          (default, or your custom path)
+fonts/                    (default, or your custom path)
   NotoSansSC-Regular.ttf
   Roboto-Bold.ttf
 ```
@@ -49,7 +49,7 @@ application. For CJK text, include a CJK-capable font such as NotoSansSC.
 ### Default Font
 
 If no font is specified, NeoFlux uses the first font found in
-`thirdparty/fonts/`.
+`fonts/`.
 
 ```cpp
 auto text = std::make_shared<Text>("Hello");  // uses default font
@@ -100,7 +100,7 @@ text->SetFont("NotoSansSC-Regular");
 
 ## Font Search Paths
 
-`FontManager` searches the configured directory (default: `thirdparty/fonts/`)
+`FontManager` searches the configured directory (default: `fonts/`)
 relative to the working directory, then falls back upward:
 
 - `<font_dir>/`

@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - drag_demo
 //
 // Demonstrates the Draggable widget with the widget state machine and
@@ -197,6 +197,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildDragPage);
 
   Application app;
+  app.SetFontDir("thirdparty/fonts");
   if (!app.Init(argc, argv, 420, 480, "NeoFlux Drag Demo")) {
     LOG(ERROR) << "Failed to initialize application";
     return 1;

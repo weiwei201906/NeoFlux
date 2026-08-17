@@ -74,7 +74,7 @@ class Application : public NonCopyable {
   // Sets the directory to scan for font files (.ttf, .otf, .ttc). Must be
   // called before Init(). Relative paths are resolved from the working
   // directory, with upward fallback (../, ../../) for build subdirectories.
-  // Default: "thirdparty/fonts".
+  // Default: "fonts".
   void SetFontDir(std::string_view dir) noexcept;
 
   // Returns the configured font directory.
@@ -114,8 +114,8 @@ class Application : public NonCopyable {
   int window_width_ = 800;
   int window_height_ = 600;
   // Directory to scan for font files. Configured via SetFontDir() before
-  // Init(); default "thirdparty/fonts".
-  std::string font_dir_{"thirdparty/fonts"};
+  // Init(); default "fonts".
+  std::string font_dir_{"fonts"};
   bool initialized_ = false;
   // Set when the widget tree or window state changes; cleared after a full
   // frame is processed. When false, OnFrame skips build/layout/paint.

@@ -48,8 +48,8 @@ Sets the text color.
 Text& SetFont(std::string_view font_name);
 ```
 
-Sets the font by name (filename without extension). The font must be in
-`thirdparty/fonts/`.
+Sets the font by name (filename without extension). The font must be in the
+configured font directory (`fonts/` by default, or via `SetFontDir()`).
 
 ### `SetAlignment()`
 

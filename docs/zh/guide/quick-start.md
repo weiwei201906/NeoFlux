@@ -66,9 +66,9 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 
   Application app;
-  // 在 Init() 之前配置字体目录。将 .ttf/.otf 文件放入 thirdparty/fonts/
+  // 在 Init() 之前配置字体目录。将 .ttf/.otf 文件放入 fonts/
   // （或你自定义的目录）。详见字体系统文档。
-  app.SetFontDir("thirdparty/fonts");
+  app.SetFontDir("fonts");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
 :::
 
 :::warning
-文本 Widget 需要字体文件。运行前请在配置的字体目录（默认 `thirdparty/fonts/`）中至少放入一个 `.ttf`/`.otf` 字体。没有字体时，所有文本会显示为乱码或空白。
+文本 Widget 需要字体文件。运行前请在配置的字体目录（默认 `fonts/`）中至少放入一个 `.ttf`/`.otf` 字体。没有字体时，所有文本会显示为乱码或空白。
 :::
 
 ## 4. CMakeLists.txt
@@ -116,7 +116,7 @@ add_custom_command(TARGET my_app POST_BUILD
 > **注意：** NeoFlux 的示例和测试**默认关闭**。如需构建，在配置时传入
 > `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON`。
 >
-> **字体：** 运行示例需要 `thirdparty/fonts/` 目录下有字体文件。没有字体时，文本会显示为乱码或空白。
+> **字体：** 运行示例需要 `thirdparty/fonts/` 目录下有字体文件（示例显式调用 SetFontDir("thirdparty/fonts")）。没有字体时，文本会显示为乱码或空白。
 
 ### 使用 FetchContent
 

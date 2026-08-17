@@ -8,11 +8,11 @@ NeoFlux 使用 FreeType 进行字体光栅化，并使用字形纹理图集实�
 必须在调用 `Application::Init()` 之前配置字体目录。如果找不到字体，所有文本 Widget 都会渲染为乱码或空白。
 :::
 
-默认情况下，NeoFlux 扫描 `thirdparty/fonts/` 目录查找字体文件。如需使用其他目录，在 `Init()` **之前**调用 `Application::SetFontDir()`：
+默认情况下，NeoFlux 扫描 `fonts/` 目录查找字体文件。如需使用其他目录，在 `Init()` **之前**调用 `Application::SetFontDir()`：
 
 ```cpp
 Application app;
-app.SetFontDir("assets/fonts");  // 扫描 assets/fonts/ 而非 thirdparty/fonts/
+app.SetFontDir("assets/fonts");  // 扫描 assets/fonts/ 而非 fonts/
 app.Init(argc, argv, 800, 600, "My App");
 app.PushRoute("/");
 app.Run();
@@ -25,7 +25,7 @@ app.Run();
 将字体文件（`.ttf`、`.otf`、`.ttc`）放入配置的字体目录：
 
 ```
-thirdparty/fonts/          （默认，或你自定义的路径）
+fonts/                    （默认，或你自定义的路径）
   NotoSansSC-Regular.ttf
   Roboto-Bold.ttf
 ```
@@ -57,7 +57,7 @@ text->SetFont("NotoSansSC-Regular");  // 加载配置目录下的 NotoSansSC-Reg
 
 ## 字体搜索路径
 
-`FontManager` 搜索配置的目录（默认：`thirdparty/fonts/`），从工作目录开始，然后向上回退：
+`FontManager` 搜索配置的目录（默认：`fonts/`），从工作目录开始，然后向上回退：
 
 - `<font_dir>/`
 - `../<font_dir>/`

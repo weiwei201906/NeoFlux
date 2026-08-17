@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - Flex Layout Demo
 //
 // Demonstrates Taitank flex layout capabilities:
@@ -129,6 +129,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildFlexPage);
 
   Application app;
+  app.SetFontDir("thirdparty/fonts");
   if (!app.Init(argc, argv, 400, 520, "NeoFlux Flex Layout Demo")) {
     return 1;
   }

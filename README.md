@@ -94,13 +94,13 @@ By default, logs are written to files in `./logs/` and no console window appears
 
 NeoFlux uses a font manager that scans a configurable directory for TrueType
 (`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup.
-The default directory is `thirdparty/fonts/`.
+The default directory is `fonts/`.
 
 **Configure the font directory before `Init()`:**
 
 ```cpp
 Application app;
-app.SetFontDir("assets/fonts");  // optional: override default "thirdparty/fonts"
+app.SetFontDir("assets/fonts");  // optional: override default "fonts"
 app.Init(argc, argv, 800, 600, "NeoFlux");
 ```
 

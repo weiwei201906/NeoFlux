@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - Loading Animation Demo
 //
 // Demonstrates the lightweight widget state machine and C++20 coroutines:
@@ -195,6 +195,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildLoadingPage);
 
   Application app;
+  app.SetFontDir("thirdparty/fonts");
   if (!app.Init(argc, argv, 360, 480, "NeoFlux Loading Demo")) {
     return 1;
   }
