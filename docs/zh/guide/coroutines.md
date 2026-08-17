@@ -33,8 +33,10 @@ app.GetEventLoop().Schedule(MyCoroutine());
 `Yield()` 挂起协程并将其注册到事件循环的 yield 队列，下一帧恢复：
 
 ```cpp
-neoflux::Task<void> FadeIn(Widget* widget) {
+neoflux::Task<void> FadeIn(std::weak_ptr<Widget> weak_widget) {
   for (int i = 0; i <= 60; ++i) {
+    auto widget = weak_widget.lock();
+    if (!widget) co_return;  // widget 已销毁
     const float opacity = static_cast<float>(i) / 60.0F;
     widget->SetOpacity(opacity);
     co_await neoflux::Yield();  // 每次迭代一帧

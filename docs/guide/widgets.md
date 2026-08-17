@@ -14,9 +14,13 @@ behavior.
 | `OnMeasure(width, mode, height, mode)` | Returns intrinsic size for leaf widgets |
 | `Paint(RenderContext&)` | Generates render commands |
 | `HitTest(Point)` | Tests if a point hits this widget |
-| `OnPointerDown/Up(Point)` | Handles press/release events |
-| `OnPointerScroll(Point, x, y)` | Handles scroll events |
-| `GetWidgetName()` | Returns the widget's name for debugging |
+| `OnPointerDown(const Point&)` | Handles press event (returns true if consumed) |
+| `OnPointerUp(const Point&)` | Handles release event |
+| `OnPointerMove(const Point&)` | Handles pointer move (hover/drag) |
+| `OnPointerEnter()` | Handles pointer entering widget bounds |
+| `OnPointerExit()` | Handles pointer leaving widget bounds |
+| `OnPointerScroll(const Point&, x, y)` | Handles scroll events |
+| `GetWidgetName()` | Returns the widget's name for debugging (string_view) |
 
 ## Widget Lifecycle
 

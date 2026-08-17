@@ -41,8 +41,10 @@ have gone out of scope.
 yield queue. It resumes on the next frame:
 
 ```cpp
-neoflux::Task<void> FadeIn(Widget* widget) {
+neoflux::Task<void> FadeIn(std::weak_ptr<Widget> weak_widget) {
   for (int i = 0; i <= 60; ++i) {
+    auto widget = weak_widget.lock();
+    if (!widget) co_return;  // widget destroyed
     const float opacity = static_cast<float>(i) / 60.0F;
     widget->SetOpacity(opacity);
     co_await neoflux::Yield();  // one frame per iteration

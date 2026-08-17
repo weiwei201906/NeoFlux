@@ -69,18 +69,18 @@ or using a callback:
 ```cpp
 class HomePage : public StatefulWidget {
  public:
-  explicit HomePage(Application* app) : app_(app) {}
+  explicit HomePage(Application& app) : app_(app) {}
 
   std::shared_ptr<Widget> Build(BuildContext&) override {
     auto btn = std::make_shared<Button>("Go to Settings");
     btn->SetOnPressed([this]() {
-      app_->PushRoute("/settings");
+      app_.get().PushRoute("/settings");
     });
     return btn;
   }
 
  private:
-  Application* app_;
+  std::reference_wrapper<Application> app_;
 };
 ```
 

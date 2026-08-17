@@ -5,24 +5,28 @@ NeoFlux uses a command-based rendering pipeline. The application layer generates
 
 ## RenderCommand
 
-`RenderCommand` is a tagged union that represents a single drawing operation:
+`RenderCommand` is a flat struct (not a union) that represents a single drawing
+operation. It carries a type tag and the payload for that operation:
 
 | Type | Description |
 |------|-------------|
+| `kNoop` | No operation (padding) |
 | `kBeginFrame` | Start a new frame (clear, set viewport) |
-| `kEndFrame` | End frame (swap buffers) |
+| `kEndFrame` | End frame (flush) |
 | `kDrawRect` | Draw a filled rectangle |
 | `kDrawRoundedRect` | Draw a filled rounded rectangle |
 | `kDrawText` | Draw text glyphs |
-| `kTranslate` | Push a translate transform |
-| `kClipRect` | Set a clip rectangle |
+| `kSave` | Push transform/clip state |
 | `kRestore` | Pop transform/clip state |
+| `kTranslate` | Apply translation offset |
+| `kClipRect` | Set a clip rectangle |
 
 Commands are created via factory functions:
 
 ```cpp
 RenderCommand cmd = RenderCommand::MakeDrawRect(rect, color);
-RenderCommand text_cmd = RenderCommand::MakeDrawText(x, y, text, font, color);
+RenderCommand text_cmd = RenderCommand::MakeDrawText(
+    text, position, color, font_size, font_name);
 ```
 
 ## SPSC Ring Queue

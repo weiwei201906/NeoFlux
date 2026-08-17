@@ -7,7 +7,7 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `--target_fps` | int | `60` | 应用事件循环与渲染的目标帧率 |
-| `--render_queue_capacity` | int | `2048` | SPSC 无锁环形队列容量，自动向上取整为 2 的幂 |
+| `--render_queue_capacity` | uint64 | `2048` | SPSC 无锁环形队列容量，自动向上取整为 2 的幂 |
 | `--verbose_logging` | bool | `false` | 启用详细 VLOG(1) 输出并将日志镜像到 stderr |
 | `--logtostderr` | bool | `false` | 将日志输出到 stderr 而非日志文件 |
 | `--log_dir` | string | `./logs` | 日志文件存放目录，不存在时自动创建 |
@@ -38,11 +38,13 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 | 选项 | 默认值 | 说明 |
 |------|--------|------|
 | `NEOFLUX_BUILD_TESTS` | `OFF` | 编译单元测试 |
+| `NEOFLUX_BUILD_EXAMPLES` | `OFF` | 编译示例应用 |
+| `NEOFLUX_ENABLE_CLANG_TIDY` | `OFF` | 构建时运行 clang-tidy |
 
-启用测试：
+启用测试和示例：
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
 ```
 
 ## 下一步

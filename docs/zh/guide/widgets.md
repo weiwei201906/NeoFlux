@@ -19,6 +19,22 @@ NeoFlux 采用类 Flutter 的 Widget 开发模型。每个 UI 元素都是一个
 
 继承 `Widget` 并重写虚函数：
 
+### 核心虚函数
+
+| 函数 | 用途 |
+|------|------|
+| `Build(BuildContext&)` | 为有状态组件返回子 Widget |
+| `OnMeasure(width, mode, height, mode)` | 叶子组件返回固有尺寸 |
+| `Paint(RenderContext&)` | 生成渲染命令 |
+| `HitTest(Point)` | 测试点是否命中此 Widget |
+| `OnPointerDown(const Point&)` | 处理按下事件（返回 true 表示消费） |
+| `OnPointerUp(const Point&)` | 处理释放事件 |
+| `OnPointerMove(const Point&)` | 处理指针移动（悬停/拖拽） |
+| `OnPointerEnter()` | 指针进入 Widget 边界 |
+| `OnPointerExit()` | 指针离开 Widget 边界 |
+| `OnPointerScroll(const Point&, x, y)` | 处理滚动事件 |
+| `GetWidgetName()` | 返回 Widget 名称（string_view，用于调试） |
+
 ```cpp
 class MyWidget : public Widget {
  public:

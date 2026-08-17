@@ -5,12 +5,12 @@ configuration and [glog](https://github.com/google/glog) for logging.
 
 ## gflags
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--target_fps` | `60` | Target frames per second for the render loop |
-| `--render_queue_capacity` | `2048` | Capacity of the SPSC render command queue |
-| `--render_backend` | `"gl"` | Render backend: `"gl"` (OpenGL) or `"vulkan"` (fallback to GL) |
-| `--verbose_logging` | `false` | Enable verbose VLOG output |
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--target_fps` | int32 | `60` | Target frames per second for the event loop and render pacing |
+| `--render_queue_capacity` | uint64 | `2048` | Capacity of the SPSC render command queue (rounded up to power of 2) |
+| `--render_backend` | string | `"vulkan"` | Render backend: `"vulkan"`, `"gl"`, or `"cpu"`. Vulkan/CPU fall back to OpenGL with a warning when not yet implemented |
+| `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr |
 
 ### Usage
 
@@ -67,11 +67,11 @@ VLOG(1) << "Detailed debug info";  // only with --v=1 or higher
 ```bash
 ./my_app \
   --target_fps=144 \
-  --render_backend=gl \
+  --render_backend=vulkan \
   --render_queue_capacity=4096 \
   --logtostderr \
   --v=1
 ```
 
-This runs at 144 FPS target, uses OpenGL, a 4096-entry queue, logs to stderr,
-and enables verbose logging.
+This runs at 144 FPS target, uses Vulkan backend, a 4096-entry queue, logs to
+stderr, and enables verbose logging.

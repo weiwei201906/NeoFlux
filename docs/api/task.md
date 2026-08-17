@@ -49,8 +49,10 @@ neoflux::Task<int> ComputeAsync() {
 ## Animation Example
 
 ```cpp
-neoflux::Task<void> FadeIn(Widget* widget) {
+neoflux::Task<void> FadeIn(std::weak_ptr<Widget> weak_widget) {
   for (int frame = 0; frame <= 30; ++frame) {
+    auto widget = weak_widget.lock();
+    if (!widget) co_return;
     const float opacity = static_cast<float>(frame) / 30.0F;
     widget->SetOpacity(opacity);
     widget->MarkNeedsBuild();
