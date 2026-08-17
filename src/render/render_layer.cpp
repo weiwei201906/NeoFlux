@@ -61,12 +61,25 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
     return false;
   }
 
+  // Temporarily make the GL context current on the main thread so that
+  // renderer_->Init() can load GL function pointers via glfwGetProcAddress.
+  // On Windows, wglGetProcAddress requires a current context; without it
+  // all function pointers resolve to NULL and the first frame renders
+  // nothing (window appears black until an input event triggers a re-render
+  // after the render thread has made the context current).
+  glfw_bridge_->MakeContextCurrent();
+
   if (!renderer_->Init(width, height, glfw_bridge_->GetNativeHandle())) {
     LOG(ERROR) << "Failed to initialize tgfx renderer";
+    glfw_bridge_->ReleaseContext();
     glfw_bridge_->Shutdown();
     glfw_bridge_.reset();
     return false;
   }
+
+  // Release the context from the main thread; the render thread will
+  // acquire it exclusively via MakeContextCurrent() in RenderLoop().
+  glfw_bridge_->ReleaseContext();
 #else
   // Mobile: tgfx renders directly into the platform surface provided by
   // the OS (ANativeWindow / CAMetalLayer). No windowing bridge is needed;
