@@ -82,8 +82,9 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 | `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
 | `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
 | `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |
+| `--render_backend` | string | `vulkan` | Render backend selection: `vulkan`, `gl`, or `cpu`. Vulkan/CPU fall back to OpenGL with a warning when not yet implemented. |
 
-By default, logs are written to files in `./logs/` and no console window appears on Windows (MinGW `-mwindows`). To debug, pass `--logtostderr --verbose_logging`.
+By default, logs are written to files in `./logs/` and no console window appears on Windows (`CMAKE_WIN32_EXECUTABLE`). To debug, pass `--logtostderr --verbose_logging`.
 
 ## Font System
 
@@ -152,7 +153,8 @@ can contain children. Layout is computed by the Taitank flexbox engine.
 | `Container` | Flexbox container with padding, margin, background color, border radius, flex direction. |
 | `Text` | Single-line text with configurable font size, color, alignment. |
 | `Button` | Clickable button with label, press callback, and pressed-state styling. |
-| `ScrollView` | Scrollable viewport that clips and pans its content via mouse wheel / touch. |
+| `ScrollView` | Scrollable viewport that clips and pans its content via mouse wheel / drag. |
+| `Draggable` | Container that can be dragged with pointer input; paint-time translate so layout is unaffected. |
 | `Expanded` | Container with `flex_grow` set; fills remaining space in a flex parent. |
 | `SizedBox` | Container with explicit width/height; useful for fixed-size spacing. |
 | `StatelessWidget` | Base for widgets that don't hold mutable state. |
@@ -178,10 +180,13 @@ which Taitank calls during layout.
 
 Mouse/touch events flow from the platform bridge through the widget tree:
 
-1. `GlfwBridge` receives GLFW mouse events and forwards them via `InputEventCallback`.
-2. `Application` performs a recursive `HitTest()` to find the deepest widget under the cursor.
-3. The hit widget's `OnPointerDown()` / `OnPointerUp()` is called with local coordinates.
-4. `Button` overrides these to track press state and invoke its `on_pressed` callback.
+1. `GlfwBridge` receives GLFW mouse events (button, motion, scroll) and forwards them via callbacks.
+2. `Application` performs a recursive `HitTest()` to find the deepest widget under the cursor. A hit-test cache avoids re-traversing the tree on every pointer-move event; the cache is invalidated whenever layout changes.
+3. The hit widget's event handlers are called with local coordinates:
+   - `OnPointerDown()` / `OnPointerUp()` — press and release
+   - `OnPointerMove()` — cursor motion while hovering or dragging
+   - `OnPointerEnter()` / `OnPointerExit()` — hover enter/leave transitions
+4. `Button` overrides press/release to track state and invoke its `on_pressed` callback. `Draggable` overrides move to update its drag offset. `ScrollView` overrides move to support drag-to-scroll.
 
 ### Route Navigation
 
@@ -235,10 +240,35 @@ multiple font sizes/colors, and CJK text rendering. Place fonts in
 ### scroll_demo
 
 Demonstrates `ScrollView`: a header bar plus a scrollable list of colored
-items. Scroll with the mouse wheel; content is clipped to the viewport.
+items. Scroll with the mouse wheel or drag the content; content is clipped
+to the viewport.
 
 ```bash
 ./bin/scroll_demo
+```
+
+### loading_demo
+
+Demonstrates the widget state machine integrated with C++20 coroutines. A
+"Start Loading" button transitions the widget to a loading state; a coroutine
+animates a progress bar from 0% to 100% over ~2 seconds, yielding one frame
+per step. On completion, the widget transitions to a success state.
+
+```bash
+./bin/loading_demo
+```
+
+### drag_demo
+
+Demonstrates the `Draggable` widget with pointer events and the "state
+machine as condition lock" pattern. A colored box can be dragged around; a
+status label shows the current state (Idle/Hovering/Dragging) and offset.
+A long-press coroutine is launched on pointer-down; if the pointer is
+released before 500ms, the coroutine observes the state change and returns
+silently. If held for 500ms+, a "[Long Press!]" indicator appears.
+
+```bash
+./bin/drag_demo
 ```
 
 ## Coroutines
@@ -258,6 +288,31 @@ neoflux::Task<void> AnimateAsync() {
 
 event_loop.Schedule(AnimateAsync());
 ```
+
+### Sleep
+
+Use `co_await Sleep(duration)` to suspend a coroutine for a wall-clock
+duration. The event loop maintains a timer queue (`std::multimap` of
+timepoints to coroutine handles) and resumes expired timers each frame:
+
+```cpp
+neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
+  co_await neoflux::Sleep(std::chrono::milliseconds(500));
+  auto btn = weak_btn.lock();
+  if (!btn) co_return;          // widget destroyed
+  if (btn->IsPressed()) {       // state machine as condition lock
+    btn->OnLongPress();
+  }
+}
+```
+
+### State Machine + Coroutine Pattern
+
+Widgets carry a lightweight `WidgetState` (Idle, Hovering, Dragging, etc.).
+State transitions are the "condition lock" for coroutines: a coroutine
+launched on pointer-down checks the widget state after sleeping; if the
+state has changed (e.g. pointer released), the coroutine returns silently.
+No explicit cancellation is needed — the state machine gates execution.
 
 ## Project Structure
 

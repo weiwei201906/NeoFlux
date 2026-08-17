@@ -33,10 +33,13 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 - 类 Flutter Widget 系统（StatelessWidget / StatefulWidget / State）
 - 基于路由的 Widget 注册与导航
 - Taitank flexbox 布局引擎（Container 支持 flex direction、padding、margin、justify/align）
-- 鼠标/触摸输入事件管道（命中测试 + 指针事件分发）
+- 完整指针事件管道：OnPointerDown/Up/Move/Enter/Exit，命中测试缓存
+- 可拖拽 Widget（Draggable）与可滚动视图（ScrollView，支持滚轮与拖拽滚动）
+- C++20 协程：Task\<void\>、Yield()、Sleep()，事件循环驱动
+- 轻量状态机 + 协程"条件锁"模式
 - 跨平台：Windows / Linux / macOS（桌面），Android / iOS（移动）
 - C++20 标准，使用 `std::string_view`、designated initializers 等现代特性
-- 遵循 Google C++ 编码规范，clang-tidy 静态分析
+- 遵循 Google C++ 编码规范，clang-tidy 静态分析，-Werror 零警告
 - GLog 日志 + GFlags 命令行参数解析
 - GTest 单元测试
 - CMake 构建系统，FetchContent 自动管理第三方依赖
@@ -61,48 +64,7 @@ cmake --build .
 
 ### 运行测试
 
-```bash
-ctest --output-on-failure
-```
-
-### 运行示例
-
-```bash
-# 完整演示（路由导航、状态管理、按钮回调）
-./bin/hello_neoflux
-
-# 极简计数器
-./bin/counter
-```
-
-## 配置（gflags）
-
-NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
-
-| 参数                      | 类型   | 默认值                           | 说明                                                                                             |
-|---------------------------|--------|----------------------------------|--------------------------------------------------------------------------------------------------|
-| `--target_fps`            | int    | `60`                             | 应用事件循环与渲染的目标帧率。                                                                   |
-| `--render_queue_capacity` | int    | `2048`                           | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。                    |
-| `--verbose_logging`       | bool   | `false`                          | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。                                           |
-| `--logtostderr`           | bool   | `false`                          | 将日志输出到 stderr 而非日志文件。                                                               |
-| `--log_dir`               | string | `./logs`                         | 日志文件存放目录，不存在时自动创建。                                                             |
-
-默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（MinGW `-mwindows`）。调试时使用 `--logtostderr --verbose_logging`。
-
-## 字体系统
-
-NeoFlux 使用字体管理器，在启动时扫描 `thirdparty/fonts/` 目录下的 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。Widget 通过文件名（不含扩展名）引用字体：
-
-```cpp
-auto* text = new Text("Hello World");
-text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regular.ttf
-```
-
-若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `thirdparty/fonts/` 目录即可通过名称引用，无需构建时拷贝。
-
-## 编译测试
-
-测试默认禁用。通过 CMake 选项 `NEOFLUX_BUILD_TESTS` 启用：
+测试默认禁用，需通过 CMake 选项启用：
 
 ```bash
 cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
@@ -110,18 +72,60 @@ cmake --build build
 cd build && ctest --output-on-failure
 ```
 
+### 运行示例
+
+```bash
+./bin/hello_neoflux   # 完整演示
+./bin/counter         # 计数器
+./bin/flex_demo       # flex 布局
+./bin/font_demo       # 字体系统
+./bin/scroll_demo     # 滚动视图
+./bin/loading_demo    # 状态机 + 协程动画
+./bin/drag_demo       # 可拖拽 Widget
+```
+
+## 配置（gflags）
+
+NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
+
+| 参数                      | 类型   | 默认值    | 说明                                                                 |
+|---------------------------|--------|-----------|----------------------------------------------------------------------|
+| `--target_fps`            | int    | `60`      | 应用事件循环与渲染的目标帧率。                                       |
+| `--render_queue_capacity` | int    | `2048`    | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。 |
+| `--verbose_logging`       | bool   | `false`   | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。               |
+| `--logtostderr`           | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
+| `--log_dir`               | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |
+| `--render_backend`        | string | `vulkan`  | 渲染后端选择：`vulkan`、`gl`、`cpu`。Vulkan/CPU 尚未实现时回退到 OpenGL 并输出警告。 |
+
+默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（`CMAKE_WIN32_EXECUTABLE`）。调试时使用 `--logtostderr --verbose_logging`。
+
+## 字体系统
+
+NeoFlux 使用字体管理器，在启动时扫描 `thirdparty/fonts/` 目录下的 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。Widget 通过文件名（不含扩展名）引用字体：
+
+```cpp
+auto text = std::make_shared<Text>("Hello World");
+text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regular.ttf
+```
+
+若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `thirdparty/fonts/` 目录即可通过名称引用，无需构建时拷贝。
+
 ## Widget 系统
 
 ### 核心 Widget
 
 | Widget            | 说明                                                         |
 |-------------------|--------------------------------------------------------------|
-| `Widget`          | 抽象基类，重写 `Build()`、`OnMeasure()`、`Paint()`。         |
-| `Container`       | Flexbox 容器，支持 padding、margin、背景色、flex direction。 |
-| `Text`            | 单行文本，支持字体大小、颜色、对齐方式，UTF-8 编码。         |
-| `Button`          | 可点击按钮，支持标签、按下回调、按下状态样式。               |
-| `StatelessWidget` | 无状态 Widget 基类。                                         |
-| `StatefulWidget`  | 有状态 Widget 基类，配合 `State<W>` 使用。                   |
+| `Widget`          | 抽象基类，重写 `Build()`、`OnMeasure()`、`Paint()` 及事件回调。 |
+| `Container`       | Flexbox 容器，支持 padding、margin、背景色、圆角、flex direction。 |
+| `Text`            | 单行文本，支持字体大小、颜色、对齐方式，UTF-8 编码。          |
+| `Button`          | 可点击按钮，支持标签、按下回调、按下状态样式。                |
+| `ScrollView`      | 可滚动视口，支持滚轮与拖拽滚动，内容裁剪。                    |
+| `Draggable`       | 可拖拽容器，绘制时平移不影响 Taitank 布局。                   |
+| `Expanded`        | 设置了 flex_grow 的容器，填充父容器剩余空间。                 |
+| `SizedBox`        | 固定宽高的容器，用于固定间距。                                |
+| `StatelessWidget` | 无状态 Widget 基类。                                          |
+| `StatefulWidget`  | 有状态 Widget 基类，配合 `State<W>` 使用。                    |
 
 ### 布局（Taitank Flexbox）
 
@@ -142,10 +146,13 @@ col->SetFlexDirection(FlexDirection::kColumn)   // 子控件垂直排列
 
 鼠标/触摸事件从平台桥接流经 Widget 树：
 
-1. `GlfwBridge` 接收 GLFW 鼠标事件，通过 `InputEventCallback` 转发。
-2. `Application` 执行递归 `HitTest()`，找到光标下最深层的 Widget。
-3. 调用命中 Widget 的 `OnPointerDown()` / `OnPointerUp()`，传入局部坐标。
-4. `Button` 重写这些方法跟踪按下状态并触发 `on_pressed` 回调。
+1. `GlfwBridge` 接收 GLFW 鼠标事件（按钮、移动、滚轮）并通过回调转发。
+2. `Application` 执行递归 `HitTest()` 找到光标下最深层的 Widget。命中测试缓存避免每次指针移动都遍历整棵树；布局变化时缓存自动失效。
+3. 调用命中 Widget 的事件处理函数，传入局部坐标：
+   - `OnPointerDown()` / `OnPointerUp()` — 按下与释放
+   - `OnPointerMove()` — 悬停或拖拽时的光标移动
+   - `OnPointerEnter()` / `OnPointerExit()` — 悬停进入/离开
+4. `Button` 重写按下/释放跟踪状态并触发回调；`Draggable` 重写移动更新拖拽偏移；`ScrollView` 重写移动支持拖拽滚动。
 
 ### 路由导航
 
@@ -156,6 +163,42 @@ RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
 app.PushRoute("/settings");  // 构建并显示设置页面
 app.PopRoute();              // 返回上一路由
 ```
+
+## 协程
+
+NeoFlux 支持 C++20 协程用于异步工作。在事件循环上调度一个 `Task<void>`，它在就绪时的下一帧恢复：
+
+```cpp
+#include <neoflux/core/task.h>
+
+neoflux::Task<void> AnimateAsync() {
+  for (int i = 0; i < 60; ++i) {
+    co_await neoflux::Yield();  // 下一帧恢复
+    widget->SetOpacity(i / 60.0F);
+  }
+}
+
+event_loop.Schedule(AnimateAsync());
+```
+
+### Sleep
+
+使用 `co_await Sleep(duration)` 将协程挂起指定时长。事件循环维护一个定时器队列（`std::multimap`，时间点到协程句柄的映射），每帧检查并恢复到期的定时器：
+
+```cpp
+neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
+  co_await neoflux::Sleep(std::chrono::milliseconds(500));
+  auto btn = weak_btn.lock();
+  if (!btn) co_return;          // Widget 已销毁
+  if (btn->IsPressed()) {       // 状态机作为条件锁
+    btn->OnLongPress();
+  }
+}
+```
+
+### 状态机 + 协程模式
+
+Widget 携带轻量 `WidgetState`（Idle、Hovering、Dragging 等）。状态迁移是协程的"条件锁"：指针按下时启动的协程在睡眠后检查 Widget 状态；如果状态已改变（如指针已释放），协程静默返回。无需显式取消机制——状态机本身就是执行的门控。
 
 ## 最小示例
 
@@ -208,9 +251,17 @@ int main(int argc, char** argv) {
 
 字体系统演示：默认字体、显式 `SetFont()` 选择字体、多种字号/颜色、CJK 文本渲染。将字体放入 `thirdparty/fonts/` 后按名称引用即可。
 
-```bash
-./bin/font_demo
-```
+### scroll_demo
+
+`ScrollView` 演示：标题栏 + 可滚动的彩色列表。支持滚轮滚动与拖拽滚动，内容自动裁剪到视口。
+
+### loading_demo
+
+演示 Widget 状态机与 C++20 协程的集成。"Start Loading" 按钮将 Widget 切换到加载状态；协程在约 2 秒内将进度条从 0% 动画到 100%，每帧 yield 一次。完成后 Widget 切换到成功状态。
+
+### drag_demo
+
+演示 `Draggable` Widget 与指针事件，以及"状态机作为条件锁"模式。彩色方块可拖拽；状态标签显示当前状态（Idle/Hovering/Dragging）和偏移量。指针按下时启动长按检测协程；如果 500ms 内释放，协程观察到状态变化后静默返回；如果按住超过 500ms，显示 "[Long Press!]" 指示器。
 
 ## 项目结构
 
@@ -222,19 +273,18 @@ neoflux/
 ├── README-zh.md            # 中文文档（本文件）
 ├── .clang-tidy             # clang-tidy 规则
 ├── .clang-format           # 代码风格
-├── cmake/                  # CMake 模块
-├── thirdparty/             # 第三方依赖
-│   ├── fonts/              # 打包字体目录
+├── thirdparty/             # 第三方依赖（FetchContent）
+│   ├── fonts/              # 字体目录（开发者自行放入）
 │   └── CMakeLists.txt      # FetchContent 配置
 ├── include/neoflux/        # 公共头文件（仅声明）
-│   ├── core/               # 环形队列、类型定义、工具
+│   ├── core/               # 环形队列、类型定义、协程、工具
 │   ├── widget/             # Widget 系统
 │   ├── app/                # Application、EventLoop
 │   └── render/             # 渲染层、命令、tgfx、GLFW
 ├── src/                    # 实现（.cpp）
 ├── tests/                  # GTest 单元测试
-├── examples/               # 示例应用（hello_neoflux、counter）
-└── docs/                   # 架构文档
+├── examples/               # 示例应用
+└── docs/                   # VitePress 文档
 ```
 
 ## 移动端渲染
