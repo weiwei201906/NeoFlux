@@ -53,6 +53,6 @@ logs/
 
 node_modules/
 
-
+cache
 docs/.vitepress/dist/
 
