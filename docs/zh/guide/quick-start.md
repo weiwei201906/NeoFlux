@@ -1,86 +1,145 @@
 # 快速开始
 
-## 环境要求
+本指南从零开始创建你的第一个 NeoFlux 应用。
 
-- CMake 3.20+
-- 支持 C++20 的编译器（GCC 11+ / Clang 14+ / MSVC 2022）
-- Git（用于 FetchContent 下载依赖）
+## 1. 项目结构
 
-## 构建
+为项目创建新目录：
 
-```bash
-mkdir build
-cd build
-cmake .. -G Ninja
-cmake --build .
+```
+my_app/
+├── CMakeLists.txt
+├── main.cpp
+└── neoflux/          # NeoFlux 源码（git submodule 或拷贝）
 ```
 
-Windows MinGW 示例：
+## 2. 获取 NeoFlux
+
+### 方式 A：Git Submodule（推荐）
 
 ```bash
-cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
-mingw32-make -j4
+git init
+git submodule add https://github.com/weiwei201906/NeoFlux.git neoflux
 ```
 
-## 运行示例
+### 方式 B：FetchContent（无需 submodule）
 
-构建完成后，可执行文件在 `bin/` 目录下：
+在 `CMakeLists.txt` 中添加（见下文）——NeoFlux 在配置时自动下载。
 
-```bash
-./bin/hello_neoflux   # 完整演示
-./bin/counter         # 计数器
-./bin/flex_demo       # flex 布局
-./bin/font_demo       # 字体系统
-./bin/scroll_demo     # 滚动视图
-./bin/loading_demo    # 状态机 + 协程动画
-./bin/drag_demo       # 可拖拽 Widget
-```
-
-## 编译测试
-
-测试默认禁用，通过 CMake 选项启用：
-
-```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
-cmake --build build
-cd build && ctest --output-on-failure
-```
-
-## 最小示例
+## 3. main.cpp
 
 ```cpp
-#include <neoflux/neoflux.h>
+#include <neoflux/app/application.h>
+#include <neoflux/widget/container.h>
+#include <neoflux/widget/text.h>
+#include <neoflux/widget/button.h>
+#include <neoflux/widget/route_registry.h>
 
 using namespace neoflux;
 
-std::shared_ptr<Widget> BuildHome(BuildContext& ctx) {
+// 路由构建函数：返回 "/" 路由的根 widget 树
+std::shared_ptr<Widget> BuildHomePage(BuildContext& /*ctx*/) {
   auto root = std::make_shared<Container>();
-  root->SetBackgroundColor({.r = 255, .g = 255, .b = 255, .a = 255});
+  root->SetFlexDirection(FlexDirection::kColumn)
+      .SetBackgroundColor({.r = 245, .g = 245, .b = 245, .a = 255})
+      .SetJustifyContent(HAlign::kCenter)
+      .SetAlignItems(VAlign::kCenter)
+      .SetPadding({.left = 24, .top = 24, .right = 24, .bottom = 24});
 
-  auto text = std::make_shared<Text>("Hello NeoFlux!");
-  text->SetFontSize(24.0F);
+  auto title = std::make_shared<Text>("Hello NeoFlux");
+  title->SetFontSize(28.0F)
+      .SetTextColor({.r = 33, .g = 33, .b = 33, .a = 255});
+  root->AddChild(title);
 
   auto button = std::make_shared<Button>("Click Me");
-  button->SetOnPressed([]() { /* 处理点击 */ });
-
-  root->AddChild(text);
+  button->SetOnPressed([]() {
+    LOG(INFO) << "Button pressed!";
+  });
   root->AddChild(button);
+
   return root;
 }
 
 int main(int argc, char** argv) {
-  RouteRegistry::Instance().RegisterRoute("/", BuildHome);
+  // 在初始化应用前注册路由。
+  RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 
   Application app;
-  app.Init(argc, argv, 800, 600, "NeoFlux");
+  if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
+    return 1;
+  }
+
+  // 压入初始路由并运行事件循环（阻塞直到窗口关闭）。
   app.PushRoute("/");
   app.Run();
   return 0;
 }
 ```
 
+## 4. CMakeLists.txt
+
+### 使用 submodule
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(my_app LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory(neoflux)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE neoflux)
+```
+
+### 使用 FetchContent
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(my_app LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(FetchContent)
+FetchContent_Declare(
+  neoflux
+  GIT_REPOSITORY https://github.com/weiwei201906/NeoFlux.git
+  GIT_TAG main
+)
+FetchContent_MakeAvailable(neoflux)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE neoflux)
+```
+
+## 5. 构建并运行
+
+```bash
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . -j
+./my_app
+```
+
+你应该看到一个窗口，显示 "Hello NeoFlux" 文本和一个可点击的按钮。
+
+## 核心概念
+
+| 概念 | 说明 |
+|------|------|
+| **路由构建函数** | 返回 widget 树的函数，路由被压入时调用。 |
+| **Container** | 基础布局组件。Flex 方向、对齐、内边距、背景色。 |
+| **Text** | 渲染 UTF-8 文本的叶子组件。 |
+| **Button** | 可点击组件，通过 `SetOnPressed()` 设置回调。 |
+| **RouteRegistry** | 将路由名称映射到构建函数。 |
+| **Application** | 拥有窗口、事件循环、渲染层和导航栈。 |
+
 ## 下一步
 
-- [架构概览](./architecture)
-- [Widget 系统](./widgets)
-- [Flex 布局](./layout)
+- 学习 [Widget 系统](./widgets)
+- 探索 [Flex 布局](./layout)
+- 处理 [用户输入](./input)
+- 添加页面间 [路由导航](./routing)
+- 使用 [协程](./coroutines) 实现动画和定时工作
