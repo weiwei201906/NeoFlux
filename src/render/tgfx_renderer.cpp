@@ -66,7 +66,7 @@ struct GlLoader {
   void(APIENTRY* glCompileShader)(GlUint) = nullptr;
   void(APIENTRY* glGetShaderiv)(GlUint, GlEnum, GlInt*) = nullptr;
   void(APIENTRY* glGetShaderInfoLog)(GlUint, GlSizei, GlSizei*, char*) = nullptr;
-  GlUint(APIENTRY* glCreateProgram)(void) = nullptr;
+  GlUint(APIENTRY* glCreateProgram)() = nullptr;
   void(APIENTRY* glAttachShader)(GlUint, GlUint) = nullptr;
   void(APIENTRY* glLinkProgram)(GlUint) = nullptr;
   void(APIENTRY* glGetProgramiv)(GlUint, GlEnum, GlInt*) = nullptr;
@@ -184,6 +184,10 @@ class GlRendererImpl : public NonCopyable {
  public:
   GlRendererImpl() = default;
   ~GlRendererImpl() { Cleanup(); }
+  GlRendererImpl(const GlRendererImpl&) = delete;
+  GlRendererImpl& operator=(const GlRendererImpl&) = delete;
+  GlRendererImpl(GlRendererImpl&&) = delete;
+  GlRendererImpl& operator=(GlRendererImpl&&) = delete;
 
   bool Init(int width, int height, void* native_handle) {
     window_ = static_cast<GLFWwindow*>(native_handle);
@@ -545,7 +549,7 @@ class GlRendererImpl : public NonCopyable {
     if (w == 0 || h == 0) {
       GlyphInfo info;
       info.advance = static_cast<float>(
-          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6);
+          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);
       glyph_cache_[key] = info;
       return &glyph_cache_[key];
     }
@@ -593,7 +597,7 @@ class GlRendererImpl : public NonCopyable {
     info.bearing_x = static_cast<float>(face->glyph->bitmap_left);
     info.bearing_y = static_cast<float>(face->glyph->bitmap_top);
     info.advance = static_cast<float>(
-        static_cast<std::uint32_t>(face->glyph->advance.x) >> 6);
+        static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);
     info.width = w;
     info.height = h;
     glyph_cache_[key] = info;

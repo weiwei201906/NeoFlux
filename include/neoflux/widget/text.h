@@ -50,7 +50,7 @@ class Text : public Widget {
   void Paint(RenderContext& context) override;
 
  private:
-  std::string text_;
+  std::string text_{};
   Color text_color_;
   float font_size_;
   HAlign alignment_;

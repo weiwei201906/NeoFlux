@@ -95,19 +95,33 @@ bool Widget::OnPointerDown(const Point& /*local_pos*/) { return false; }
 
 void Widget::OnPointerUp(const Point& /*local_pos*/) {}
 
-std::shared_ptr<Widget> Widget::HitTest(const Point& global_pos) {
-  // Check if the point is inside this widget's bounds.
-  if (global_pos.x < bounds_.x || global_pos.y < bounds_.y ||
-      global_pos.x >= bounds_.x + bounds_.width ||
-      global_pos.y >= bounds_.y + bounds_.height) {
+std::shared_ptr<Widget> Widget::HitTest(  // NOLINT(readability-make-member-function-const)
+    const Point& parent_pos) {
+  // parent_pos is relative to this widget's parent. bounds_ is also relative
+  // to the parent, so we can compare directly.
+  if (parent_pos.x < bounds_.x || parent_pos.y < bounds_.y ||
+      parent_pos.x >= bounds_.x + bounds_.width ||
+      parent_pos.y >= bounds_.y + bounds_.height) {
+    VLOG(2) << "HitTest: " << GetWidgetName() << " bounds ["
+            << bounds_.x << "," << bounds_.y << " " << bounds_.width << "x"
+            << bounds_.height << "] MISS point (" << parent_pos.x << ","
+            << parent_pos.y << ")";
     return nullptr;
   }
+  VLOG(2) << "HitTest: " << GetWidgetName() << " bounds ["
+          << bounds_.x << "," << bounds_.y << " " << bounds_.width << "x"
+          << bounds_.height << "] HIT point (" << parent_pos.x << ","
+          << parent_pos.y << "), children=" << children_.size();
+  // Convert to this widget's local coordinates before recursing into children,
+  // because children's bounds_ are relative to this widget.
+  const Point local_pos{.x = parent_pos.x - bounds_.x,
+                        .y = parent_pos.y - bounds_.y,};
   // Test children in reverse order (top-most / last painted first).
   for (auto it = children_.rbegin(); it != children_.rend(); ++it) {
     if (*it == nullptr) {
       continue;
     }
-    std::shared_ptr<Widget> hit = (*it)->HitTest(global_pos);
+    std::shared_ptr<Widget> hit = (*it)->HitTest(local_pos);
     if (hit != nullptr) {
       return hit;
     }
@@ -167,6 +181,17 @@ Widget* Widget::GetParent() const noexcept { return parent_; }
 void Widget::SetBounds(const Rect& bounds) noexcept { bounds_ = bounds; }
 
 const Rect& Widget::GetBounds() const noexcept { return bounds_; }
+
+Point Widget::GetGlobalPosition() const noexcept {
+  Point pos{.x = bounds_.x, .y = bounds_.y};
+  const Widget* p = parent_;
+  while (p != nullptr) {
+    pos.x += p->bounds_.x;
+    pos.y += p->bounds_.y;
+    p = p->parent_;
+  }
+  return pos;
+}
 
 void Widget::SetDesiredSize(const Size& size) noexcept {
   desired_size_ = size;

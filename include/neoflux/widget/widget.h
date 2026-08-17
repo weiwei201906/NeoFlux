@@ -105,9 +105,14 @@ class Widget : public std::enable_shared_from_this<Widget> {
   //
   // Returns the deepest widget that contains the point, or nullptr if no
   // widget is hit. Children are tested in reverse order (top-most first).
-  // Performs a hit test at the given global position. Returns the leaf widget
-  // that contains the point, or nullptr if no widget contains it.
-  [[nodiscard]] std::shared_ptr<Widget> HitTest(const Point& global_pos);
+  // Performs a hit test at the given parent-relative coordinates.
+  // Returns the deepest widget that contains the point, or nullptr if no
+  // widget is hit. Children are tested in reverse order (top-most first).
+  // For the root widget, the coordinate is the window coordinate.
+  [[nodiscard]] std::shared_ptr<Widget> HitTest(const Point& parent_pos);
+
+  // Returns the widget's global position (sum of all ancestor bounds offsets).
+  [[nodiscard]] Point GetGlobalPosition() const noexcept;
 
   // Performs Taitank layout rooted at this widget with the given available
   // size, then recursively copies computed bounds back into the widget tree.

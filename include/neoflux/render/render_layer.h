@@ -61,6 +61,10 @@ class RenderLayer : public NonCopyable {
   // Returns the GLFW bridge (desktop only, may be nullptr before Start).
   [[nodiscard]] GlfwBridge* GetGlfwBridge() const noexcept;
 
+  // Returns the actual window/framebuffer size in pixels (may differ from
+  // the requested size due to DPI scaling).
+  void GetWindowSize(int& width, int& height) const noexcept;
+
  private:
   // Main render loop. Runs on the render thread.
   void RenderLoop();

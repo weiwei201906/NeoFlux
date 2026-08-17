@@ -17,8 +17,12 @@ namespace {
 
 class RouteRegistryTest : public ::testing::Test {
  protected:
-  void SetUp() override { RouteRegistry::Instance().Clear(); }
-  void TearDown() override { RouteRegistry::Instance().Clear(); }
+  void SetUp() override {  // NOLINT(misc-override-with-different-visibility)
+    RouteRegistry::Instance().Clear();
+  }
+  void TearDown() override {  // NOLINT(misc-override-with-different-visibility)
+    RouteRegistry::Instance().Clear();
+  }
 };
 
 TEST_F(RouteRegistryTest, RegisterAndHasRoute) {

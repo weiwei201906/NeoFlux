@@ -51,9 +51,9 @@ class EventLoop : public NonCopyable {
   void ThrottleFrame(
       const std::chrono::steady_clock::time_point& frame_start) const;
 
-  std::atomic<bool> running_;
-  std::atomic<bool> should_stop_;
-  std::atomic<uint64_t> frame_count_;
+  std::atomic<bool> running_{false};
+  std::atomic<bool> should_stop_{false};
+  std::atomic<uint64_t> frame_count_{0};
   int target_fps_;
 };
 

@@ -177,11 +177,19 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
   if (!bridge->input_callback_) {
     return;
   }
+  // Query cursor position directly instead of relying on the cached value from
+  // CursorPosCallback, which may be stale if the button is pressed without
+  // prior mouse movement.
+  double cursor_x = 0.0;
+  double cursor_y = 0.0;
+  glfwGetCursorPos(window, &cursor_x, &cursor_y);
+  bridge->last_cursor_x_ = cursor_x;
+  bridge->last_cursor_y_ = cursor_y;
   const auto btn = static_cast<MouseButton>(button);
   const auto act = static_cast<InputAction>(action);
   bridge->input_callback_(btn, act,
-                          {.x = static_cast<float>(bridge->last_cursor_x_),
-                           .y = static_cast<float>(bridge->last_cursor_y_),});
+                          {.x = static_cast<float>(cursor_x),
+                           .y = static_cast<float>(cursor_y),});
 }
 
 void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,

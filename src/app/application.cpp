@@ -7,6 +7,7 @@
 #include "neoflux/app/application.h"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -65,8 +66,10 @@ bool Application::Init(int argc, char** argv, int window_width,
       filtered_argv.push_back(argv[i]);
     }
   }
-  int filtered_argc = static_cast<int>(filtered_argv.size());
-  char** filtered_argv_ptr = filtered_argv.data();
+  int filtered_argc =  // NOLINT(cppcoreguidelines-init-variables)
+      static_cast<int>(filtered_argv.size());
+  char** filtered_argv_ptr =  // NOLINT(cppcoreguidelines-init-variables)
+      filtered_argv.data();
 
   // Initialize glog first so its built-in flags are accessible. Route initial
   // log messages to stderr temporarily until the log destination is configured,
@@ -249,18 +252,21 @@ void Application::LayoutWidgetTree() const {
   root->PerformLayout(static_cast<float>(window_width_),
                       static_cast<float>(window_height_));
   if (VLOG_IS_ON(1)) {
-    std::string children_info;
-    for (const auto& child : root->GetChildren()) {
-      if (child) {
-        const auto& b = child->GetBounds();
-        children_info += "[" + std::to_string(static_cast<int>(b.x)) + "," +
-                         std::to_string(static_cast<int>(b.y)) + " " +
-                         std::to_string(static_cast<int>(b.width)) + "x" +
-                         std::to_string(static_cast<int>(b.height)) + "] ";
+    std::function<void(const Widget&, int)> dump = [&](const Widget& w,
+                                                        int depth) {
+      const auto& b = w.GetBounds();
+      std::string indent(static_cast<std::size_t>(depth) * 2, ' ');
+      VLOG(1) << indent << w.GetWidgetName() << " [" << static_cast<int>(b.x)
+              << "," << static_cast<int>(b.y) << " "
+              << static_cast<int>(b.width) << "x"
+              << static_cast<int>(b.height) << "]";
+      for (const auto& child : w.GetChildren()) {
+        if (child != nullptr) {
+          dump(*child, depth + 1);
+        }
       }
-    }
-    VLOG(1) << "Layout: root " << root->GetBounds().width << "x"
-            << root->GetBounds().height << ", children: " << children_info;
+    };
+    dump(*root, 0);
   }
 }
 
@@ -294,8 +300,8 @@ void Application::PaintWidgetRecursive(Widget& widget,
   widget.Paint(context);
 }
 
-void Application::DispatchPointerEvent(MouseButton button, InputAction action,
-                                       const Point& pos) {
+void Application::DispatchPointerEvent(  // NOLINT(readability-make-member-function-const)
+    MouseButton button, InputAction action, const Point& pos) {
   if (button != MouseButton::kLeft) {
     return;
   }
@@ -306,20 +312,27 @@ void Application::DispatchPointerEvent(MouseButton button, InputAction action,
 
   if (action == InputAction::kPress) {
     std::shared_ptr<Widget> hit = root->HitTest(pos);
+    VLOG(1) << "Pointer press at (" << pos.x << "," << pos.y
+            << ") hit: " << (hit ? hit->GetWidgetName() : "null");
     if (hit != nullptr) {
-      const Point local{.x = pos.x - hit->GetBounds().x,
-                        .y = pos.y - hit->GetBounds().y,};
+      const Point global_pos = hit->GetGlobalPosition();
+      const Point local{.x = pos.x - global_pos.x,
+                        .y = pos.y - global_pos.y,};
       if (hit->OnPointerDown(local)) {
         // Store a weak_ptr so a widget-tree rebuild between press and release
         // does not leave a dangling pointer.
         pressed_widget_ = hit->weak_from_this();
+        VLOG(1) << "Pointer press consumed by " << hit->GetWidgetName();
       }
     }
   } else if (action == InputAction::kRelease) {
     auto pressed = pressed_widget_.lock();
+    VLOG(1) << "Pointer release at (" << pos.x << "," << pos.y
+            << ") pressed_widget valid: " << (pressed != nullptr);
     if (pressed != nullptr) {
-      const Point local{.x = pos.x - pressed->GetBounds().x,
-                        .y = pos.y - pressed->GetBounds().y,};
+      const Point global_pos = pressed->GetGlobalPosition();
+      const Point local{.x = pos.x - global_pos.x,
+                        .y = pos.y - global_pos.y,};
       pressed->OnPointerUp(local);
     }
     pressed_widget_.reset();

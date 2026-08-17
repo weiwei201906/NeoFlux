@@ -71,8 +71,8 @@ class Button : public Widget {
   // Returns true if the given point is inside the button bounds.
   [[nodiscard]] bool ContainsPoint(const Point& point) const noexcept;
 
-  std::string label_;
-  OnPressed on_pressed_;
+  std::string label_{};
+  OnPressed on_pressed_{};
   Color background_color_;
   Color text_color_;
   Color pressed_color_;

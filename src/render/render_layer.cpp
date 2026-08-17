@@ -27,7 +27,7 @@ DEFINE_uint64(render_queue_capacity, 2048,
 
 namespace neoflux {
 
-RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init)
+RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, modernize-use-equals-default)
     : command_queue_(FLAGS_render_queue_capacity),
       running_(false),
       should_close_(false),
@@ -167,6 +167,11 @@ void RenderLayer::PollEvents() {
 
 GlfwBridge* RenderLayer::GetGlfwBridge() const noexcept {
   return glfw_bridge_.get();
+}
+
+void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
+  width = window_width_;
+  height = window_height_;
 }
 
 void RenderLayer::RenderLoop() {

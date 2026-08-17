@@ -84,7 +84,8 @@ std::shared_ptr<Widget> BuildHomePage(BuildContext& context) {
   const auto counter = std::make_shared<CounterWidget>();
 
   const auto nav_button = std::make_shared<Button>("Go to About Page");
-  nav_button->SetOnPressed([&context] { context.PushRoute("/about"); });
+  Application* app_ptr = context.GetApplication();
+  nav_button->SetOnPressed([app_ptr] { app_ptr->PushRoute("/about"); });
 
   root->AddChild(title);
   root->AddChild(subtitle);
@@ -110,7 +111,8 @@ std::shared_ptr<Widget> BuildAboutPage(BuildContext& context) {
   desc->SetFontSize(14.0F).SetTextColor({.r=60, .g=60, .b=60, .a=255});
 
   auto back_button = std::make_shared<Button>("Back");
-  back_button->SetOnPressed([&context] { context.PopRoute(); });
+  Application* app_ptr = context.GetApplication();
+  back_button->SetOnPressed([app_ptr] { app_ptr->PopRoute(); });
 
   root->AddChild(title);
   root->AddChild(desc);
