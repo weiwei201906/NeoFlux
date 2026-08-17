@@ -228,6 +228,22 @@ taitank::TaitankNode* Widget::GetTaitankNode() const noexcept {
   return taitank_node_;
 }
 
+void Widget::SetState(WidgetState new_state) {
+  if (new_state == state_) {
+    return;
+  }
+  const WidgetState old = state_;
+  state_ = new_state;
+  OnStateChanged(old, new_state);
+}
+
+WidgetState Widget::GetState() const noexcept { return state_; }
+
+void Widget::OnStateChanged(WidgetState /*from*/, WidgetState /*to*/) {
+  // Default: no-op. Subclasses override to launch coroutines, mark dirty
+  // frames, or update visual properties on state transitions.
+}
+
 void Widget::SyncTaitankChildren() {
   if (taitank_node_ == nullptr) {
     return;

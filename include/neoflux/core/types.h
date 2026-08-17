@@ -81,6 +81,22 @@ enum class VAlign : std::uint8_t { kTop, kCenter, kBottom };
 // Main axis direction for flex layouts.
 enum class Axis : std::uint8_t { kHorizontal, kVertical };
 
+// Lightweight widget lifecycle state for state-machine-driven widgets.
+//
+// Subclasses override OnStateChanged() to react to transitions, e.g.
+// launching a coroutine animation when entering kLoading or kDragging.
+// Custom states can be added by extending this enum; the default kIdle
+// is sufficient for static widgets.
+enum class WidgetState : std::uint8_t {
+  kIdle,
+  kHovering,
+  kDragging,
+  kLoading,
+  kSuccess,
+  kError,
+  kDisabled,
+};
+
 }  // namespace neoflux
 
 #endif  // NEOFLUX_CORE_TYPES_H_

@@ -168,6 +168,14 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Returns the opaque Taitank node handle (for subclasses to set styles).
   [[nodiscard]] taitank::TaitankNode* GetTaitankNode() const noexcept;
 
+  // Sets the widget's lifecycle state. If the state changes, OnStateChanged()
+  // is called with the old and new states. Subclasses override OnStateChanged()
+  // to launch coroutines, mark frames dirty, or trigger side effects.
+  void SetState(WidgetState new_state);
+
+  // Returns the current widget state.
+  [[nodiscard]] WidgetState GetState() const noexcept;
+
  protected:
   // Paints all children with appropriate translation.
   void PaintChildren(RenderContext& context);
@@ -178,6 +186,16 @@ class Widget : public std::enable_shared_from_this<Widget> {
 
   // Recursively reads computed bounds from Taitank nodes into widgets.
   virtual void ReadLayoutRecursive();
+
+  // Called when the widget's state changes via SetState().
+  //
+  // Subclasses override this to react to state transitions. Common uses:
+  //   - Launch a coroutine animation (e.g. loading spinner on kLoading)
+  //   - Mark the frame dirty to trigger a repaint
+  //   - Update visual properties (color, opacity) for the new state
+  //
+  // The default implementation does nothing.
+  virtual void OnStateChanged(WidgetState from, WidgetState to);
 
   // Enables the Taitank measure function on this widget's node. Must be
   // called by leaf widgets (Text, Button, etc.) in their constructors.
@@ -192,6 +210,7 @@ class Widget : public std::enable_shared_from_this<Widget> {
   std::vector<std::shared_ptr<Widget>> children_{};
   Widget* parent_ = nullptr;
   bool needs_build_ = true;
+  WidgetState state_ = WidgetState::kIdle;
   taitank::TaitankNode* taitank_node_ = nullptr;  // Opaque Taitank node.
 };
 

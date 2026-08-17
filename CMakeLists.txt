@@ -41,7 +41,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # ---------------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------------
-option(NEOFLUX_BUILD_TESTS    "Build unit tests"         ON)
+option(NEOFLUX_BUILD_TESTS    "Build unit tests"         OFF)
 option(NEOFLUX_BUILD_EXAMPLES "Build example applications" ON)
 option(NEOFLUX_ENABLE_CLANG_TIDY "Enable clang-tidy as a build step (requires correct sysroot config)" OFF)
 option(NEOFLUX_USE_TGFX      "Use tgfx rendering backend (requires MSVC on Windows)" OFF)

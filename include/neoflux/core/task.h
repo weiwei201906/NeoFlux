@@ -35,6 +35,9 @@ struct YieldAwaitable {
   void await_resume() const noexcept {}
 };
 
+// Convenience factory: co_await Yield() suspends and resumes next frame.
+[[nodiscard]] inline YieldAwaitable Yield() noexcept { return {}; }
+
 // A time-based awaitable. The EventLoop is responsible for resuming the
 // coroutine after the specified duration.
 template <typename Rep, typename Period>
