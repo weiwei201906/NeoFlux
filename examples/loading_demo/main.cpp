@@ -118,29 +118,23 @@ class LoadingWidget : public Container {
     spacer->SetHeight(16.0F);
     root.AddChild(spacer);
 
-    // Progress bar track.
+    // Progress bar: track contains fill as child so they overlap correctly.
     auto track = std::make_shared<Container>();
     track->SetWidth(240.0F)
         .SetHeight(12.0F)
         .SetBackgroundColor({.r = 224, .g = 224, .b = 224, .a = 255})
-        .SetBorderRadius(6.0F);
-    root.AddChild(track);
-
-    // Progress bar fill (width proportional to progress_).
+        .SetBorderRadius(6.0F)
+        .SetFlexDirection(FlexDirection::kRow)
+        .SetAlignItems(VAlign::kTop);
+    // Fill sits inside track, left-aligned, width proportional to progress.
     auto fill = std::make_shared<Container>();
     const float fill_width = 240.0F * progress_;
     fill->SetWidth(fill_width)
         .SetHeight(12.0F)
         .SetBackgroundColor({.r = 33, .g = 150, .b = 243, .a = 255})
         .SetBorderRadius(6.0F);
-    // Position fill at the same location as track via negative margin hack:
-    // place fill in a zero-height container so it overlays the track.
-    auto fill_wrapper = std::make_shared<Container>();
-    fill_wrapper->SetHeight(0.0F);
-    fill_wrapper->AddChild(fill);
-    // Note: simple overlay via layout order; track is above, fill below in
-    // the column but with 0-height wrapper so it occupies same vertical space.
-    root.AddChild(fill_wrapper);
+    track->AddChild(fill);
+    root.AddChild(track);
 
     auto spacer2 = std::make_shared<Container>();
     spacer2->SetHeight(16.0F);

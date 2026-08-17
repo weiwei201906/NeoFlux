@@ -147,10 +147,12 @@ endif()
 target_compile_features(neoflux PUBLIC cxx_std_20)
 
 # Strict warnings for neoflux code only (not third-party deps).
-# -Wno-conversion: glog/gflags headers trigger implicit conversion warnings.
-# -Wno-sign-conversion: render code mixes int coords with size_t indices.
+# -Wno-conversion/-Wno-sign-conversion: render code mixes int coords with
+# size_t indices; unavoidable without excessive casts.
+# -Wno-error=attributes: glog headers emit dllimport attribute warnings on
+# Windows; warning is still shown, just not fatal.
 target_compile_options(neoflux PRIVATE
-  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror -Wno-conversion -Wno-sign-conversion>
+  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror -Wno-conversion -Wno-sign-conversion -Wno-error=attributes>
 )
 
 # Platform-specific definitions
