@@ -50,3 +50,6 @@ Thumbs.db
 # Glog output
 *.log.*
 logs/
+
+node_modules/
+
