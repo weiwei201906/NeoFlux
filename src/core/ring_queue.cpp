@@ -8,6 +8,8 @@
 #include "neoflux/core/ring_queue.h"
 #include "neoflux/render/render_command.h"
 
+// Template method implementations (must be included before explicit
+// instantiation so the compiler generates the symbols).
 #include "ring_queue_impl.inc"
 
 namespace neoflux {

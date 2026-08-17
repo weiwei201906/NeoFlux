@@ -23,9 +23,8 @@
 namespace neoflux {
 
 template <typename T>
-SpscRingQueue<T>::SpscRingQueue(std::size_t capacity)
-    : storage_(),
-      capacity_(0),
+SpscRingQueue<T>::SpscRingQueue(const std::size_t capacity)
+    : capacity_(0),
       mask_(0),
       head_(0),
       tail_(0) {

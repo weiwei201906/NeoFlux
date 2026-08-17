@@ -39,6 +39,10 @@ class Text : public Widget {
   // Sets the text alignment.
   Text& SetAlignment(HAlign align) noexcept;
 
+  // Sets the font name (resolved via FontManager). Empty string uses the
+  // default font.
+  Text& SetFont(std::string_view font_name);
+
   // Reports intrinsic text size to the Taitank layout engine.
   [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
                                int height_mode) override;
@@ -50,6 +54,7 @@ class Text : public Widget {
   Color text_color_;
   float font_size_;
   HAlign alignment_;
+  std::string font_name_{};
 };
 
 }  // namespace neoflux

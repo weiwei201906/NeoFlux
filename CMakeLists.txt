@@ -80,6 +80,7 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(neoflux STATIC
   src/core/ring_queue.cpp
+  src/core/font_manager.cpp
   src/core/types.cpp
   src/widget/widget.cpp
   src/widget/container.cpp
@@ -169,28 +170,6 @@ endif()
 # ---------------------------------------------------------------------------
 if(NEOFLUX_BUILD_EXAMPLES)
   add_subdirectory(examples)
-endif()
-
-# ---------------------------------------------------------------------------
-# Copy bundled fonts to the runtime output directory (bin/fonts/) so that
-# executables can find them regardless of the current working directory.
-# Uses file(GLOB) to collect font files and copies them post-build.
-# ---------------------------------------------------------------------------
-file(GLOB NEOFLUX_BUNDLED_FONTS
-  "${CMAKE_SOURCE_DIR}/thirdparty/fonts/*.ttf"
-  "${CMAKE_SOURCE_DIR}/thirdparty/fonts/*.otf"
-  "${CMAKE_SOURCE_DIR}/thirdparty/fonts/*.ttc"
-)
-if(NEOFLUX_BUNDLED_FONTS)
-  add_custom_command(TARGET neoflux POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-      ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fonts
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      ${NEOFLUX_BUNDLED_FONTS}
-      ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fonts/
-    COMMENT "Copying bundled fonts to bin/fonts/"
-    VERBATIM
-  )
 endif()
 
 # ---------------------------------------------------------------------------

@@ -31,7 +31,8 @@ class RenderContext {
 
   // Draws text at the given position.
   void DrawText(std::string_view text, const Point& position,
-                const Color& color, float font_size);
+                const Color& color, float font_size,
+                std::string_view font_name = "");
 
   // Saves the current transform/clip state.
   void Save();

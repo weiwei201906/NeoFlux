@@ -46,6 +46,9 @@ class Button : public Widget {
   // Sets the button font size.
   Button& SetFontSize(float size) noexcept;
 
+  // Sets the button font name (resolved via FontManager).
+  Button& SetFont(std::string_view font_name);
+
   // Handles a press event at the given local coordinates.
   bool HandlePress(const Point& local_pos);
 
@@ -74,6 +77,7 @@ class Button : public Widget {
   Color text_color_;
   Color pressed_color_;
   float font_size_;
+  std::string font_name_{};
   float horizontal_padding_;
   float vertical_padding_;
   bool is_pressed_;

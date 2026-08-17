@@ -53,7 +53,8 @@ class TgfxRenderer : public NonCopyable {
  private:
   void DrawRectImpl(const Rect& rect, const Color& color);
   void DrawTextImpl(std::string_view text, const Point& position,
-                    const Color& color, float font_size);
+                    const Color& color, float font_size,
+                    std::string_view font_name);
   void SaveImpl();
   void RestoreImpl();
   void TranslateImpl(float delta_x, float delta_y);

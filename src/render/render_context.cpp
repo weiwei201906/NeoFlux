@@ -22,9 +22,10 @@ void RenderContext::DrawRect(const Rect& rect, const Color& color) {
 }
 
 void RenderContext::DrawText(std::string_view text, const Point& position,
-                             const Color& color, float font_size) {
-  commands_.push_back(RenderCommand::MakeDrawText(std::string(text), position,
-                                                  color, font_size));
+                             const Color& color, float font_size,
+                             std::string_view font_name) {
+  commands_.push_back(RenderCommand::MakeDrawText(
+      std::string(text), position, color, font_size, std::string(font_name)));
 }
 
 void RenderContext::Save() {

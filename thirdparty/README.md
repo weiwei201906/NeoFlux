@@ -7,14 +7,14 @@ This directory contains all third-party libraries used by NeoFlux.
 Dependencies are automatically downloaded and built by CMake into
 `_deps/` on first configure. No manual installation required.
 
-| Library   | Purpose                          | Version |
-|-----------|----------------------------------|---------|
-| glog      | Logging                          | v0.7.1  |
-| gflags    | Command-line flag parsing        | v2.2.2  |
-| googletest| Unit testing                     | v1.14.0 |
-| glfw      | Desktop window / input (desktop) | 3.4     |
-| taitank   | Flexbox layout engine            | main    |
-| tgfx      | 2D graphics rendering            | main    |
+| Library    | Purpose                          | Version |
+|------------|----------------------------------|---------|
+| glog       | Logging                          | v0.7.1  |
+| gflags     | Command-line flag parsing        | v2.2.2  |
+| googletest | Unit testing                     | v1.14.0 |
+| glfw       | Desktop window / input (desktop) | 3.4     |
+| taitank    | Flexbox layout engine            | main    |
+| tgfx       | 2D graphics rendering            | main    |
 
 ## Adding a new dependency
 

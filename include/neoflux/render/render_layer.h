@@ -10,8 +10,10 @@
 #define NEOFLUX_RENDER_RENDER_LAYER_H_
 
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string_view>
 #include <thread>
 
@@ -64,6 +66,12 @@ class RenderLayer : public NonCopyable {
   void RenderLoop();
 
   SpscRingQueue<RenderCommand> command_queue_;
+
+  // Condition variable to wake the render thread when a new frame is
+  // submitted. Avoids busy-polling on the SPSC queue.
+  std::mutex frame_mutex_{};
+  std::condition_variable frame_cv_{};
+  bool frame_ready_ = false;
 
   std::atomic<bool> running_{false};
   std::atomic<bool> should_close_{false};

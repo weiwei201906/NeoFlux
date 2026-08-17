@@ -79,12 +79,32 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 |------|------|---------|-------------|
 | `--target_fps` | int | `60` | Target frame rate for the application event loop and render pacing. |
 | `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Rounded up to the next power of two automatically. |
-| `--font_path` | string | `""` | Path to a TrueType/OpenType font file (`.ttf`, `.ttc`, `.otf`). If set, this font is loaded first; otherwise the renderer falls back to platform default fonts. |
 | `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
 | `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
 | `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |
 
 By default, logs are written to files in `./logs/` and no console window appears on Windows (MinGW `-mwindows`). To debug, pass `--logtostderr --verbose_logging`.
+
+## Font System
+
+NeoFlux uses a font manager that scans `thirdparty/fonts/` for TrueType (`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup. Widgets reference fonts by filename stem (without extension):
+
+```cpp
+auto* text = new Text("Hello World");
+text->SetFont("NotoSansSC-Regular");  // loads thirdparty/fonts/NotoSansSC-Regular.ttf
+```
+
+If no font is specified on a widget, the first discovered font is used as the default. Place your font files in `thirdparty/fonts/` and reference them by name — no build-time copying is required.
+
+## Building Tests
+
+Tests are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` CMake option:
+
+```bash
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
+cmake --build build
+cd build && ctest --output-on-failure
+```
 
 ## Minimal Example
 

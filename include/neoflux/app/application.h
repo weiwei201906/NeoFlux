@@ -79,7 +79,9 @@ class Application : public NonCopyable {
   std::unique_ptr<RenderLayer> render_layer_ = nullptr;
   std::vector<std::shared_ptr<Widget>> navigation_stack_{};
   RenderContext render_context_{};
-  Widget* pressed_widget_ = nullptr;  // Not owned. Widget receiving pointer down.
+  // Widget that received pointer-down. Stored as weak_ptr to avoid dangling
+  // references if the widget tree is rebuilt between press and release.
+  std::weak_ptr<Widget> pressed_widget_{};
   int window_width_ = 800;
   int window_height_ = 600;
   bool initialized_ = false;

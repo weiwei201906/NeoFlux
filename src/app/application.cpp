@@ -121,6 +121,12 @@ bool Application::Init(int argc, char** argv, int window_width,
                                     const Point& pos) {
       DispatchPointerEvent(button, action, pos);
     });
+    // Update layout dimensions when the window is resized so the widget
+    // tree re-lays-out at the new size on the next frame.
+    bridge->SetResizeCallback([this](int width, int height) {
+      window_width_ = width;
+      window_height_ = height;
+    });
   }
 
   initialized_ = true;
@@ -292,21 +298,24 @@ void Application::DispatchPointerEvent(MouseButton button, InputAction action,
   }
 
   if (action == InputAction::kPress) {
-    Widget* hit = root->HitTest(pos);
+    std::shared_ptr<Widget> hit = root->HitTest(pos);
     if (hit != nullptr) {
       const Point local{.x = pos.x - hit->GetBounds().x,
                         .y = pos.y - hit->GetBounds().y,};
       if (hit->OnPointerDown(local)) {
-        pressed_widget_ = hit;
+        // Store a weak_ptr so a widget-tree rebuild between press and release
+        // does not leave a dangling pointer.
+        pressed_widget_ = hit->weak_from_this();
       }
     }
   } else if (action == InputAction::kRelease) {
-    if (pressed_widget_ != nullptr) {
-      const Point local{.x = pos.x - pressed_widget_->GetBounds().x,
-                        .y = pos.y - pressed_widget_->GetBounds().y,};
-      pressed_widget_->OnPointerUp(local);
-      pressed_widget_ = nullptr;
+    auto pressed = pressed_widget_.lock();
+    if (pressed != nullptr) {
+      const Point local{.x = pos.x - pressed->GetBounds().x,
+                        .y = pos.y - pressed->GetBounds().y,};
+      pressed->OnPointerUp(local);
     }
+    pressed_widget_.reset();
   }
 }
 

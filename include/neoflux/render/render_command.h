@@ -39,6 +39,7 @@ struct RenderCommand {
   Rect rect{};                     // kDrawRect, kClipRect
   Color color{};                   // kDrawRect, kDrawText
   std::string text{};              // kDrawText (UTF-8)
+  std::string font_name{};         // kDrawText (font name, resolved by FontManager)
   Point point{};                   // kDrawText
   float font_size = 14.0F;         // kDrawText
   float translate_x = 0.0F;        // kTranslate
@@ -52,7 +53,8 @@ struct RenderCommand {
   [[nodiscard]] static RenderCommand MakeDrawText(std::string text,
                                                   const Point& position,
                                                   const Color& color,
-                                                  float font_size);
+                                                  float font_size,
+                                                  std::string font_name);
 
   // Factory: create a save command.
   [[nodiscard]] static RenderCommand MakeSave();

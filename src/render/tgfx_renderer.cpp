@@ -26,13 +26,9 @@
 #include <glog/logging.h>
 
 #include "neoflux/core/noncopyable.h"
+#include "neoflux/core/font_manager.h"
 #include "neoflux/core/types.h"
 #include "neoflux/render/render_command.h"
-
-DEFINE_string(font_path, "",
-              "Path to a TTF/OTF font file for text rendering. "
-              "If empty, searches executable_dir/fonts/ and "
-              "thirdparty/fonts/ for NotoSansSC-Regular.ttf.");
 
 namespace neoflux {
 
@@ -194,13 +190,23 @@ class GlRendererImpl : public NonCopyable {
     height_ = height;
     // GL initialization is deferred to BeginFrame, which runs on the render
     // thread where the GL context is current. FreeType does not need GL.
-    LoadFont();
+    InitFonts();
     return true;
   }
 
   void BeginFrame(const Color& clear) {
     if (!InitializeGL()) return;
-    gl.glViewport(0, 0, width_, height_);
+    // Query the actual framebuffer size (may differ from window size due to
+    // DPI scaling). glViewport scales NDC to framebuffer pixels; u_resolution
+    // stays at layout (window) size so shader math uses layout coordinates.
+    int fb_width = 0;
+    int fb_height = 0;
+    glfwGetFramebufferSize(window_, &fb_width, &fb_height);
+    if (fb_width <= 0 || fb_height <= 0) {
+      fb_width = width_;
+      fb_height = height_;
+    }
+    gl.glViewport(0, 0, fb_width, fb_height);
     gl.glClearColor(clear.r / 255.0F, clear.g / 255.0F, clear.b / 255.0F,
                     clear.a / 255.0F);
     gl.glClear(0x00004000 | 0x00000100);
@@ -236,8 +242,11 @@ class GlRendererImpl : public NonCopyable {
   }
 
   void DrawText(std::string_view text, const Point& position,
-                const Color& color, float font_size) {
-    if (!gl_ready_ || ft_face_ == nullptr) return;
+                const Color& color, float font_size,
+                std::string_view font_name) {
+    if (!gl_ready_) return;
+    FT_Face face = GetFontFace(font_name);
+    if (face == nullptr) return;
     const Transform& t = transform_stack_.back();
     float cursor_x = position.x;
     const float baseline_y = position.y;
@@ -274,7 +283,7 @@ class GlRendererImpl : public NonCopyable {
       }
       i += seq_len;
 
-      const GlyphInfo* glyph = GetGlyph(cp, font_size);
+      const GlyphInfo* glyph = GetGlyph(face, cp, font_size);
       if (glyph == nullptr) continue;
 
       const float draw_x = cursor_x + glyph->bearing_x;
@@ -354,7 +363,7 @@ class GlRendererImpl : public NonCopyable {
       out vec4 frag_color;
       void main() {
         if (u_use_texture != 0) {
-          float a = texture(u_texture, v_uv).a;
+          float a = texture(u_texture, v_uv).r;
           frag_color = vec4(u_color.rgb, u_color.a * a);
         } else {
           frag_color = u_color;
@@ -419,7 +428,8 @@ class GlRendererImpl : public NonCopyable {
     gl.glTexParameteri(0x0DE1, 0x2801, 0x2601);
     gl.glTexParameteri(0x0DE1, 0x2802, 0x812F);
     gl.glTexParameteri(0x0DE1, 0x2803, 0x812F);
-    gl.glTexImage2D(0x0DE1, 0, 0x1908, kAtlasSize, kAtlasSize, 0, 0x1908,
+    // GL_R8 internal format: 8-bit single-channel grayscale for glyph coverage.
+    gl.glTexImage2D(0x0DE1, 0, 0x8229, kAtlasSize, kAtlasSize, 0, 0x1903,
                     0x1401, nullptr);
 
     gl.glEnable(0x0BE2);
@@ -437,43 +447,58 @@ class GlRendererImpl : public NonCopyable {
     return true;
   }
 
-  void LoadFont() {
+  // Initializes FreeType and scans the default font directories.
+  void InitFonts() {
     if (FT_Init_FreeType(&ft_library_) != 0) {
       LOG(ERROR) << "Failed to initialize FreeType";
       return;
     }
-
-    std::string font_path = FLAGS_font_path;
-    if (font_path.empty() || !std::filesystem::exists(font_path)) {
-      const std::filesystem::path candidate =
-          std::filesystem::current_path() / "fonts" / "NotoSansSC-Regular.ttf";
-      if (std::filesystem::exists(candidate)) {
-        font_path = candidate.string();
-      }
+    // Scan common font locations. Developers place their fonts in
+    // thirdparty/fonts/ and reference them by filename stem.
+    font_manager_.ScanDirectory("thirdparty/fonts");
+    font_manager_.ScanDirectory("../thirdparty/fonts");
+    font_manager_.ScanDirectory("../../thirdparty/fonts");
+    if (font_manager_.GetFontCount() == 0) {
+      LOG(WARNING) << "No fonts found in thirdparty/fonts/. "
+                   << "Text rendering will be disabled.";
     }
-    if (font_path.empty() || !std::filesystem::exists(font_path)) {
-      const std::filesystem::path candidate =
-          std::filesystem::path("thirdparty") / "fonts" /
-          "NotoSansSC-Regular.ttf";
-      if (std::filesystem::exists(candidate)) {
-        font_path = candidate.string();
-      }
-    }
-
-    if (font_path.empty() || !std::filesystem::exists(font_path)) {
-      LOG(ERROR) << "No font file found. Use --font_path to specify one.";
-      return;
-    }
-
-    if (FT_New_Face(ft_library_, font_path.c_str(), 0, &ft_face_) != 0) {
-      LOG(ERROR) << "Failed to load font: " << font_path;
-      return;
-    }
-    LOG(INFO) << "Loaded font: " << font_path;
   }
 
-  const GlyphInfo* GetGlyph(std::uint32_t codepoint, float font_size) {
-    if (ft_face_ == nullptr) return nullptr;
+  // Returns the FT_Face for the given font name, loading and caching it on
+  // first use. If font_name is empty, returns the default font. Returns
+  // nullptr if the font cannot be found or loaded.
+  FT_Face GetFontFace(std::string_view font_name) {
+    if (ft_library_ == nullptr) return nullptr;
+    std::string name(font_name);
+    if (name.empty()) {
+      name = font_manager_.GetDefaultFont();
+    }
+    if (name.empty()) return nullptr;
+
+    const auto it = font_faces_.find(name);
+    if (it != font_faces_.end()) {
+      return it->second;
+    }
+
+    const std::string path = font_manager_.GetPath(name);
+    if (path.empty()) {
+      LOG(WARNING) << "Font not found: " << name;
+      return nullptr;
+    }
+
+    FT_Face face = nullptr;
+    if (FT_New_Face(ft_library_, path.c_str(), 0, &face) != 0) {
+      LOG(ERROR) << "Failed to load font: " << path;
+      return nullptr;
+    }
+    font_faces_[name] = face;
+    LOG(INFO) << "Loaded font: " << name << " (" << path << ")";
+    return face;
+  }
+
+  const GlyphInfo* GetGlyph(FT_Face face, std::uint32_t codepoint,
+                            float font_size) {
+    if (face == nullptr) return nullptr;
 
     const int size_key = static_cast<int>(font_size);
     const auto key = (static_cast<std::uint64_t>(codepoint) << 32) |
@@ -483,22 +508,22 @@ class GlRendererImpl : public NonCopyable {
       return &it->second;
     }
 
-    FT_Set_Pixel_Sizes(ft_face_, 0, static_cast<FT_UInt>(size_key));
+    FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(size_key));
 
-    if (FT_Load_Char(ft_face_, codepoint, FT_LOAD_DEFAULT) != 0) {
+    if (FT_Load_Char(face, codepoint, FT_LOAD_DEFAULT) != 0) {
       return nullptr;
     }
-    if (FT_Render_Glyph(ft_face_->glyph, FT_RENDER_MODE_NORMAL) != 0) {
+    if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL) != 0) {
       return nullptr;
     }
 
-    const FT_Bitmap& bitmap = ft_face_->glyph->bitmap;
+    const FT_Bitmap& bitmap = face->glyph->bitmap;
     const int w = static_cast<int>(bitmap.width);
     const int h = static_cast<int>(bitmap.rows);
 
     if (w == 0 || h == 0) {
       GlyphInfo info;
-      info.advance = static_cast<float>(ft_face_->glyph->advance.x >> 6);
+      info.advance = static_cast<float>(face->glyph->advance.x >> 6);
       glyph_cache_[key] = info;
       return &glyph_cache_[key];
     }
@@ -513,31 +538,39 @@ class GlRendererImpl : public NonCopyable {
       return nullptr;
     }
 
-    std::vector<unsigned char> rgba(static_cast<std::size_t>(w) * h * 4, 0);
-    for (int row = 0; row < h; ++row) {
-      for (int col = 0; col < w; ++col) {
-        const unsigned char val = bitmap.buffer[row * bitmap.pitch + col];
-        const auto idx = (static_cast<std::size_t>(row) * w + col) * 4;
-        rgba[idx] = 255;
-        rgba[idx + 1] = 255;
-        rgba[idx + 2] = 255;
-        rgba[idx + 3] = val;
+    // Copy glyph bitmap to a tightly packed grayscale buffer. FreeType may
+    // pad rows (pitch > width) or use negative pitch (bottom-up).
+    std::vector<unsigned char> packed(static_cast<std::size_t>(w) * h);
+    const int pitch = bitmap.pitch;
+    if (pitch >= 0) {
+      for (int row = 0; row < h; ++row) {
+        std::memcpy(packed.data() + static_cast<std::size_t>(row) * w,
+                    bitmap.buffer + row * pitch,
+                    static_cast<std::size_t>(w));
+      }
+    } else {
+      // Negative pitch: bitmap is bottom-up. Read from bottom row.
+      for (int row = 0; row < h; ++row) {
+        std::memcpy(packed.data() + static_cast<std::size_t>(row) * w,
+                    bitmap.buffer + (h - 1 - row) * (-pitch),
+                    static_cast<std::size_t>(w));
       }
     }
 
     gl.glBindTexture(0x0DE1, atlas_texture_);
-    gl.glPixelStorei(0x0CF2, 1);
-    gl.glTexSubImage2D(0x0DE1, 0, atlas_x_, atlas_y_, w, h, 0x1908, 0x1401,
-                       rgba.data());
+    gl.glPixelStorei(0x0CF5, 1);  // GL_UNPACK_ALIGNMENT = 1
+    gl.glTexSubImage2D(0x0DE1, 0, atlas_x_, atlas_y_, w, h, 0x1903, 0x1401,
+                       packed.data());
+    gl.glPixelStorei(0x0CF5, 4);  // reset to default
 
     GlyphInfo info;
     info.u0 = static_cast<float>(atlas_x_) / kAtlasSize;
     info.v0 = static_cast<float>(atlas_y_) / kAtlasSize;
     info.u1 = static_cast<float>(atlas_x_ + w) / kAtlasSize;
     info.v1 = static_cast<float>(atlas_y_ + h) / kAtlasSize;
-    info.bearing_x = static_cast<float>(ft_face_->glyph->bitmap_left);
-    info.bearing_y = static_cast<float>(ft_face_->glyph->bitmap_top);
-    info.advance = static_cast<float>(ft_face_->glyph->advance.x >> 6);
+    info.bearing_x = static_cast<float>(face->glyph->bitmap_left);
+    info.bearing_y = static_cast<float>(face->glyph->bitmap_top);
+    info.advance = static_cast<float>(face->glyph->advance.x >> 6);
     info.width = w;
     info.height = h;
     glyph_cache_[key] = info;
@@ -555,9 +588,12 @@ class GlRendererImpl : public NonCopyable {
       gl.glDeleteVertexArrays(1, &vao_);
       gl.glDeleteProgram(program_);
     }
-    if (ft_face_ != nullptr) {
-      FT_Done_Face(ft_face_);
+    for (auto& [name, face] : font_faces_) {
+      if (face != nullptr) {
+        FT_Done_Face(face);
+      }
     }
+    font_faces_.clear();
     if (ft_library_ != nullptr) {
       FT_Done_FreeType(ft_library_);
     }
@@ -581,7 +617,8 @@ class GlRendererImpl : public NonCopyable {
   GlInt u_use_texture_ = -1;
 
   FT_Library ft_library_ = nullptr;
-  FT_Face ft_face_ = nullptr;
+  FontManager font_manager_{};
+  std::unordered_map<std::string, FT_Face> font_faces_{};
 
   std::unordered_map<std::uint64_t, GlyphInfo> glyph_cache_;
   int atlas_x_ = 0;
@@ -656,7 +693,7 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
       break;
     case RenderCommandType::kDrawText:
       impl->DrawText(command.text, command.point, command.color,
-                     command.font_size);
+                     command.font_size, command.font_name);
       break;
     case RenderCommandType::kSave:
       impl->Save();
@@ -693,3 +730,4 @@ int TgfxRenderer::GetWidth() const noexcept { return width_; }
 int TgfxRenderer::GetHeight() const noexcept { return height_; }
 
 }  // namespace neoflux
+

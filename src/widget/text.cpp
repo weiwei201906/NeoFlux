@@ -85,6 +85,11 @@ Text& Text::SetAlignment(HAlign align) noexcept {
   return *this;
 }
 
+Text& Text::SetFont(std::string_view font_name) {
+  font_name_ = std::string(font_name);
+  return *this;
+}
+
 Size Text::OnMeasure(float width, int width_mode, float height,
                      int height_mode) {
   const float intrinsic_width = EstimateTextWidth(text_, font_size_);
@@ -116,7 +121,7 @@ void Text::Paint(RenderContext& context) {
   }
   // Baseline at font_size from top (approximate descent).
   context.DrawText(text_, {.x = text_x, .y = font_size_}, text_color_,
-                   font_size_);
+                   font_size_, font_name_);
 }
 
 }  // namespace neoflux

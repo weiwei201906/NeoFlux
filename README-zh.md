@@ -79,29 +79,49 @@ ctest --output-on-failure
 
 NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `--target_fps` | int | `60` | 应用事件循环与渲染的目标帧率。 |
-| `--render_queue_capacity` | int | `2048` | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。 |
-| `--font_path` | string | `""` | TrueType/OpenType 字体文件路径（`.ttf`/`.ttc`/`.otf`）。设置后优先加载，否则回退到平台默认字体。 |
-| `--verbose_logging` | bool | `false` | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。 |
-| `--logtostderr` | bool | `false` | 将日志输出到 stderr 而非日志文件。 |
-| `--log_dir` | string | `./logs` | 日志文件存放目录，不存在时自动创建。 |
+| 参数                      | 类型   | 默认值                           | 说明                                                                                             |
+|---------------------------|--------|----------------------------------|--------------------------------------------------------------------------------------------------|
+| `--target_fps`            | int    | `60`                             | 应用事件循环与渲染的目标帧率。                                                                   |
+| `--render_queue_capacity` | int    | `2048`                           | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。                    |
+| `--verbose_logging`       | bool   | `false`                          | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。                                           |
+| `--logtostderr`           | bool   | `false`                          | 将日志输出到 stderr 而非日志文件。                                                               |
+| `--log_dir`               | string | `./logs`                         | 日志文件存放目录，不存在时自动创建。                                                             |
 
 默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（MinGW `-mwindows`）。调试时使用 `--logtostderr --verbose_logging`。
+
+## 字体系统
+
+NeoFlux 使用字体管理器，在启动时扫描 `thirdparty/fonts/` 目录下的 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。Widget 通过文件名（不含扩展名）引用字体：
+
+```cpp
+auto* text = new Text("Hello World");
+text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regular.ttf
+```
+
+若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `thirdparty/fonts/` 目录即可通过名称引用，无需构建时拷贝。
+
+## 编译测试
+
+测试默认禁用。通过 CMake 选项 `NEOFLUX_BUILD_TESTS` 启用：
+
+```bash
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
+cmake --build build
+cd build && ctest --output-on-failure
+```
 
 ## Widget 系统
 
 ### 核心 Widget
 
-| Widget | 说明 |
-|--------|------|
-| `Widget` | 抽象基类，重写 `Build()`、`OnMeasure()`、`Paint()`。 |
-| `Container` | Flexbox 容器，支持 padding、margin、背景色、flex direction。 |
-| `Text` | 单行文本，支持字体大小、颜色、对齐方式，UTF-8 编码。 |
-| `Button` | 可点击按钮，支持标签、按下回调、按下状态样式。 |
-| `StatelessWidget` | 无状态 Widget 基类。 |
-| `StatefulWidget` | 有状态 Widget 基类，配合 `State<W>` 使用。 |
+| Widget            | 说明                                                         |
+|-------------------|--------------------------------------------------------------|
+| `Widget`          | 抽象基类，重写 `Build()`、`OnMeasure()`、`Paint()`。         |
+| `Container`       | Flexbox 容器，支持 padding、margin、背景色、flex direction。 |
+| `Text`            | 单行文本，支持字体大小、颜色、对齐方式，UTF-8 编码。         |
+| `Button`          | 可点击按钮，支持标签、按下回调、按下状态样式。               |
+| `StatelessWidget` | 无状态 Widget 基类。                                         |
+| `StatefulWidget`  | 有状态 Widget 基类，配合 `State<W>` 使用。                   |
 
 ### 布局（Taitank Flexbox）
 
@@ -136,16 +156,6 @@ RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
 app.PushRoute("/settings");  // 构建并显示设置页面
 app.PopRoute();              // 返回上一路由
 ```
-
-## 字体
-
-NeoFlux 支持 UTF-8 文本渲染，字体搜索优先级：
-
-1. `--font_path` 命令行参数
-2. `thirdparty/fonts/` 目录（打包字体，详见该目录下的 README）
-3. 平台系统字体（Windows 优先 `simhei.ttf`，Linux 优先 Noto Sans CJK，macOS 优先 PingFang）
-
-如需开箱即用的 CJK 支持，将开源字体（如 Noto Sans SC、思源黑体）放入 `thirdparty/fonts/` 目录即可。
 
 ## 最小示例
 

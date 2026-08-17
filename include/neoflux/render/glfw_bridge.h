@@ -30,6 +30,10 @@ enum class InputAction : std::uint8_t { kPress = 1, kRelease = 0, kRepeat = 2 };
 using InputEventCallback =
     std::function<void(MouseButton button, InputAction action, const Point& pos)>;
 
+// Callback type for framebuffer resize events. Receives the new framebuffer
+// size in pixels.
+using ResizeCallback = std::function<void(int width, int height)>;
+
 // Desktop window and input bridge using GLFW.
 class GlfwBridge : public NonCopyable {
  public:
@@ -69,6 +73,9 @@ class GlfwBridge : public NonCopyable {
   // Sets the callback invoked for mouse button events.
   void SetInputCallback(InputEventCallback callback) noexcept;
 
+  // Sets the callback invoked when the framebuffer is resized.
+  void SetResizeCallback(ResizeCallback callback) noexcept;
+
  private:
   static void ErrorCallback(int error, const char* description);
   static void FramebufferSizeCallback(GLFWwindow* window, int width,
@@ -82,6 +89,7 @@ class GlfwBridge : public NonCopyable {
   GLFWwindow* window_;
   bool initialized_;
   InputEventCallback input_callback_;
+  ResizeCallback resize_callback_;
   double last_cursor_x_ = 0.0;
   double last_cursor_y_ = 0.0;
 };

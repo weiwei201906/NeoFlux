@@ -96,6 +96,13 @@ void RenderLayer::Stop() {
 
   LOG(INFO) << "RenderLayer stopping";
 
+  // Wake the render thread so it can exit the wait loop.
+  {
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+    frame_ready_ = true;
+  }
+  frame_cv_.notify_one();
+
   if (render_thread_ != nullptr && render_thread_->joinable()) {
     render_thread_->join();
   }
@@ -126,6 +133,15 @@ std::size_t RenderLayer::Submit(const RenderCommand* commands,
       break;
     }
     ++submitted;
+  }
+
+  // Wake the render thread: a new frame (or partial frame) is available.
+  if (submitted > 0) {
+    {
+      std::lock_guard<std::mutex> lock(frame_mutex_);
+      frame_ready_ = true;
+    }
+    frame_cv_.notify_one();
   }
   return submitted;
 }
@@ -173,8 +189,19 @@ void RenderLayer::RenderLoop() {
   constexpr Color kClearColor{.r = 245, .g = 245, .b = 245, .a = 255};
 
   while (running_.load()) {
+    // Wait for a frame to be submitted (or stop signal). Uses a condition
+    // variable instead of busy-polling to avoid wasting CPU cycles.
+    {
+      std::unique_lock<std::mutex> lock(frame_mutex_);
+      frame_cv_.wait_for(lock, std::chrono::milliseconds(16), [this] {
+        return frame_ready_ || !running_.load();
+      });
+      frame_ready_ = false;
+    }
+
+    // Drain all available commands for this frame.
     RenderCommand cmd;
-    if (command_queue_.TryPop(cmd)) {
+    while (running_.load() && command_queue_.TryPop(cmd)) {
       switch (cmd.type) {
         case RenderCommandType::kBeginFrame:
           if (renderer_ != nullptr) {
@@ -192,7 +219,7 @@ void RenderLayer::RenderLoop() {
 #endif
             ++frames_rendered;
             if (frames_rendered % 60 == 0) {
-              VLOG(1) << "Rendered " << frames_rendered << " frames";
+              LOG(INFO) << "Rendered " << frames_rendered << " frames";
             }
           }
           in_frame = false;
@@ -203,9 +230,6 @@ void RenderLayer::RenderLoop() {
           }
           break;
       }
-    } else {
-      // No commands available; yield to avoid busy-waiting.
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
 

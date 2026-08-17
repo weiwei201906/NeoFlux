@@ -139,14 +139,26 @@ void GlfwBridge::SetInputCallback(InputEventCallback callback) noexcept {
   input_callback_ = std::move(callback);
 }
 
+void GlfwBridge::SetResizeCallback(ResizeCallback callback) noexcept {
+  resize_callback_ = std::move(callback);
+}
+
 void GlfwBridge::ErrorCallback(int error, const char* description) {
   LOG(ERROR) << "GLFW error " << error << ": "
              << (description != nullptr ? description : "unknown");
 }
 
-void GlfwBridge::FramebufferSizeCallback(GLFWwindow* /*window*/, int width,
+void GlfwBridge::FramebufferSizeCallback(GLFWwindow* window, int width,
                                          int height) {
+  auto* user_data =
+      static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
+  if (user_data == nullptr || user_data->bridge == nullptr) {
+    return;
+  }
   VLOG(1) << "Framebuffer resized: " << width << "x" << height;
+  if (user_data->bridge->resize_callback_) {
+    user_data->bridge->resize_callback_(width, height);
+  }
 }
 
 void GlfwBridge::KeyCallback(GLFWwindow* /*window*/, int key,

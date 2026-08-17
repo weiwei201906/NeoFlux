@@ -102,7 +102,7 @@ bool Widget::OnPointerDown(const Point& /*local_pos*/) { return false; }
 
 void Widget::OnPointerUp(const Point& /*local_pos*/) {}
 
-Widget* Widget::HitTest(const Point& global_pos) {
+std::shared_ptr<Widget> Widget::HitTest(const Point& global_pos) {
   // Check if the point is inside this widget's bounds.
   if (global_pos.x < bounds_.x || global_pos.y < bounds_.y ||
       global_pos.x >= bounds_.x + bounds_.width ||
@@ -114,12 +114,12 @@ Widget* Widget::HitTest(const Point& global_pos) {
     if (*it == nullptr) {
       continue;
     }
-    Widget* hit = (*it)->HitTest(global_pos);
+    std::shared_ptr<Widget> hit = (*it)->HitTest(global_pos);
     if (hit != nullptr) {
       return hit;
     }
   }
-  return this;
+  return shared_from_this();
 }
 
 void Widget::PerformLayout(float width, float height) {

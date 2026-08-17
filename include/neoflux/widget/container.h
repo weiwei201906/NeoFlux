@@ -19,7 +19,7 @@
 namespace neoflux {
 
 // Flex direction for Container layout.
-enum class FlexDirection {
+enum class FlexDirection : std::uint8_t {
   kRow,         // Main axis horizontal, left to right.
   kRowReverse,  // Main axis horizontal, right to left.
   kColumn,      // Main axis vertical, top to bottom.

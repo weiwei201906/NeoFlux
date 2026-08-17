@@ -28,7 +28,7 @@ TEST(RenderCommandTest, MakeDrawRect) {
 TEST(RenderCommandTest, MakeDrawText) {
   auto cmd = RenderCommand::MakeDrawText(
       "Hello", Point{.x = 5.0F, .y = 10.0F},
-      Color{.r = 0, .g = 0, .b = 0, .a = 255}, 16.0F);
+      Color{.r = 0, .g = 0, .b = 0, .a = 255}, 16.0F, "");
 
   EXPECT_EQ(cmd.type, RenderCommandType::kDrawText);
   EXPECT_EQ(cmd.text, "Hello");

@@ -94,6 +94,11 @@ Button& Button::SetFontSize(float size) noexcept {
   return *this;
 }
 
+Button& Button::SetFont(std::string_view font_name) {
+  font_name_ = std::string(font_name);
+  return *this;
+}
+
 bool Button::HandlePress(const Point& local_pos) {
   if (ContainsPoint(local_pos)) {
     is_pressed_ = true;
@@ -151,7 +156,7 @@ void Button::Paint(RenderContext& context) {
   const float label_x = (bounds_.width - label_width) / 2.0F;
   const float label_y = vertical_padding_ + font_size_;
   context.DrawText(label_, {.x = label_x, .y = label_y}, text_color_,
-                   font_size_);
+                   font_size_, font_name_);
 }
 
 bool Button::ContainsPoint(const Point& point) const noexcept {
