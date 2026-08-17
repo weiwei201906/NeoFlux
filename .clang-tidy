@@ -35,6 +35,7 @@ Checks: >
   -readability-avoid-const-params-in-decls,
   -readability-convert-member-functions-to-static,
   -readability-isolate-declaration,
+  -readability-identifier-length,
   portability-*,
   -portability-simd-intrinsics
 WarningsAsErrors: ''

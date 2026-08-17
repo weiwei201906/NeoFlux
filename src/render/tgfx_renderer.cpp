@@ -196,7 +196,9 @@ class GlRendererImpl : public NonCopyable {
   }
 
   void BeginFrame(const Color& clear) {
-    if (!InitializeGL()) return;
+    if (!InitializeGL()) {
+      return;
+    }
     // Query the actual framebuffer size (may differ from window size due to
     // DPI scaling). glViewport scales NDC to framebuffer pixels; u_resolution
     // stays at layout (window) size so shader math uses layout coordinates.
@@ -210,7 +212,7 @@ class GlRendererImpl : public NonCopyable {
     gl.glViewport(0, 0, fb_width, fb_height);
     gl.glClearColor(clear.r / 255.0F, clear.g / 255.0F, clear.b / 255.0F,
                     clear.a / 255.0F);
-    gl.glClear(0x00004000 | 0x00000100);
+    gl.glClear(0x00004000U | 0x00000100U);
     transform_stack_.clear();
     transform_stack_.push_back({0.0F, 0.0F});
   }
@@ -218,7 +220,9 @@ class GlRendererImpl : public NonCopyable {
   void EndFrame() { /* buffer swap handled by GLFW bridge */ }
 
   void DrawRect(const Rect& rect, const Color& color) {
-    if (!gl_ready_) return;
+    if (!gl_ready_) {
+      return;
+    }
     const Transform& t = transform_stack_.back();
 
     // Use relative vertices and u_translate for positioning.
@@ -245,9 +249,13 @@ class GlRendererImpl : public NonCopyable {
   void DrawText(std::string_view text, const Point& position,
                 const Color& color, float font_size,
                 std::string_view font_name) {
-    if (!gl_ready_) return;
+    if (!gl_ready_) {
+      return;
+    }
     FT_Face face = GetFontFace(font_name);
-    if (face == nullptr) return;
+    if (face == nullptr) {
+      return;
+    }
     const Transform& t = transform_stack_.back();
     float cursor_x = position.x;
     const float baseline_y = position.y;
@@ -280,12 +288,14 @@ class GlRendererImpl : public NonCopyable {
         seq_len = 4;
       }
       for (int j = 1; j < seq_len && i + j < text.size(); ++j) {
-        cp = (cp << 6) | (static_cast<unsigned char>(text[i + j]) & 0x3F);
+        cp = (cp << 6) | (static_cast<unsigned char>(text[i + j]) & 0x3FU);
       }
       i += seq_len;
 
       const GlyphInfo* glyph = GetGlyph(face, cp, font_size);
-      if (glyph == nullptr) continue;
+      if (glyph == nullptr) {
+        continue;
+      }
 
       const float draw_x = cursor_x + glyph->bearing_x;
       const float draw_y = baseline_y - glyph->bearing_y;
@@ -308,11 +318,9 @@ class GlRendererImpl : public NonCopyable {
   }
 
   void Save() {
-    if (!transform_stack_.empty()) {
-      transform_stack_.push_back(transform_stack_.back());
-    } else {
-      transform_stack_.push_back({0.0F, 0.0F});
-    }
+    transform_stack_.push_back(transform_stack_.empty()
+                                   ? Transform{0.0F, 0.0F}
+                                   : transform_stack_.back());
   }
 
   void Restore() {
@@ -337,7 +345,9 @@ class GlRendererImpl : public NonCopyable {
 
  private:
   bool InitializeGL() {
-    if (gl_ready_) return true;
+    if (gl_ready_) {
+      return true;
+    }
     if (!gl.Load()) {
       LOG(ERROR) << "Failed to load OpenGL functions";
       return false;
@@ -380,14 +390,14 @@ class GlRendererImpl : public NonCopyable {
 
     GlInt ok = 0;
     gl.glGetShaderiv(vs, 0x8B81, &ok);
-    if (!ok) {
+    if (ok == 0) {
       char log[512];
       gl.glGetShaderInfoLog(vs, 512, nullptr, log);
       LOG(ERROR) << "Vertex shader compile failed: " << log;
       return false;
     }
     gl.glGetShaderiv(fs, 0x8B81, &ok);
-    if (!ok) {
+    if (ok == 0) {
       char log[512];
       gl.glGetShaderInfoLog(fs, 512, nullptr, log);
       LOG(ERROR) << "Fragment shader compile failed: " << log;
@@ -399,7 +409,7 @@ class GlRendererImpl : public NonCopyable {
     gl.glAttachShader(program_, fs);
     gl.glLinkProgram(program_);
     gl.glGetProgramiv(program_, 0x8B82, &ok);
-    if (!ok) {
+    if (ok == 0) {
       char log[512];
       gl.glGetProgramInfoLog(program_, 512, nullptr, log);
       LOG(ERROR) << "Shader link failed: " << log;
@@ -469,12 +479,16 @@ class GlRendererImpl : public NonCopyable {
   // first use. If font_name is empty, returns the default font. Returns
   // nullptr if the font cannot be found or loaded.
   FT_Face GetFontFace(std::string_view font_name) {
-    if (ft_library_ == nullptr) return nullptr;
+    if (ft_library_ == nullptr) {
+      return nullptr;
+    }
     std::string name(font_name);
     if (name.empty()) {
       name = font_manager_.GetDefaultFont();
     }
-    if (name.empty()) return nullptr;
+    if (name.empty()) {
+      return nullptr;
+    }
     // Normalize to lowercase for case-insensitive cache lookup (matches
     // FontManager's internal keying).
     std::transform(name.begin(), name.end(), name.begin(),
@@ -503,7 +517,9 @@ class GlRendererImpl : public NonCopyable {
 
   const GlyphInfo* GetGlyph(FT_Face face, std::uint32_t codepoint,
                             float font_size) {
-    if (face == nullptr) return nullptr;
+    if (face == nullptr) {
+      return nullptr;
+    }
 
     const int size_key = static_cast<int>(font_size);
     const auto key = (static_cast<std::uint64_t>(codepoint) << 32) |
@@ -528,7 +544,8 @@ class GlRendererImpl : public NonCopyable {
 
     if (w == 0 || h == 0) {
       GlyphInfo info;
-      info.advance = static_cast<float>(face->glyph->advance.x >> 6);
+      info.advance = static_cast<float>(
+          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6);
       glyph_cache_[key] = info;
       return &glyph_cache_[key];
     }
@@ -575,7 +592,8 @@ class GlRendererImpl : public NonCopyable {
     info.v1 = static_cast<float>(atlas_y_ + h) / kAtlasSize;
     info.bearing_x = static_cast<float>(face->glyph->bitmap_left);
     info.bearing_y = static_cast<float>(face->glyph->bitmap_top);
-    info.advance = static_cast<float>(face->glyph->advance.x >> 6);
+    info.advance = static_cast<float>(
+        static_cast<std::uint32_t>(face->glyph->advance.x) >> 6);
     info.width = w;
     info.height = h;
     glyph_cache_[key] = info;
@@ -625,12 +643,12 @@ class GlRendererImpl : public NonCopyable {
   FontManager font_manager_{};
   std::unordered_map<std::string, FT_Face> font_faces_{};
 
-  std::unordered_map<std::uint64_t, GlyphInfo> glyph_cache_;
+  std::unordered_map<std::uint64_t, GlyphInfo> glyph_cache_{};
   int atlas_x_ = 0;
   int atlas_y_ = 0;
   int atlas_row_height_ = 0;
 
-  std::vector<Transform> transform_stack_;
+  std::vector<Transform> transform_stack_{};
 };
 
 }  // namespace
@@ -650,7 +668,9 @@ TgfxRenderer::~TgfxRenderer() {
 }
 
 bool TgfxRenderer::Init(int width, int height, void* native_handle) {
-  if (initialized_) return true;
+  if (initialized_) {
+    return true;
+  }
 #ifdef NEOFLUX_PLATFORM_DESKTOP
   auto* impl = new GlRendererImpl();
   if (!impl->Init(width, height, native_handle)) {
@@ -690,7 +710,9 @@ void TgfxRenderer::EndFrame() {
 
 void TgfxRenderer::Execute(const RenderCommand& command) {
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (impl_ == nullptr) return;
+  if (impl_ == nullptr) {
+    return;
+  }
   auto* impl = static_cast<GlRendererImpl*>(impl_);
   switch (command.type) {
     case RenderCommandType::kDrawRect:

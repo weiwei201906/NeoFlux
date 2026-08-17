@@ -88,8 +88,8 @@ class GlfwBridge : public NonCopyable {
 
   GLFWwindow* window_;
   bool initialized_;
-  InputEventCallback input_callback_;
-  ResizeCallback resize_callback_;
+  InputEventCallback input_callback_{};
+  ResizeCallback resize_callback_{};
   double last_cursor_x_ = 0.0;
   double last_cursor_y_ = 0.0;
 };

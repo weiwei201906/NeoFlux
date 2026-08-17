@@ -29,6 +29,12 @@ class TestWidget : public Widget {
   int paint_count = 0;
 
   void Paint(RenderContext& /*context*/) override { ++paint_count; }
+
+  [[nodiscard]] Size OnMeasure(float /*width*/, int /*width_mode*/,
+                                float /*height*/,
+                                int /*height_mode*/) override {
+    return {.width = 0.0F, .height = 0.0F};
+  }
 };
 
 TEST(WidgetTest, AddAndCountChildren) {

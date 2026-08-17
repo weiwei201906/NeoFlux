@@ -68,15 +68,19 @@ bool Application::Init(int argc, char** argv, int window_width,
   int filtered_argc = static_cast<int>(filtered_argv.size());
   char** filtered_argv_ptr = filtered_argv.data();
 
-  // Initialize glog first so its built-in flags are accessible. Suppress
-  // initial logging until we have configured the log destination.
+  // Initialize glog first so its built-in flags are accessible. Route initial
+  // log messages to stderr temporarily until the log destination is configured,
+  // then restore the user's selection (default: file-based logging).
+  const bool user_wants_stderr = FLAGS_logtostderr;
   FLAGS_logtostderr = true;
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&filtered_argc, &filtered_argv_ptr, true);
+  FLAGS_logtostderr = user_wants_stderr;
 
   // Configure glog logging destination. Default is file-based logging to
   // --log_dir (defaults to ./logs); --logtostderr redirects all output to
-  // stderr (useful for debugging and CI environments).
+  // stderr (useful for debugging and CI environments). Log files are named
+  // with a .log extension for easy identification.
   if (!FLAGS_logtostderr) {
     if (FLAGS_log_dir.empty()) {
       FLAGS_log_dir = "./logs";
@@ -86,6 +90,9 @@ bool Application::Init(int argc, char** argv, int window_width,
     if (dir_error) {
       // Fall back to stderr if the log directory cannot be created.
       FLAGS_logtostderr = true;
+    } else {
+      // Append .log extension so log files end with .log.
+      google::SetLogFilenameExtension(".log");
     }
   }
 

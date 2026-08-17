@@ -36,8 +36,8 @@ TEST(RenderCommandTest, MakeDrawText) {
 }
 
 TEST(RenderCommandTest, MakeSaveRestore) {
-  auto save = RenderCommand::MakeSave();
-  auto restore = RenderCommand::MakeRestore();
+  const auto save = RenderCommand::MakeSave();
+  const auto restore = RenderCommand::MakeRestore();
 
   EXPECT_EQ(save.type, RenderCommandType::kSave);
   EXPECT_EQ(restore.type, RenderCommandType::kRestore);
