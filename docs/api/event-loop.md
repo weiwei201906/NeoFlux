@@ -1,70 +1,41 @@
 # EventLoop
 
-The event loop drives the application's frame cycle and coroutine scheduling.
+CV-driven frame scheduler, coroutine scheduler, and timer queue.
 
-## Header
+## Overview
 
-```cpp
-#include <neoflux/app/event_loop.h>
-```
+`EventLoop` manages the application's main loop, running at a target frame
+rate. It supports C++20 coroutine scheduling via `Schedule()`, one-frame
+yields via `ScheduleYield()`, and timed resumes via `ScheduleSleep()`.
 
 ## Methods
 
-### `Run()`
+| Method | Description |
+|--------|-------------|
+| `Run(frame_callback)` | Start the event loop, blocks until `Stop()` |
+| `Stop()` | Stop the event loop |
+| `WakeUp()` | Wake the loop from idle wait |
+| `Schedule(task)` | Schedule a `Task<void>` coroutine |
+| `ScheduleYield(handle)` | Resume a handle on the next frame (used by `Yield()`) |
+| `ScheduleSleep(duration, handle)` | Resume a handle after a duration (used by `Sleep()`) |
+| `SetTargetFps(fps)` | Set target frame rate |
+| `GetTargetFps() -> int` | Get target frame rate |
+| `GetFrameCount() -> uint64_t` | Get frames processed |
 
-```cpp
-void Run(std::function<void()> frame_callback);
-```
+## Coroutine Lifecycle
 
-Runs the event loop. The `frame_callback` is invoked each frame (when dirty).
-Blocks until `Stop()` is called.
+The loop uses `shared_ptr<Task<void>>` for all scheduled coroutines. An
+`active_tasks_` map (keyed by handle address) holds shared ownership, ensuring
+a coroutine frame is not destroyed while a timer or yield-pending handle still
+references it. See [Coroutines](../guide/coroutines) for details.
 
-### `Stop()`
+## Thread Safety
 
-```cpp
-void Stop();
-```
+`Schedule()`, `ScheduleYield()`, and `ScheduleSleep()` are guarded by a mutex
+and may be called from any thread. `WakeUp()` is thread-safe.
 
-Stops the event loop.
+## See Also
 
-### `WakeUp()`
-
-```cpp
-void WakeUp();
-```
-
-Wakes the event loop to process a frame immediately.
-
-### `Schedule()`
-
-```cpp
-void Schedule(Task<void> coroutine);
-```
-
-Schedules a C++20 coroutine to run. The coroutine resumes on subsequent frames
-when ready.
-
-## Frame Cycle
-
-Each frame:
-
-1. Poll platform events (input, window events).
-2. Run ready coroutines (`RunReadyCoroutines()`).
-3. Invoke the frame callback (build → layout → paint → submit).
-4. Wait for the next frame (target FPS via `--target_fps`).
-
-## Coroutine Integration
-
-```cpp
-EventLoop& loop = app.GetEventLoop();
-
-loop.Schedule([]() -> neoflux::Task<void> {
-  for (int i = 0; i < 60; ++i) {
-    co_await neoflux::Yield();
-    // update animation state
-  }
-}());
-```
-
-The event loop maintains a queue of pending coroutines. Each frame, it resumes
-all ready coroutines and requeues those that are still pending.
+- [Task](./task)
+- [Application](./application)
+- [Coroutines Guide](../guide/coroutines)

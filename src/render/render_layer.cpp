@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - render_layer.cpp
 //
 // Implementation of RenderLayer. Methods moved from header.
@@ -103,7 +103,7 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   // u_resolution (shader layout coordinates). The actual framebuffer size
   // (which may differ due to DPI scaling) is queried each frame in
   // TgfxRenderer::BeginFrame() and used only for glViewport. Do NOT call
-  // Resize() here with the framebuffer size 閳?that would corrupt u_resolution
+  // Resize() here with the framebuffer size -- that would corrupt u_resolution
   // and make layout coordinates mismatch the shader.
 #else
   // Mobile: tgfx renders directly into the platform surface provided by

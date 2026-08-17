@@ -29,11 +29,16 @@ Application app;
 app.GetEventLoop().Schedule(MyCoroutine());
 ```
 
-The coroutine resumes on each frame when it is ready.
+The coroutine is wrapped in a `shared_ptr` and registered in an `active_tasks_`
+map keyed by coroutine handle address. This ensures the coroutine frame stays
+alive for as long as a timer or yield-pending handle references it, preventing
+use-after-free when a `Sleep` coroutine is resumed after its owning `Task` would
+have gone out of scope.
 
 ## Yield
 
-`Yield()` suspends the coroutine and resumes it on the next frame:
+`Yield()` suspends the coroutine and registers it with the event loop's
+yield queue. It resumes on the next frame:
 
 ```cpp
 neoflux::Task<void> FadeIn(Widget* widget) {
@@ -47,49 +52,53 @@ neoflux::Task<void> FadeIn(Widget* widget) {
 
 This runs a 60-frame fade-in animation at ~60 FPS.
 
-## Animation Example
+## Sleep
+
+`Sleep(duration)` suspends the coroutine for the specified duration using the
+event loop's timer queue. The coroutine is **not** resumed each frame while
+waiting; it is only resumed when the timer expires.
 
 ```cpp
-class AnimatedBox : public StatefulWidget {
- public:
-  void StartAnimation(EventLoop& loop) {
-    loop.Schedule(Animate());
-  }
-
- private:
-  neoflux::Task<void> Animate() {
-    for (int frame = 0; frame < 120; ++frame) {
-      const float t = static_cast<float>(frame) / 120.0F;
-      offset_ = 200.0F * t;
-      MarkNeedsBuild();
-      co_await neoflux::Yield();
-    }
-  }
-
-  float offset_ = 0.0F;
-};
-```
-
-## Coroutine-Aware Event Loop
-
-The `EventLoop` runs ready coroutines each frame:
-
-```cpp
-void EventLoop::RunReadyCoroutines() {
-  std::vector<Task<void>> ready;
-  {
-    std::lock_guard lock(coroutine_mutex_);
-    ready.swap(pending_coroutines_);
-  }
-  for (auto& task : ready) {
-    if (!task.Resume()) {
-      // still pending, requeue
-      std::lock_guard lock(coroutine_mutex_);
-      pending_coroutines_.push_back(std::move(task));
-    }
+neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
+  co_await neoflux::Sleep(std::chrono::milliseconds(500));
+  auto btn = weak_btn.lock();
+  if (!btn) co_return;          // widget destroyed
+  if (btn->IsPressed()) {       // state machine as condition lock
+    btn->OnLongPress();
   }
 }
 ```
+
+## Lifecycle Management
+
+The event loop maintains three coroutine collections:
+
+| Collection | Purpose |
+|------------|---------|
+| `pending_coroutines_` | Tasks ready to resume this frame |
+| `active_tasks_` | All live tasks, keyed by handle address (shared ownership) |
+| `yield_handles_` | Handles that requested `co_await Yield()` |
+| `timer_queue_` | `multimap<time_point, handle>` for `co_await Sleep()` |
+
+Each frame `RunReadyCoroutines()` executes four phases:
+
+1. **Promote yields**: move yield-pending tasks back to `pending_coroutines_`
+2. **Resume pending**: swap and resume all pending tasks
+3. **Collect completed**: erase finished tasks from `active_tasks_`
+4. **Fire timers**: look up each expired timer's owning `Task` from
+   `active_tasks_` before resuming — this prevents resuming a dangling handle
+
+A task is only destroyed when its `shared_ptr` refcount reaches zero, which
+happens after it completes and is erased from `active_tasks_` and all local
+references go out of scope.
+
+## State Machine + Coroutine Pattern
+
+Widgets carry a lightweight `WidgetState` (Idle, Hovering, Dragging, etc.).
+State transitions act as a "condition lock" for coroutines: a long-press
+coroutine started on pointer-down checks the widget's state after sleeping;
+if the state has changed (e.g. pointer released), the coroutine silently
+returns. No explicit cancellation mechanism is needed.
 
 ## When to Use Coroutines
 

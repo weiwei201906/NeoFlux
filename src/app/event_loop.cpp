@@ -90,9 +90,20 @@ uint64_t EventLoop::GetFrameCount() const noexcept {
 }
 
 void EventLoop::Schedule(Task<void> task) {
+  auto shared_task = std::make_shared<Task<void>>(std::move(task));
+  void* key = shared_task->Handle().address();
   {
     std::lock_guard<std::mutex> lock(coroutine_mutex_);
-    pending_coroutines_.push_back(std::move(task));
+    active_tasks_.emplace(key, shared_task);
+    pending_coroutines_.push_back(std::move(shared_task));
+  }
+  WakeUp();
+}
+
+void EventLoop::ScheduleYield(std::coroutine_handle<> continuation) {
+  {
+    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    yield_handles_.push_back(continuation);
   }
   WakeUp();
 }
@@ -107,6 +118,16 @@ void EventLoop::ScheduleSleep(std::chrono::steady_clock::duration duration,
   WakeUp();
 }
 
+void YieldAwaitable::await_suspend(std::coroutine_handle<> h) {
+  EventLoop* loop = EventLoop::Current();
+  if (loop != nullptr) {
+    loop->ScheduleYield(h);
+  } else {
+    // No active loop: resume immediately.
+    h.resume();
+  }
+}
+
 void SleepAwaitable::await_suspend(std::coroutine_handle<> h) {
   EventLoop* loop = EventLoop::Current();
   if (loop != nullptr) {
@@ -118,29 +139,46 @@ void SleepAwaitable::await_suspend(std::coroutine_handle<> h) {
 }
 
 void EventLoop::RunReadyCoroutines() {
-  // Move pending coroutines out of the shared vector.
-  std::vector<Task<void>> ready;
+  // Phase 1: promote yield-pending handles back to pending so they resume
+  // this frame. These are coroutines that did co_await Yield().
+  {
+    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    for (const auto& handle : yield_handles_) {
+      auto it = active_tasks_.find(handle.address());
+      if (it != active_tasks_.end()) {
+        pending_coroutines_.push_back(it->second);
+      }
+    }
+    yield_handles_.clear();
+  }
+
+  // Phase 2: move pending coroutines out and resume them.
+  std::vector<std::shared_ptr<Task<void>>> ready;
   {
     std::lock_guard<std::mutex> lock(coroutine_mutex_);
     ready.swap(pending_coroutines_);
   }
-
-  // Resume all pending coroutines.
-  for (auto& task : ready) {
-    if (!task.Done()) {
-      task.Resume();
+  for (const auto& task : ready) {
+    if (task != nullptr && !task->Done()) {
+      task->Resume();
     }
   }
 
-  // Re-queue tasks that are not yet done (e.g. waiting on YieldAwaitable).
-  for (auto& task : ready) {
-    if (!task.Done()) {
-      std::lock_guard<std::mutex> lock(coroutine_mutex_);
-      pending_coroutines_.push_back(std::move(task));
+  // Phase 3: erase completed tasks from active_tasks_. The shared_ptr in
+  // |ready| keeps the frame alive until this function returns; after erase
+  // and |ready| going out of scope, the refcount drops and the frame is
+  // destroyed if no timer/yield handle still references it.
+  {
+    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    for (const auto& task : ready) {
+      if (task != nullptr && task->Done()) {
+        active_tasks_.erase(task->Handle().address());
+      }
     }
   }
 
-  // Resume expired sleep timers.
+  // Phase 4: resume expired sleep timers. Look up the owning Task from
+  // active_tasks_ so we never resume a dangling handle.
   const auto now = std::chrono::steady_clock::now();
   std::vector<std::coroutine_handle<>> expired;
   {
@@ -151,9 +189,21 @@ void EventLoop::RunReadyCoroutines() {
       it = timer_queue_.erase(it);
     }
   }
-  for (auto& handle : expired) {
-    if (!handle.done()) {
-      handle.resume();
+  for (const auto& handle : expired) {
+    std::shared_ptr<Task<void>> task;
+    {
+      std::lock_guard<std::mutex> lock(coroutine_mutex_);
+      auto it = active_tasks_.find(handle.address());
+      if (it != active_tasks_.end()) {
+        task = it->second;
+      }
+    }
+    if (task != nullptr && !task->Done()) {
+      task->Resume();
+      if (task->Done()) {
+        std::lock_guard<std::mutex> lock(coroutine_mutex_);
+        active_tasks_.erase(handle.address());
+      }
     }
   }
 }

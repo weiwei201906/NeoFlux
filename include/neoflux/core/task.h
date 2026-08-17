@@ -32,7 +32,7 @@ class EventLoop;
 // event-loop tick. Used for yielding to the event loop.
 struct YieldAwaitable {
   bool await_ready() const noexcept { return false; }
-  void await_suspend(std::coroutine_handle<>) const noexcept {}
+  void await_suspend(std::coroutine_handle<> h);
   void await_resume() const noexcept {}
 };
 

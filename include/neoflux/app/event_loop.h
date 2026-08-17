@@ -15,7 +15,9 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <unordered_map>
 #include <vector>
 
 #include "neoflux/core/noncopyable.h"
@@ -67,6 +69,10 @@ class EventLoop : public NonCopyable {
   // Thread-safe.
   void Schedule(Task<void> task);
 
+  // Schedules a coroutine handle to resume on the next frame tick.
+  // Used by YieldAwaitable. Thread-safe.
+  void ScheduleYield(std::coroutine_handle<> continuation);
+
   // Schedules a coroutine handle to resume after the given duration.
   // Used by SleepAwaitable. Thread-safe.
   void ScheduleSleep(std::chrono::steady_clock::duration duration,
@@ -91,8 +97,21 @@ class EventLoop : public NonCopyable {
   std::mutex frame_mutex_{};
 
   // Pending coroutines to resume. Guarded by coroutine_mutex_.
+  // Shared ownership: active_tasks_ also holds a reference for the lifetime
+  // of the coroutine, preventing premature frame destruction while a timer
+  // or yield-pending handle still references it.
   std::mutex coroutine_mutex_{};
-  std::vector<Task<void>> pending_coroutines_{};
+  std::vector<std::shared_ptr<Task<void>>> pending_coroutines_{};
+
+  // All active (not-yet-completed) tasks, keyed by coroutine handle address.
+  // This map is the authoritative owner: when a task completes, it is erased
+  // here and the shared_ptr refcount drops, eventually destroying the frame.
+  // Guarded by coroutine_mutex_.
+  std::unordered_map<void*, std::shared_ptr<Task<void>>> active_tasks_{};
+
+  // Handles that requested a one-frame yield (co_await Yield()).
+  // Resumed at the start of the next frame. Guarded by coroutine_mutex_.
+  std::vector<std::coroutine_handle<>> yield_handles_{};
 
   // Timer queue: wake-up time -> coroutine handle to resume.
   // Guarded by coroutine_mutex_.
