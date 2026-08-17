@@ -1,14 +1,14 @@
 // =============================================================================
 // NeoFlux - event_loop.cpp
 //
-// Implementation of EventLoop. Methods moved from header.
+// Implementation of EventLoop. CV-driven frame scheduling: the loop blocks
+// on a condition variable when idle and is woken on demand via WakeUp().
 // =============================================================================
 
 #include "neoflux/app/event_loop.h"
 
 #include <chrono>
 #include <cstdint>
-#include <thread>
 
 #include <glog/logging.h>
 
@@ -28,24 +28,34 @@ void EventLoop::Run(FrameCallback frame_callback) {
   should_stop_.store(false);
   frame_count_.store(0);
 
-  LOG(INFO) << "EventLoop started at " << target_fps_ << " fps";
+  LOG(INFO) << "EventLoop started at " << target_fps_ << " fps (CV-driven)";
+
+  const auto frame_duration = std::chrono::microseconds(
+      static_cast<int64_t>(1'000'000.0 / static_cast<double>(target_fps_)));
 
   while (!should_stop_.load()) {
-    const auto frame_start = std::chrono::steady_clock::now();
-
     if (frame_callback) {
       frame_callback();
     }
-
     frame_count_.fetch_add(1);
-    ThrottleFrame(frame_start);
+
+    // Block until woken by WakeUp() or until the frame interval elapses.
+    // This avoids busy-waiting when no work is pending.
+    std::unique_lock<std::mutex> lock(frame_mutex_);
+    frame_cv_.wait_for(lock, frame_duration,
+                       [this] { return should_stop_.load(); });
   }
 
   running_.store(false);
   LOG(INFO) << "EventLoop stopped after " << frame_count_.load() << " frames";
 }
 
-void EventLoop::Stop() noexcept { should_stop_.store(true); }
+void EventLoop::Stop() noexcept {
+  should_stop_.store(true);
+  frame_cv_.notify_one();
+}
+
+void EventLoop::WakeUp() noexcept { frame_cv_.notify_one(); }
 
 bool EventLoop::IsRunning() const noexcept { return running_.load(); }
 
@@ -62,16 +72,6 @@ int EventLoop::GetTargetFps() const noexcept { return target_fps_; }
 
 uint64_t EventLoop::GetFrameCount() const noexcept {
   return frame_count_.load();
-}
-
-void EventLoop::ThrottleFrame(
-    const std::chrono::steady_clock::time_point& frame_start) const {
-  const auto frame_duration = std::chrono::microseconds(
-      static_cast<int64_t>(1'000'000.0 / static_cast<double>(target_fps_)));
-
-  if (const auto elapsed = std::chrono::steady_clock::now() - frame_start; elapsed < frame_duration) {
-    std::this_thread::sleep_for(frame_duration - elapsed);
-  }
 }
 
 }  // namespace neoflux

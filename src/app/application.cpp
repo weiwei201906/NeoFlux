@@ -130,12 +130,14 @@ bool Application::Init(int argc, char** argv, int window_width,
     bridge->SetInputCallback([this](MouseButton button, InputAction action,
                                     const Point& pos) {
       DispatchPointerEvent(button, action, pos);
+      MarkFrameDirty();
     });
     // Update layout dimensions when the window is resized so the widget
     // tree re-lays-out at the new size on the next frame.
     bridge->SetResizeCallback([this](int width, int height) {
       window_width_ = width;
       window_height_ = height;
+      MarkFrameDirty();
     });
   }
 
@@ -172,6 +174,7 @@ void Application::PushRoute(std::string_view route_name) {
     navigation_stack_.push_back(std::move(widget));
     LOG(INFO) << "Pushed route: " << route_name
               << " (stack depth: " << navigation_stack_.size() << ")";
+    MarkFrameDirty();
   }
 }
 
@@ -183,6 +186,7 @@ void Application::PopRoute() {
   navigation_stack_.pop_back();
   LOG(INFO) << "Popped route (stack depth: " << navigation_stack_.size()
             << ")";
+  MarkFrameDirty();
 }
 
 Widget* Application::GetRootWidget() const noexcept {
@@ -202,6 +206,11 @@ int Application::GetWindowWidth() const noexcept { return window_width_; }
 
 int Application::GetWindowHeight() const noexcept { return window_height_; }
 
+void Application::MarkFrameDirty() noexcept {
+  frame_dirty_.store(true);
+  event_loop_.WakeUp();
+}
+
 void Application::OnFrame() {
   if (render_layer_ != nullptr) {
     render_layer_->PollEvents();
@@ -211,20 +220,31 @@ void Application::OnFrame() {
     }
   }
 
-  BuildDirtyWidgets();
+  // Always process dirty widgets: MarkNeedsBuild may be called without
+  // going through MarkFrameDirty (e.g. from State::SetState).
+  const bool rebuilt = BuildDirtyWidgets();
+
+  // Skip layout/paint when nothing changed: no explicit dirty flag and
+  // no widget was rebuilt.
+  if (!frame_dirty_.exchange(false) && !rebuilt) {
+    return;
+  }
+
   LayoutWidgetTree();
   PaintAndSubmit();
 }
 
-void Application::BuildDirtyWidgets() {
+bool Application::BuildDirtyWidgets() {
   BuildContext context(this);
   Widget* root = GetRootWidget();
-  if (root != nullptr) {
-    BuildWidgetRecursive(*root, context);
+  if (root == nullptr) {
+    return false;
   }
+  return BuildWidgetRecursive(*root, context);
 }
 
-void Application::BuildWidgetRecursive(Widget& widget, BuildContext& context) {
+bool Application::BuildWidgetRecursive(Widget& widget, BuildContext& context) {
+  bool rebuilt = false;
   if (widget.NeedsBuild()) {
     auto child = widget.Build(context);
     if (child != nullptr) {
@@ -232,13 +252,15 @@ void Application::BuildWidgetRecursive(Widget& widget, BuildContext& context) {
       widget.AddChild(std::move(child));
     }
     widget.ClearNeedsBuild();
+    rebuilt = true;
   }
 
   for (auto& child : widget.GetChildren()) {
     if (child != nullptr) {
-      BuildWidgetRecursive(*child, context);
+      rebuilt |= BuildWidgetRecursive(*child, context);
     }
   }
+  return rebuilt;
 }
 
 void Application::LayoutWidgetTree() const {

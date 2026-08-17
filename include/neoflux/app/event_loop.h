@@ -10,8 +10,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 
 #include "neoflux/core/noncopyable.h"
 
@@ -19,7 +21,10 @@ namespace neoflux {
 
 // Application-layer event loop.
 //
-// Runs the frame pipeline at a target frame rate.
+// Runs the frame pipeline driven by a condition variable. The loop blocks
+// on a CV when no work is pending, and is woken immediately when WakeUp()
+// is called (e.g. when a widget is marked dirty or an input event arrives).
+// A maximum wait timeout enforces the target frame rate.
 class EventLoop : public NonCopyable {
  public:
   // Frame callback invoked once per frame.
@@ -34,6 +39,10 @@ class EventLoop : public NonCopyable {
   // Requests the event loop to stop after the current frame.
   void Stop() noexcept;
 
+  // Wakes the event loop immediately, causing a frame to be processed
+  // without waiting for the next frame-rate timeout. Thread-safe.
+  void WakeUp() noexcept;
+
   // Returns true if the loop is currently running.
   [[nodiscard]] bool IsRunning() const noexcept;
 
@@ -47,14 +56,14 @@ class EventLoop : public NonCopyable {
   [[nodiscard]] uint64_t GetFrameCount() const noexcept;
 
  private:
-  // Sleeps for the remaining time in the current frame to maintain target FPS.
-  void ThrottleFrame(
-      const std::chrono::steady_clock::time_point& frame_start) const;
-
   std::atomic<bool> running_{false};
   std::atomic<bool> should_stop_{false};
   std::atomic<uint64_t> frame_count_{0};
   int target_fps_;
+
+  // CV used to block the loop when idle and wake it on demand.
+  std::condition_variable frame_cv_{};
+  std::mutex frame_mutex_{};
 };
 
 }  // namespace neoflux

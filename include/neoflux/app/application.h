@@ -8,6 +8,7 @@
 #ifndef NEOFLUX_APP_APPLICATION_H_
 #define NEOFLUX_APP_APPLICATION_H_
 
+#include <atomic>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -65,12 +66,20 @@ class Application : public NonCopyable {
   // Returns the window height.
   [[nodiscard]] int GetWindowHeight() const noexcept;
 
+  // Marks the next frame as dirty, forcing a build/layout/paint cycle.
+  // Thread-safe; wakes the event loop if it is idle.
+  void MarkFrameDirty() noexcept;
+
  private:
   void OnFrame();
-  void BuildDirtyWidgets();
+  // Builds all dirty widgets. Returns true if at least one widget was
+  // rebuilt (indicating layout/paint should run).
+  bool BuildDirtyWidgets();
   void LayoutWidgetTree() const;
   void PaintAndSubmit();
-  void BuildWidgetRecursive(Widget& widget, BuildContext& context);
+  // Recursively builds dirty widgets. Returns true if any widget in the
+  // subtree was rebuilt.
+  bool BuildWidgetRecursive(Widget& widget, BuildContext& context);
   void PaintWidgetRecursive(Widget& widget, RenderContext& context);
   void DispatchPointerEvent(MouseButton button, InputAction action,
                             const Point& pos);
@@ -85,6 +94,9 @@ class Application : public NonCopyable {
   int window_width_ = 800;
   int window_height_ = 600;
   bool initialized_ = false;
+  // Set when the widget tree or window state changes; cleared after a full
+  // frame is processed. When false, OnFrame skips build/layout/paint.
+  std::atomic<bool> frame_dirty_{true};
 };
 
 }  // namespace neoflux
