@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // NeoFlux - render_layer.cpp
 //
 // Implementation of RenderLayer. Methods moved from header.
@@ -25,10 +25,10 @@ DEFINE_uint64(render_queue_capacity, 2048,
               "One slot is reserved for full/empty distinction, so the "
               "maximum storable commands are (capacity - 1).");
 
-DEFINE_string(render_backend, "gl",
-              "Rendering backend to use. Options: 'gl' (OpenGL ES 3.0 / "
-              "OpenGL 3.3 core, default), 'vulkan' (Vulkan 閳?currently a "
-              "compile-time stub, falls back to GL with a warning).");
+DEFINE_string(render_backend, "vulkan",
+              "Rendering backend to use. Options: 'vulkan' (default, "
+              "currently falls back to GL), 'gl' (OpenGL), 'cpu' "
+              "(software rasterizer, falls back to GL).");
 
 namespace neoflux {
 

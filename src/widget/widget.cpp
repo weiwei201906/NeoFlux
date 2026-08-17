@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - widget.cpp
 //
 // Implementation of Widget, BuildContext, StatefulWidget, StatelessWidget.
@@ -77,7 +77,7 @@ Widget::Widget() : taitank_node_(taitank::NodeCreate()) {
     // Default to column layout (vertical stacking), matching the typical
     // UI pattern. Containers may override with SetFlexDirection(kRow).
     // Taitank's factory default is FLEX_DIRECTION_ROW (enum value 0),
-    // which would lay children horizontally — wrong for most widgets.
+    // which would lay children horizontally 鈥?wrong for most widgets.
     taitank::SetFlexDirection(taitank_node_, taitank::FLEX_DIRECTION_COLUMN);
     taitank::SetAlignItems(taitank_node_, taitank::FLEX_ALIGN_STRETCH);
     // Note: measure function is NOT set here. Only leaf widgets (Text,
@@ -112,7 +112,7 @@ void Widget::OnPointerEnter() {}
 
 void Widget::OnPointerExit() {}
 
-std::shared_ptr<Widget> Widget::HitTest(  // NOLINT(readability-make-member-function-const)
+std::shared_ptr<Widget> Widget::HitTest(
     const Point& parent_pos) {
   // parent_pos is relative to this widget's parent. bounds_ is also relative
   // to the parent, so we can compare directly.

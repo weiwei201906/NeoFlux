@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - application.cpp
 //
 // Implementation of Application. Methods moved from header.
@@ -153,7 +153,7 @@ bool Application::Init(int argc, char** argv, int window_width,
   return true;
 }
 
-void Application::Run() {  // NOLINT(readability-make-member-function-const)
+void Application::Run() {
   if (!initialized_) {
     LOG(ERROR) << "Application::Run called before Init()";
     return;
@@ -339,7 +339,7 @@ void Application::PaintWidgetRecursive(Widget& widget,
   widget.Paint(context);
 }
 
-void Application::DispatchPointerEvent(  // NOLINT(readability-make-member-function-const)
+void Application::DispatchPointerEvent(
     MouseButton button, InputAction action, const Point& pos) {
   if (button != MouseButton::kLeft) {
     return;
@@ -443,7 +443,7 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
   }
 }
 
-void Application::DispatchScrollEvent(  // NOLINT(readability-make-member-function-const)
+void Application::DispatchScrollEvent(
     double xoffset, double yoffset) {
   Widget* root = GetRootWidget();
   if (root == nullptr || render_layer_ == nullptr) {

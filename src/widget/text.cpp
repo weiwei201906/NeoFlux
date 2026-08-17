@@ -112,13 +112,11 @@ Size Text::OnMeasure(float width, int width_mode, float height,
 }
 
 void Text::Paint(RenderContext& context) {
-  float text_x = 0.0F;
   const float text_width = EstimateTextWidth(text_, font_size_);
-  if (alignment_ == HAlign::kCenter) {
-    text_x = (bounds_.width - text_width) / 2.0F;
-  } else if (alignment_ == HAlign::kRight) {
-    text_x = bounds_.width - text_width;
-  }
+  const float text_x =
+      (alignment_ == HAlign::kCenter)
+          ? (bounds_.width - text_width) / 2.0F
+          : (alignment_ == HAlign::kRight ? bounds_.width - text_width : 0.0F);
   // Baseline at font_size from top (approximate descent).
   context.DrawText(text_, {.x = text_x, .y = font_size_}, text_color_,
                    font_size_, font_name_);

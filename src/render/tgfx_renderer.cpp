@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - tgfx_renderer.cpp
 //
 // Renderer backend. When tgfx is available (NEOFLUX_USE_TGFX), this file
@@ -454,7 +454,7 @@ class GlRendererImpl : public NonCopyable {
     }
   }
 
-  void ClipRect(const Rect& rect) {  // NOLINT(readability-make-member-function-const)
+  void ClipRect(const Rect& rect) {
     // Intersect with current clip (if any) and apply.
     Rect result = rect;
     if (!clip_stack_.empty() && clip_stack_.back().width >= 0.0F) {

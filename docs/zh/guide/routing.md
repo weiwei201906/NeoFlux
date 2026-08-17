@@ -1,0 +1,34 @@
+# 路由导航
+
+Widget 通过 `RouteRegistry` 注册，压入/弹出导航栈。
+
+## 注册路由
+
+```cpp
+RouteRegistry::Instance().RegisterRoute("/home", BuildHome);
+RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
+```
+
+## 导航
+
+```cpp
+app.PushRoute("/settings");  // 构建并显示设置页面
+app.PopRoute();              // 返回上一路由
+```
+
+## 路由构建函数
+
+每个路由对应一个 `WidgetBuilder` 函数，接收 `BuildContext`，返回 `std::shared_ptr<Widget>`：
+
+```cpp
+std::shared_ptr<Widget> BuildHome(BuildContext& ctx) {
+  auto root = std::make_shared<Container>();
+  // ...
+  return root;
+}
+```
+
+## 下一步
+
+- [Widget 系统](./widgets)
+- [协程](./coroutines)
