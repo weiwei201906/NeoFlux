@@ -5,7 +5,7 @@ export default defineConfig({
   description: 'A lightweight cross-platform C++20 UI framework with Taitank flex layout and tgfx rendering',
   lastUpdated: true,
   cleanUrls: true,
-
+  base: '/neoflux/',
   locales: {
     root: {
       label: 'English',
