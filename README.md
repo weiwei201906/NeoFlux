@@ -95,7 +95,7 @@ By default, logs are written to files in `./logs/` and no console window appears
 NeoFlux uses a font manager that scans `thirdparty/fonts/` for TrueType (`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup. Widgets reference fonts by filename stem (without extension):
 
 ```cpp
-auto* text = new Text("Hello World");
+auto text = std::make_shared<Text>("Hello World");
 text->SetFont("NotoSansSC-Regular");  // loads thirdparty/fonts/NotoSansSC-Regular.ttf
 ```
 

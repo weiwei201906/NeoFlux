@@ -27,10 +27,12 @@ RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
 ```
 
-> **Tip:** Even if your project has only one route, you must still register it
-> with `RouteRegistry` and then call `app.PushRoute("/")` to display it.
-> `Application::Init` does not automatically push any route — an empty
-> navigation stack renders nothing.
+:::tip
+Even if your project has only one route, you must still register it with
+`RouteRegistry` and then call `app.PushRoute("/")` to display it.
+`Application::Init` does not automatically push any route — an empty
+navigation stack renders nothing.
+:::
 
 ## Navigation
 

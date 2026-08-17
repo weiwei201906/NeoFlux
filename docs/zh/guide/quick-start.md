@@ -77,7 +77,9 @@ int main(int argc, char** argv) {
 }
 ```
 
-> **提示：** 哪怕只有一个路由，也必须先 `RegisterRoute` 再 `PushRoute`。`Init` 只创建窗口——在推送路由之前不会显示任何 Widget。
+:::tip
+哪怕只有一个路由，也必须先 `RegisterRoute` 再 `PushRoute`。`Init` 只创建窗口——在推送路由之前不会显示任何 Widget。
+:::
 
 ## 4. CMakeLists.txt
 

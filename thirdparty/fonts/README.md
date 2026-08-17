@@ -9,7 +9,7 @@ each font under its filename stem (without extension).
 Reference fonts by name in your widgets:
 
 ```cpp
-auto* text = new Text("Hello");
+auto text = std::make_shared<Text>("Hello");
 text->SetFont("NotoSansSC-Regular");  // loads NotoSansSC-Regular.ttf
 ```
 

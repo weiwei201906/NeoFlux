@@ -16,10 +16,11 @@ thirdparty/fonts/
 The `FontManager` scans this directory at startup and registers fonts by their
 filename (without extension).
 
-> **Warning:** If `thirdparty/fonts/` is empty or missing, all text widgets
-> will render incorrectly (garbled or blank). Ship at least one font file with
-> your application. For CJK text, include a CJK-capable font such as
-> NotoSansSC.
+:::warning
+If `thirdparty/fonts/` is empty or missing, all text widgets will render
+incorrectly (garbled or blank). Ship at least one font file with your
+application. For CJK text, include a CJK-capable font such as NotoSansSC.
+:::
 
 ## Using Fonts
 

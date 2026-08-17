@@ -28,7 +28,9 @@
 app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
 ```
 
-> **提示：** 移动端将平台 Surface（Android 传 `ANativeWindow*`，iOS 传 `CAMetalLayer*`/`CAEAGLLayer*`）作为 `platform_surface` 参数传给 `Application::Init`。桌面端传 `nullptr`，GLFW 自动创建窗口。
+:::tip
+移动端将平台 Surface（Android 传 `ANativeWindow*`，iOS 传 `CAMetalLayer*`/`CAEAGLLayer*`）作为 `platform_surface` 参数传给 `Application::Init`。桌面端传 `nullptr`，GLFW 自动创建窗口。
+:::
 
 桌面端 `platform_surface` 传 `nullptr`，框架自动创建 GLFW 窗口。
 

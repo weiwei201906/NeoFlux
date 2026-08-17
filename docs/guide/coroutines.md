@@ -69,9 +69,11 @@ neoflux::Task<void> LongPressDetector(std::weak_ptr<Button> weak_btn) {
 }
 ```
 
-> **Warning:** Never capture a raw `Widget*` in a coroutine. Always use
-> `std::weak_ptr` and re-lock after every `co_await`. The widget may be
-> destroyed while the coroutine is suspended.
+:::warning
+Never capture a raw `Widget*` in a coroutine. Always use `std::weak_ptr` and
+re-lock after every `co_await`. The widget may be destroyed while the coroutine
+is suspended.
+:::
 
 ## Lifecycle Management
 

@@ -39,10 +39,12 @@ point. It works in parent-relative coordinates:
 std::shared_ptr<Widget> hit = root->HitTest(point);
 ```
 
-> **Tip:** During an active drag (`OnPointerDown` followed by move events),
-> move events are sent directly to the pressed widget, bypassing hit testing.
-> This ensures a `Draggable` widget keeps receiving events even when the
-> pointer moves outside its layout bounds (due to paint-time translation).
+:::tip
+During an active drag (`OnPointerDown` followed by move events), move events
+are sent directly to the pressed widget, bypassing hit testing. This ensures a
+`Draggable` widget keeps receiving events even when the pointer moves outside
+its layout bounds (due to paint-time translation).
+:::
 
 ## Pointer Events
 

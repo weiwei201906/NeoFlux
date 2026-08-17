@@ -15,10 +15,12 @@ root->PerformLayout(window_width, window_height);
 // After layout, each widget's GetBounds() returns its computed position/size.
 ```
 
-> **Tip:** Leaf widgets (`Text`, `Button`) must override `OnMeasure()` to
-> report their intrinsic size. Taitank calls `OnMeasure()` during layout to
-> determine how much space a leaf widget needs. Without a correct
-> `OnMeasure()`, the widget may collapse to zero size.
+:::tip
+Leaf widgets (`Text`, `Button`) must override `OnMeasure()` to report their
+intrinsic size. Taitank calls `OnMeasure()` during layout to determine how much
+space a leaf widget needs. Without a correct `OnMeasure()`, the widget may
+collapse to zero size.
+:::
 
 ## Flex Direction
 

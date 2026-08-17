@@ -35,7 +35,9 @@ col->SetFlexDirection(FlexDirection::kColumn)   // 子组件垂直排列
 
 叶子组件（`Text`、`Button`）通过 `OnMeasure()` 报告固有尺寸，Taitank 布局时调用。有 measure 函数的节点不能有子节点。
 
-> **提示：** 自定义叶子 Widget 必须重写 `OnMeasure()` 报告固有尺寸，否则 Taitank 无法计算其大小，Widget 可能坍缩为零尺寸。
+:::tip
+自定义叶子 Widget 必须重写 `OnMeasure()` 报告固有尺寸，否则 Taitank 无法计算其大小，Widget 可能坍缩为零尺寸。
+:::
 
 ## 下一步
 

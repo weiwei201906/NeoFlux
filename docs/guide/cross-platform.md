@@ -57,10 +57,12 @@ On mobile platforms, NeoFlux uses:
 - **tgfx** for 2D rendering (backs onto Vulkan/Metal/GLES)
 - Platform-specific window management (provided by the host app)
 
-> **Tip:** On mobile, pass the platform surface (`ANativeWindow*` on Android,
-> `CAMetalLayer*`/`CAEAGLLayer*` on iOS) as the `platform_surface` parameter
-> to `Application::Init`. On desktop, pass `nullptr` and GLFW creates the
-> window automatically.
+:::tip
+On mobile, pass the platform surface (`ANativeWindow*` on Android,
+`CAMetalLayer*`/`CAEAGLLayer*` on iOS) as the `platform_surface` parameter to
+`Application::Init`. On desktop, pass `nullptr` and GLFW creates the window
+automatically.
+:::
 
 The `MobileBridge` class provides a stub interface that the mobile host
 application implements.
