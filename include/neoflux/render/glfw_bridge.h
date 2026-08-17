@@ -83,7 +83,7 @@ class GlfwBridge : public NonCopyable {
   void MakeContextCurrent();
 
   // Releases the OpenGL context from the calling thread.
-  void ReleaseContext();
+  static void ReleaseContext();
 
   // Sets the callback invoked for mouse button events.
   void SetInputCallback(InputEventCallback callback) noexcept;

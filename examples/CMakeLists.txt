@@ -2,11 +2,10 @@
 # NeoFlux examples
 # =============================================================================
 
-# On Windows with MinGW, link as GUI subsystem to avoid a console window.
-# Logs go to files by default (glog), so no stdout/stderr console is needed.
-if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-  add_link_options(-mwindows)
-endif()
+# Build examples as GUI subsystem on Windows (no console window).
+# CMAKE_WIN32_EXECUTABLE works on both MSVC and MinGW. On non-Windows
+# platforms this variable has no effect.
+set(CMAKE_WIN32_EXECUTABLE ON)
 
 add_subdirectory(hello_neoflux)
 add_subdirectory(counter)

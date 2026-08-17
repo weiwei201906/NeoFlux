@@ -261,8 +261,7 @@ bool Application::BuildDirtyWidgets() {
   return BuildWidgetRecursive(*root, context);
 }
 
-bool Application::BuildWidgetRecursive(Widget& widget, BuildContext& context) {
-  bool rebuilt = false;
+bool Application::BuildWidgetRecursive(Widget& widget, BuildContext& context) {  bool rebuilt = false;
   if (widget.NeedsBuild()) {
     auto child = widget.Build(context);
     if (child != nullptr) {

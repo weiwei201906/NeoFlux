@@ -78,9 +78,9 @@ class Application : public NonCopyable {
   void LayoutWidgetTree() const;
   void PaintAndSubmit();
   // Recursively builds dirty widgets. Returns true if any widget in the
-  // subtree was rebuilt.
-  bool BuildWidgetRecursive(Widget& widget, BuildContext& context);
-  void PaintWidgetRecursive(Widget& widget, RenderContext& context);
+  // subtree was rebuilt. Static: does not access any member state.
+  static bool BuildWidgetRecursive(Widget& widget, BuildContext& context);
+  static void PaintWidgetRecursive(Widget& widget, RenderContext& context);
   void DispatchPointerEvent(MouseButton button, InputAction action,
                             const Point& pos);
   void DispatchPointerMove(const Point& pos);

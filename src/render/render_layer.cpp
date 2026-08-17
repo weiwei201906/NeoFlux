@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - render_layer.cpp
 //
 // Implementation of RenderLayer. Methods moved from header.
@@ -27,7 +27,7 @@ DEFINE_uint64(render_queue_capacity, 2048,
 
 DEFINE_string(render_backend, "gl",
               "Rendering backend to use. Options: 'gl' (OpenGL ES 3.0 / "
-              "OpenGL 3.3 core, default), 'vulkan' (Vulkan 鈥?currently a "
+              "OpenGL 3.3 core, default), 'vulkan' (Vulkan 閳?currently a "
               "compile-time stub, falls back to GL with a warning).");
 
 namespace neoflux {
@@ -89,7 +89,7 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
 
   if (!renderer_->Init(width, height, glfw_bridge_->GetNativeHandle())) {
     LOG(ERROR) << "Failed to initialize tgfx renderer";
-    glfw_bridge_->ReleaseContext();
+    GlfwBridge::ReleaseContext();
     glfw_bridge_->Shutdown();
     glfw_bridge_.reset();
     return false;
@@ -97,13 +97,13 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
 
   // Release the context from the main thread; the render thread will
   // acquire it exclusively via MakeContextCurrent() in RenderLoop().
-  glfw_bridge_->ReleaseContext();
+  GlfwBridge::ReleaseContext();
 
   // Note: renderer_->Init() already stored the logical window size for
   // u_resolution (shader layout coordinates). The actual framebuffer size
   // (which may differ due to DPI scaling) is queried each frame in
   // TgfxRenderer::BeginFrame() and used only for glViewport. Do NOT call
-  // Resize() here with the framebuffer size 鈥?that would corrupt u_resolution
+  // Resize() here with the framebuffer size 閳?that would corrupt u_resolution
   // and make layout coordinates mismatch the shader.
 #else
   // Mobile: tgfx renders directly into the platform surface provided by

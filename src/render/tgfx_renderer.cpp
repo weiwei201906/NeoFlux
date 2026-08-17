@@ -533,8 +533,8 @@ class GlRendererImpl : public NonCopyable {
         }
       })";
 
-    GlUint vs = gl.glCreateShader(0x8B31);
-    GlUint fs = gl.glCreateShader(0x8B30);
+    const GlUint vs = gl.glCreateShader(0x8B31);
+    const GlUint fs = gl.glCreateShader(0x8B30);
     gl.glShaderSource(vs, 1, &kVertSrc, nullptr);
     gl.glShaderSource(fs, 1, &kFragSrc, nullptr);
     gl.glCompileShader(vs);
