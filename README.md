@@ -148,12 +148,22 @@ app.SetFontDir("fonts");  // matches the copied fonts/ folder
 app.Init(argc, argv, 800, 600, "My App");
 ```
 
+## CMake Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `NEOFLUX_BUILD_TESTS` | `OFF` | Build unit tests (gtest). |
+| `NEOFLUX_BUILD_EXAMPLES` | `OFF` | Build example applications. |
+| `NEOFLUX_ENABLE_CLANG_TIDY` | `OFF` | Run clang-tidy as a build step. |
+| `NEOFLUX_USE_TGFX` | `OFF` | Use tgfx rendering backend (requires MSVC on Windows). |
+| `NEOFLUX_FFPLAY_PATH` | `""` | Path to ffplay executable for MediaWidget. Empty = resolve from `PATH` at runtime. |
+
 ## Building Tests
 
-Tests and example are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` CMake option:
+Tests and examples are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` and `NEOFLUX_BUILD_EXAMPLES` CMake options:
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -NEOFLUX_BUILD_EXAMPLES=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
 cmake --build build
 cd build && ctest --output-on-failure
 ```
@@ -206,6 +216,8 @@ can contain children. Layout is computed by the Taitank flexbox engine.
 | `Button` | Clickable button with label, press callback, and pressed-state styling. |
 | `ScrollView` | Scrollable viewport that clips and pans its content via mouse wheel / drag. |
 | `Draggable` | Container that can be dragged with pointer input; paint-time translate so layout is unaffected. |
+| `TextField` | Single-line editable text input with cursor navigation, placeholder, UTF-8 support, and focus management. |
+| `MediaWidget` | Media playback backed by the ffplay subprocess; cross-platform, no FFmpeg linking required. |
 | `Expanded` | Container with `flex_grow` set; fills remaining space in a flex parent. |
 | `SizedBox` | Container with explicit width/height; useful for fixed-size spacing. |
 | `StatelessWidget` | Base for widgets that don't hold mutable state. |

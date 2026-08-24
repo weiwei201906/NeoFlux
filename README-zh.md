@@ -158,9 +158,19 @@ app.SetFontDir("fonts");  // 对应拷贝到输出目录的 fonts/ 文件夹
 app.Init(argc, argv, 800, 600, "My App");
 ```
 
+## CMake 选项
+
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `NEOFLUX_BUILD_TESTS` | `OFF` | 构建单元测试（gtest）。 |
+| `NEOFLUX_BUILD_EXAMPLES` | `OFF` | 构建示例应用。 |
+| `NEOFLUX_ENABLE_CLANG_TIDY` | `OFF` | 将 clang-tidy 作为构建步骤运行。 |
+| `NEOFLUX_USE_TGFX` | `OFF` | 使用 tgfx 渲染后端（Windows 上需要 MSVC）。 |
+| `NEOFLUX_FFPLAY_PATH` | `""` | MediaWidget 使用的 ffplay 可执行文件路径。为空则运行时从 `PATH` 解析。 |
+
 ## 构建测试
 
-测试和示例默认禁用，通过 `NEOFLUX_BUILD_TESTS` CMake 选项启用：
+测试和示例默认禁用，通过 `NEOFLUX_BUILD_TESTS` 和 `NEOFLUX_BUILD_EXAMPLES` CMake 选项启用：
 
 ```bash
 cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
@@ -213,6 +223,8 @@ int main(int argc, char** argv) {
 | `Button`          | 可点击按钮，支持标签、按下回调、按下状态样式。                |
 | `ScrollView`      | 可滚动视口，支持滚轮与拖拽滚动，内容裁剪。                    |
 | `Draggable`       | 可拖拽容器，绘制时平移不影响 Taitank 布局。                   |
+| `TextField`       | 单行可编辑文本输入，支持光标导航、占位符、UTF-8 和焦点管理。   |
+| `MediaWidget`     | 基于 ffplay 子进程的媒体播放，跨平台，无需链接 FFmpeg。        |
 | `Expanded`        | 设置了 flex_grow 的容器，填充父容器剩余空间。                 |
 | `SizedBox`        | 固定宽高的容器，用于固定间距。                                |
 | `StatelessWidget` | 无状态 Widget 基类。                                          |

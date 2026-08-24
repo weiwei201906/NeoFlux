@@ -221,3 +221,96 @@ class CounterWidget : public StatefulWidget {
 ```
 
 Call `MarkNeedsBuild()` when state changes to schedule a rebuild.
+
+## TextField
+
+A single-line editable text input widget. Supports cursor navigation,
+placeholder text, UTF-8 insertion/deletion, and focus management.
+
+```cpp
+auto field = std::make_shared<TextField>();
+field->SetPlaceholder("Enter your name...");
+field->SetFontSize(16.0F);
+field->SetOnSubmit([](std::string_view text) {
+  LOG(INFO) << "Submitted: " << text;
+});
+field->SetOnChange([](std::string_view text) {
+  // Called on every keystroke.
+});
+container->AddChild(field);
+```
+
+### Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| Left/Right | Move cursor one character |
+| Home/End | Move cursor to start/end |
+| Backspace | Delete character before cursor |
+| Delete | Delete character after cursor |
+| Enter | Trigger `OnSubmit` callback |
+| Ctrl+A | Move cursor to end (select all) |
+
+Click the field to acquire keyboard focus. The cursor blinks at ~1Hz.
+TextField is fully UTF-8 aware: multi-byte characters are treated as a
+single unit for cursor movement and deletion.
+
+:::tip
+TextField must call `EnableMeasureFunction()` in its constructor so
+Taitank knows its intrinsic size. Without it, the widget has zero bounds
+and hit-testing will fail (click does nothing).
+:::
+
+## MediaWidget
+
+A media playback widget backed by the **ffplay** subprocess (from FFmpeg).
+Launches ffplay as a child process to decode and render audio/video. This
+keeps the framework lightweight — no FFmpeg libraries are linked, and the
+same code works on Windows, Linux, and macOS.
+
+```cpp
+auto media = std::make_shared<MediaWidget>();
+media->SetSource("video.mp4");
+media->SetExtraArgs("-vcodec h264 -acodec aac -fs");
+media->Play();
+container->AddChild(media);
+```
+
+### FFplay Configuration
+
+- **Default path**: `"ffplay"` (resolved from `PATH` at runtime)
+- **Compile-time path**: `-DNEOFLUX_FFPLAY_PATH=/usr/bin/ffplay`
+- **Runtime path**: `media->SetFfplayPath("/custom/ffplay")`
+- **Extra args**: `media->SetExtraArgs("-fs -autoexit")` — appended after
+  the default `-autoexit` flag, before the source URL
+
+### Requirements
+
+ffplay must be installed and available on `PATH` (or configured via
+`NEOFLUX_FFPLAY_PATH`):
+
+- **Windows**: Download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
+  and add `bin/` to `PATH`
+- **Linux**: `sudo apt install ffmpeg`
+- **macOS**: `brew install ffmpeg`
+
+:::warning
+MediaWidget uses subprocess isolation, so FFmpeg's GPL/LGPL license does
+not propagate to the NeoFlux framework binary. The framework itself
+remains GPL-3.0.
+:::
+
+### Test Video
+
+Generate a 10-second test pattern video with audio:
+
+```bash
+# Linux/macOS
+bash examples/media_demo/generate_test_video.sh
+
+# Windows
+examples\media_demo\generate_test_video.bat
+```
+
+This creates `examples/media_demo/test_video.mp4` using ffmpeg's
+`testsrc` and `sine` filters.

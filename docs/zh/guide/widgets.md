@@ -97,6 +97,82 @@ class MyWidget : public Widget {
 - `StatefulWidget`：有状态组件基类，配合 `State<W>` 使用
 - `SetState()`：标记状态变化，触发重建
 
+## TextField（文本输入框）
+
+单行可编辑文本输入组件，支持光标导航、占位符文本、UTF-8 插入/删除和焦点管理。
+
+```cpp
+auto field = std::make_shared<TextField>();
+field->SetPlaceholder("请输入姓名...");
+field->SetFontSize(16.0F);
+field->SetOnSubmit([](std::string_view text) {
+  LOG(INFO) << "提交: " << text;
+});
+container->AddChild(field);
+```
+
+### 键盘导航
+
+| 按键 | 行为 |
+|------|------|
+| 左/右方向键 | 光标移动一个字符 |
+| Home/End | 光标移到开头/末尾 |
+| Backspace | 删除光标前字符 |
+| Delete | 删除光标后字符 |
+| Enter | 触发 `OnSubmit` 回调 |
+| Ctrl+A | 光标移到末尾（全选） |
+
+点击输入框获取键盘焦点，光标以约 1Hz 频率闪烁。TextField 完全支持 UTF-8：多字节字符在光标移动和删除时被视为单个单元。
+
+:::tip
+TextField 必须在构造函数中调用 `EnableMeasureFunction()`，这样 Taitank 才能知道其固有尺寸。否则组件尺寸为零，命中测试会失败（点击无反应）。
+:::
+
+## MediaWidget（媒体播放）
+
+基于 **ffplay** 子进程的媒体播放组件（来自 FFmpeg）。以子进程方式启动 ffplay 进行音视频解码和渲染。这保持了框架的轻量性——不链接任何 FFmpeg 库，相同代码可在 Windows、Linux 和 macOS 上运行。
+
+```cpp
+auto media = std::make_shared<MediaWidget>();
+media->SetSource("video.mp4");
+media->SetExtraArgs("-vcodec h264 -acodec aac -fs");
+media->Play();
+container->AddChild(media);
+```
+
+### FFplay 配置
+
+- **默认路径**：`"ffplay"`（运行时从 `PATH` 解析）
+- **编译期路径**：`-DNEOFLUX_FFPLAY_PATH=/usr/bin/ffplay`
+- **运行期路径**：`media->SetFfplayPath("/custom/ffplay")`
+- **额外参数**：`media->SetExtraArgs("-fs -autoexit")` — 追加在默认 `-autoexit` 之后、源 URL 之前
+
+### 环境要求
+
+ffplay 必须已安装并在 `PATH` 中（或通过 `NEOFLUX_FFPLAY_PATH` 配置）：
+
+- **Windows**：从 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 下载，将 `bin/` 加入 `PATH`
+- **Linux**：`sudo apt install ffmpeg`
+- **macOS**：`brew install ffmpeg`
+
+:::warning
+MediaWidget 使用子进程隔离，因此 FFmpeg 的 GPL/LGPL 许可证不会传播到 NeoFlux 框架二进制文件。框架本身保持 GPL-3.0。
+:::
+
+### 测试视频
+
+生成 10 秒带音频的测试图案视频：
+
+```bash
+# Linux/macOS
+bash examples/media_demo/generate_test_video.sh
+
+# Windows
+examples\media_demo\generate_test_video.bat
+```
+
+这会使用 ffmpeg 的 `testsrc` 和 `sine` 滤镜生成 `examples/media_demo/test_video.mp4`。
+
 ## 下一步
 
 - [Flex 布局](./layout)
