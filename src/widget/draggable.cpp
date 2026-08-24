@@ -32,7 +32,7 @@ void Draggable::Paint(RenderContext& context) {
   context.Restore();
 }
 
-std::shared_ptr<Widget> Draggable::HitTest(const Point& parent_pos) {
+std::shared_ptr<Widget> Draggable::HitTest(const Point& parent_pos) const {
   // The widget is visually translated by drag_offset_ at paint time.
   // Subtract the offset to convert the click position (in visual
   // coordinates) back to layout coordinates before delegating to the

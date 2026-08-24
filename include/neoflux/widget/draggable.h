@@ -41,7 +41,7 @@ class Draggable : public Container {
   // offset by drag_offset_ at paint time, the hit test must subtract the
   // offset so clicks at the visual position correctly hit the widget.
   [[nodiscard]] std::shared_ptr<Widget> HitTest(
-      const Point& parent_pos) override;
+      const Point& parent_pos) const override;
 
   // Pointer handlers that drive the drag state machine.
   bool OnPointerDown(const Point& local_pos) override;

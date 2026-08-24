@@ -113,7 +113,7 @@ void Widget::OnPointerEnter() {}
 void Widget::OnPointerExit() {}
 
 std::shared_ptr<Widget> Widget::HitTest(
-    const Point& parent_pos) {
+    const Point& parent_pos) const {
   // parent_pos is relative to this widget's parent. bounds_ is also relative
   // to the parent, so we can compare directly.
   if (parent_pos.x < bounds_.x || parent_pos.y < bounds_.y ||
@@ -143,7 +143,10 @@ std::shared_ptr<Widget> Widget::HitTest(
       return hit;
     }
   }
-  return shared_from_this();
+  // HitTest is logically const but shared_from_this() returns
+  // shared_ptr<const Widget> in a const method. const_pointer_cast is safe
+  // here because the caller receives a non-const view for event dispatch.
+  return std::const_pointer_cast<Widget>(shared_from_this());
 }
 
 void Widget::PerformLayout(float width, float height) {

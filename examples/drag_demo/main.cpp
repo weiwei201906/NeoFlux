@@ -72,7 +72,7 @@ class DragBox : public Draggable {
   // needed; the state check acts as the guard.
   static Task<void> LongPressCoroutine(std::weak_ptr<DragBox> weak_box) {
     co_await Sleep(std::chrono::milliseconds(500));
-    auto box = weak_box.lock();
+    const auto box = weak_box.lock();
     if (box == nullptr) {
       co_return;  // Widget destroyed.
     }

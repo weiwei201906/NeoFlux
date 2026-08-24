@@ -253,7 +253,7 @@ class GlRendererImpl : public NonCopyable {
     gl.glUniform2f(u_resolution_, static_cast<float>(width_),
                    static_cast<float>(height_));
     transform_stack_.clear();
-    transform_stack_.push_back({0.0F, 0.0F});
+    transform_stack_.emplace_back(0.0F, 0.0F);
     clip_stack_.clear();
   }
 
