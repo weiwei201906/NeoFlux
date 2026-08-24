@@ -23,12 +23,17 @@
 namespace neoflux {
 
 template <typename T>
-SpscRingQueue<T>::SpscRingQueue(const std::size_t capacity)
-    : capacity_(0),
-      mask_(0),
-      head_(0),
-      tail_(0) {
+SpscRingQueue<T>::SpscRingQueue() = default;
+
+template <typename T>
+SpscRingQueue<T>::SpscRingQueue(const std::size_t capacity) {
+  Init(capacity);
+}
+
+template <typename T>
+void SpscRingQueue<T>::Init(const std::size_t capacity) {
   assert(capacity >= 2 && "SpscRingQueue capacity must be at least 2");
+  assert(capacity_ == 0 && "SpscRingQueue::Init called twice");
   static_assert(std::is_move_constructible_v<T> ||
                     std::is_copy_constructible_v<T>,
                 "T must be move-constructible or copy-constructible");

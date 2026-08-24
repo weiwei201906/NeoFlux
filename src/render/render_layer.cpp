@@ -34,14 +34,7 @@ DEFINE_string(render_backend, "vulkan",
 
 namespace neoflux {
 
-RenderLayer::RenderLayer()
-    : command_queue_(FLAGS_render_queue_capacity),
-      running_(false),
-      should_close_(false),
-      render_thread_(nullptr),
-      render_ready_future_(render_ready_.get_future()),
-      renderer_(nullptr),
-      platform_bridge_(nullptr) {}
+RenderLayer::RenderLayer() = default;
 
 RenderLayer::~RenderLayer() { Stop(); }
 
@@ -52,6 +45,8 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
     LOG(WARNING) << "RenderLayer already running";
     return false;
   }
+
+  command_queue_.Init(FLAGS_render_queue_capacity);
 
   window_width_ = static_cast<std::uint16_t>(width);
   window_height_ = static_cast<std::uint16_t>(height);

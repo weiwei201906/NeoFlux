@@ -44,10 +44,18 @@ class SpscRingQueue {
   using value_type = T;
   using size_type = std::size_t;
 
+  // Default constructor: creates an empty queue with zero capacity.
+  // Call Init() before Push/Pop.
+  SpscRingQueue();
+
   // Constructs a queue with the given capacity (rounded up to power of two).
   // capacity must be >= 2.
   explicit SpscRingQueue(std::size_t capacity);
   ~SpscRingQueue();
+
+  // Initialises the queue with the given capacity. Must be called exactly
+  // once before Push/Pop when using the default constructor.
+  void Init(std::size_t capacity);
 
   // Non-copyable, non-movable (contains atomic members and raw storage).
   SpscRingQueue(const SpscRingQueue&) = delete;
@@ -78,19 +86,19 @@ class SpscRingQueue {
   T* Slot(std::size_t index) noexcept;
 
   // Raw storage for elements (allocated to capacity * sizeof(T)).
-  std::vector<std::byte> storage_;
+  std::vector<std::byte> storage_{};
 
   // Actual capacity (rounded up to power of two, including reserved slot).
-  std::size_t capacity_;
+  std::size_t capacity_ = 0;
 
   // Bitmask for index wrapping: capacity_ - 1 (all lower bits set).
-  std::size_t mask_;
+  std::size_t mask_ = 0;
 
   // Producer index (cache-line aligned).
-  alignas(detail::kCacheLineSize) std::atomic<std::size_t> head_;
+  alignas(detail::kCacheLineSize) std::atomic<std::size_t> head_{0};
 
   // Consumer index (cache-line aligned).
-  alignas(detail::kCacheLineSize) std::atomic<std::size_t> tail_;
+  alignas(detail::kCacheLineSize) std::atomic<std::size_t> tail_{0};
 };
 
 }  // namespace neoflux
