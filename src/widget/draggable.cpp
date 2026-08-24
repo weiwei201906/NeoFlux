@@ -32,6 +32,16 @@ void Draggable::Paint(RenderContext& context) {
   context.Restore();
 }
 
+std::shared_ptr<Widget> Draggable::HitTest(const Point& parent_pos) {
+  // The widget is visually translated by drag_offset_ at paint time.
+  // Subtract the offset to convert the click position (in visual
+  // coordinates) back to layout coordinates before delegating to the
+  // base class hit test (which uses bounds_ in layout space).
+  const Point layout_pos{.x = parent_pos.x - drag_offset_.x,
+                         .y = parent_pos.y - drag_offset_.y,};
+  return Container::HitTest(layout_pos);
+}
+
 bool Draggable::OnPointerDown(const Point& local_pos) {
   press_pos_ = local_pos;
   dragging_ = true;

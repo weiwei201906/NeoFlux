@@ -127,7 +127,8 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Returns the deepest widget that contains the point, or nullptr if no
   // widget is hit. Children are tested in reverse order (top-most first).
   // For the root widget, the coordinate is the window coordinate.
-  [[nodiscard]] std::shared_ptr<Widget> HitTest(const Point& parent_pos);
+  [[nodiscard]] virtual std::shared_ptr<Widget> HitTest(
+      const Point& parent_pos);
 
   // Returns the widget's global position (sum of all ancestor bounds offsets).
   [[nodiscard]] Point GetGlobalPosition() const noexcept;
