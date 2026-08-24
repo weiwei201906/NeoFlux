@@ -44,6 +44,7 @@ std::shared_ptr<Widget> Draggable::HitTest(const Point& parent_pos) {
 
 bool Draggable::OnPointerDown(const Point& local_pos) {
   press_pos_ = local_pos;
+  start_offset_ = drag_offset_;
   dragging_ = true;
   SetState(WidgetState::kDragging);
   return true;
@@ -65,8 +66,11 @@ bool Draggable::OnPointerMove(const Point& local_pos) {
   // Layout+Paint will run with the new offset. This avoids flooding the
   // render queue with redundant full-tree rebuilds during high-frequency
   // drag events (Flutter-style repaint without relayout).
-  drag_offset_.x = local_pos.x - press_pos_.x;
-  drag_offset_.y = local_pos.y - press_pos_.y;
+  //
+  // Absolute offset = start_offset + (current_pos - press_pos), where both
+  // positions are relative to the widget's visual top-left.
+  drag_offset_.x = start_offset_.x + (local_pos.x - press_pos_.x);
+  drag_offset_.y = start_offset_.y + (local_pos.y - press_pos_.y);
   return true;
 }
 
@@ -83,6 +87,8 @@ void Draggable::OnPointerExit() {
 }
 
 Point Draggable::GetDragOffset() const noexcept { return drag_offset_; }
+
+Point Draggable::GetPaintOffset() const noexcept { return drag_offset_; }
 
 bool Draggable::IsDragging() const noexcept { return dragging_; }
 

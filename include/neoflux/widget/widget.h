@@ -133,6 +133,12 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Returns the widget's global position (sum of all ancestor bounds offsets).
   [[nodiscard]] Point GetGlobalPosition() const noexcept;
 
+  // Returns the paint-time offset applied to this widget (e.g. drag offset).
+  // Default is zero. Subclasses that apply transforms at paint time must
+  // override so event dispatch converts visual coords to local coords
+  // correctly.
+  [[nodiscard]] virtual Point GetPaintOffset() const noexcept;
+
   // Performs Taitank layout rooted at this widget with the given available
   // size, then recursively copies computed bounds back into the widget tree.
   void PerformLayout(float width, float height);

@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // NeoFlux - widget.cpp
 //
 // Implementation of Widget, BuildContext, StatefulWidget, StatelessWidget.
@@ -218,7 +218,9 @@ Point Widget::GetGlobalPosition() const noexcept {
   return pos;
 }
 
-void Widget::SetDesiredSize(const Size& size) noexcept {
+Point Widget::GetPaintOffset() const noexcept {
+  return Point{.x = 0.0F, .y = 0.0F};
+}void Widget::SetDesiredSize(const Size& size) noexcept {
   desired_size_ = size;
 }
 

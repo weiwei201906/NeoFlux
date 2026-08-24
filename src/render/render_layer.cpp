@@ -53,8 +53,8 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
     return false;
   }
 
-  window_width_ = width;
-  window_height_ = height;
+  window_width_ = static_cast<std::uint16_t>(width);
+  window_height_ = static_cast<std::uint16_t>(height);
 
   LOG(INFO) << "RenderLayer starting: " << width << "x" << height
             << " backend=" << FLAGS_render_backend;
@@ -215,8 +215,8 @@ void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
     height = platform_bridge_->GetHeight();
     return;
   }
-  width = window_width_;
-  height = window_height_;
+  width = static_cast<int>(window_width_);
+  height = static_cast<int>(window_height_);
 }
 
 void RenderLayer::RenderLoop() {

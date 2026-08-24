@@ -111,8 +111,8 @@ class Application : public NonCopyable {
   // high-frequency pointer-move events to avoid full-tree traversal.
   std::weak_ptr<Widget> hit_cache_{};
   bool hit_cache_valid_ = false;
-  int window_width_ = 800;
-  int window_height_ = 600;
+  std::uint16_t window_width_ = 800;
+  std::uint16_t window_height_ = 600;
   // Directory to scan for font files. Configured via SetFontDir() before
   // Init(); default "fonts".
   std::string font_dir_{"fonts"};

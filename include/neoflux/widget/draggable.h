@@ -53,12 +53,16 @@ class Draggable : public Container {
   // Returns the current drag offset in pixels.
   [[nodiscard]] Point GetDragOffset() const noexcept;
 
+  // Paint-time offset for correct event coordinate conversion.
+  [[nodiscard]] Point GetPaintOffset() const noexcept override;
+
   // Returns true if currently being dragged.
   [[nodiscard]] bool IsDragging() const noexcept;
 
  private:
   Point drag_offset_{};
   Point press_pos_{};
+  Point start_offset_{};
   bool dragging_ = false;
 };
 

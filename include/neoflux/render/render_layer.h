@@ -90,14 +90,14 @@ class RenderLayer : public NonCopyable {
   // performed a preliminary BeginFrame/EndFrame to initialise GL resources.
   // Start() blocks on this until the render thread is ready, so the first
   // real frame submitted by the application never races GL initialisation.
-  std::promise<void> render_ready_;
-  std::future<void> render_ready_future_;
+  std::promise<void> render_ready_{};
+  std::future<void> render_ready_future_{};
 
-  std::unique_ptr<TgfxRenderer> renderer_;
-  std::unique_ptr<PlatformBridge> platform_bridge_;
+  std::unique_ptr<TgfxRenderer> renderer_{nullptr};
+  std::unique_ptr<PlatformBridge> platform_bridge_{nullptr};
 
-  int window_width_ = 800;
-  int window_height_ = 600;
+  std::uint16_t window_width_ = 800;
+  std::uint16_t window_height_ = 600;
 };
 
 }  // namespace neoflux

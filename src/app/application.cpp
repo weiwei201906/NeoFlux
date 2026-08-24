@@ -115,8 +115,8 @@ bool Application::Init(int argc, char** argv, int window_width,
     LOG(INFO) << "Logging to directory: " << FLAGS_log_dir;
   }
 
-  window_width_ = window_width;
-  window_height_ = window_height;
+  window_width_ = static_cast<std::uint16_t>(window_width);
+  window_height_ = static_cast<std::uint16_t>(window_height);
 
   render_layer_ = std::make_unique<RenderLayer>();
   if (!render_layer_->Start(window_width, window_height, window_title,
@@ -142,8 +142,8 @@ bool Application::Init(int argc, char** argv, int window_width,
       DispatchScrollEvent(xoffset, yoffset);
     });
     glfw->SetResizeCallback([this](int width, int height) {
-      window_width_ = width;
-      window_height_ = height;
+      window_width_ = static_cast<std::uint16_t>(width);
+      window_height_ = static_cast<std::uint16_t>(height);
       MarkFrameDirty();
     });
     glfw->SetMouseMoveCallback([this](const Point& pos) {
@@ -223,9 +223,13 @@ RenderLayer& Application::GetRenderLayer() noexcept {
 
 EventLoop& Application::GetEventLoop() noexcept { return event_loop_; }
 
-int Application::GetWindowWidth() const noexcept { return window_width_; }
+int Application::GetWindowWidth() const noexcept {
+  return static_cast<int>(window_width_);
+}
 
-int Application::GetWindowHeight() const noexcept { return window_height_; }
+int Application::GetWindowHeight() const noexcept {
+  return static_cast<int>(window_height_);
+}
 
 void Application::MarkFrameDirty() noexcept {
   frame_dirty_.store(true);
@@ -383,8 +387,9 @@ void Application::DispatchPointerEvent(
             << ") hit: " << (hit ? hit->GetWidgetName() : "null");
     if (hit != nullptr) {
       const Point global_pos = hit->GetGlobalPosition();
-      const Point local{.x = scaled_pos.x - global_pos.x,
-                        .y = scaled_pos.y - global_pos.y,};
+      const Point paint_offset = hit->GetPaintOffset();
+      const Point local{.x = scaled_pos.x - global_pos.x - paint_offset.x,
+                        .y = scaled_pos.y - global_pos.y - paint_offset.y,};
       if (hit->OnPointerDown(local)) {
         // Store a weak_ptr so a widget-tree rebuild between press and release
         // does not leave a dangling pointer.
@@ -398,8 +403,9 @@ void Application::DispatchPointerEvent(
             << ") pressed_widget valid: " << (pressed != nullptr);
     if (pressed != nullptr) {
       const Point global_pos = pressed->GetGlobalPosition();
-      const Point local{.x = scaled_pos.x - global_pos.x,
-                        .y = scaled_pos.y - global_pos.y,};
+      const Point paint_offset = pressed->GetPaintOffset();
+      const Point local{.x = scaled_pos.x - global_pos.x - paint_offset.x,
+                        .y = scaled_pos.y - global_pos.y - paint_offset.y,};
       pressed->OnPointerUp(local);
     }
     pressed_widget_.reset();
@@ -465,7 +471,9 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
   // Deliver move event to the widget under the cursor.
   if (hit != nullptr) {
     const Point global_pos = hit->GetGlobalPosition();
-    const Point local{.x = pos.x - global_pos.x, .y = pos.y - global_pos.y};
+    const Point paint_offset = hit->GetPaintOffset();
+    const Point local{.x = pos.x - global_pos.x - paint_offset.x,
+                      .y = pos.y - global_pos.y - paint_offset.y,};
     hit->OnPointerMove(local);
   }
   // Move may change visual state (drag offset, hover), so mark the frame
