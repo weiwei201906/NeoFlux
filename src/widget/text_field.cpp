@@ -200,6 +200,7 @@ bool TextField::OnKeyEvent(const KeyEvent& event) {
         // multi-byte sequences correctly.
         text_.insert(cursor_pos_, clip);
         cursor_pos_ += clip.size();
+        selection_anchor_ = cursor_pos_;
       }
     }
     if (on_change_ != nullptr) {
@@ -385,9 +386,11 @@ void TextField::InsertCodepoint(std::uint32_t codepoint) {
   CodepointToUtf8(codepoint, utf8);
   text_.insert(cursor_pos_, utf8);
   cursor_pos_ += utf8.size();
+  selection_anchor_ = cursor_pos_;
   if (on_change_ != nullptr) {
     on_change_(text_);
   }
+  RequestRepaint();
 }
 
 void TextField::DeleteBackward() {
@@ -397,9 +400,11 @@ void TextField::DeleteBackward() {
   const std::size_t prev = PrevCharOffset(cursor_pos_);
   text_.erase(prev, cursor_pos_ - prev);
   cursor_pos_ = prev;
+  selection_anchor_ = cursor_pos_;
   if (on_change_ != nullptr) {
     on_change_(text_);
   }
+  RequestRepaint();
 }
 
 void TextField::DeleteForward() {
@@ -408,9 +413,11 @@ void TextField::DeleteForward() {
   }
   const std::size_t next = NextCharOffset(cursor_pos_);
   text_.erase(cursor_pos_, next - cursor_pos_);
+  selection_anchor_ = cursor_pos_;
   if (on_change_ != nullptr) {
     on_change_(text_);
   }
+  RequestRepaint();
 }
 
 void TextField::MoveCursorLeft() {
@@ -543,6 +550,13 @@ std::size_t TextField::Utf8CharCount(std::string_view text,
     ++count;
   }
   return count;
+}
+
+void TextField::RequestRepaint() noexcept {
+  Application* app = GetApplication();
+  if (app != nullptr) {
+    app->MarkFrameDirty();
+  }
 }
 
 }  // namespace neoflux

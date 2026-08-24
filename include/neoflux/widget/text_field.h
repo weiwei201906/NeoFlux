@@ -145,6 +145,11 @@ class TextField : public Widget {
   static std::size_t Utf8CharCount(std::string_view text,
                                    std::size_t byte_limit) noexcept;
 
+  // Requests a repaint by marking the application frame dirty. Called after
+  // any state change that affects visual output (text, cursor, selection,
+  // focus). Safe to call when not attached to an application.
+  void RequestRepaint() noexcept;
+
   // Returns true if there is an active text selection (anchor != cursor).
   [[nodiscard]] bool HasSelection() const noexcept;
 
