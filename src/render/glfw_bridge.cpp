@@ -94,6 +94,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
 
   glfwSetFramebufferSizeCallback(window_, FramebufferSizeCallback);
   glfwSetKeyCallback(window_, KeyCallback);
+  glfwSetCharCallback(window_, CharCallback);
   glfwSetMouseButtonCallback(window_, MouseButtonCallback);
   glfwSetCursorPosCallback(window_, CursorPosCallback);
   glfwSetScrollCallback(window_, ScrollCallback);
@@ -205,6 +206,14 @@ void GlfwBridge::SetInputCallback(InputEventCallback callback) {
   input_callback_ = std::move(callback);
 }
 
+void GlfwBridge::SetKeyCallback(KeyEventCallback callback) {
+  key_callback_ = std::move(callback);
+}
+
+void GlfwBridge::SetCharCallback(CharEventCallback callback) {
+  char_callback_ = std::move(callback);
+}
+
 void GlfwBridge::SetScrollCallback(ScrollEventCallback callback) noexcept {
   scroll_callback_ = std::move(callback);
 }
@@ -235,9 +244,42 @@ void GlfwBridge::FramebufferSizeCallback(GLFWwindow* window, int width,
   }
 }
 
-void GlfwBridge::KeyCallback(GLFWwindow* /*window*/, int key,
-                             int /*scancode*/, int action, int /*mods*/) {
-  VLOG(2) << "Key event: key=" << key << " action=" << action;
+void GlfwBridge::KeyCallback(GLFWwindow* window, int key,
+                             int /*scancode*/, int action, int mods) {
+  auto* user_data =
+      static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
+  if (user_data == nullptr || user_data->bridge == nullptr) {
+    return;
+  }
+  auto* bridge = user_data->bridge;
+  if (bridge->key_callback_ == nullptr) {
+    return;
+  }
+  // GLFW key codes match our KeyCode enum values for the subset we define.
+  KeyEvent event{};
+  event.key = static_cast<KeyCode>(key);
+  // GLFW modifier bits match KeyModifiers exactly: shift=0x1, control=0x2,
+  // alt=0x4, super=0x8. Mask the lower 4 bits and cast to uint8_t.
+  const auto mods_u = static_cast<std::uint32_t>(mods);
+  // NOLINTNEXTLINE(bugprone-signed-bitwise) - mods_u is uint32_t, mask is unsigned literal
+  event.modifiers = static_cast<std::uint8_t>(mods_u & 0x000FU);
+  event.pressed = (action != 0);  // GLFW_RELEASE=0, PRESS=1, REPEAT=2
+  bridge->key_callback_(event);
+}
+
+void GlfwBridge::CharCallback(GLFWwindow* window, unsigned int codepoint) {
+  auto* user_data =
+      static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
+  if (user_data == nullptr || user_data->bridge == nullptr) {
+    return;
+  }
+  auto* bridge = user_data->bridge;
+  if (bridge->char_callback_ == nullptr) {
+    return;
+  }
+  CharEvent event{};
+  event.codepoint = codepoint;
+  bridge->char_callback_(event);
 }
 
 void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,

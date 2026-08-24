@@ -134,6 +134,12 @@ bool Application::Init(int argc, char** argv, int window_width,
       DispatchPointerEvent(button, action, pos);
       MarkFrameDirty();
     });
+    bridge->SetKeyCallback([this](const KeyEvent& event) {
+      DispatchKeyEvent(event);
+    });
+    bridge->SetCharCallback([this](const CharEvent& event) {
+      DispatchCharEvent(event);
+    });
 #ifdef NEOFLUX_PLATFORM_DESKTOP
     // Desktop-only callbacks: scroll and resize are GLFW-specific.
     // Mobile delivers these via the platform touch/lifecycle system.
@@ -396,6 +402,9 @@ void Application::DispatchPointerEvent(
         pressed_widget_ = hit->weak_from_this();
         VLOG(1) << "Pointer press consumed by " << hit->GetWidgetName();
       }
+      // Set keyboard focus if the clicked widget is focusable; otherwise
+      // clear focus so typing does not go to a stale widget.
+      SetFocus(hit->IsFocusable() ? hit : nullptr);
     }
   } else if (action == InputAction::kRelease) {
     auto pressed = pressed_widget_.lock();
@@ -520,6 +529,47 @@ void Application::DispatchScrollEvent(
     hit = (parent != nullptr) ? parent->shared_from_this() : nullptr;
   }
 #endif
+}
+
+void Application::DispatchKeyEvent(const KeyEvent& event) {
+  auto focused = focused_widget_.lock();
+  if (focused != nullptr) {
+    if (focused->OnKeyEvent(event)) {
+      MarkFrameDirty();
+    }
+  }
+}
+
+void Application::DispatchCharEvent(const CharEvent& event) {
+  auto focused = focused_widget_.lock();
+  VLOG(1) << "DispatchCharEvent codepoint=" << event.codepoint
+          << " focused=" << (focused ? focused->GetWidgetName() : "null");
+  if (focused != nullptr) {
+    if (focused->OnCharEvent(event)) {
+      MarkFrameDirty();
+    }
+  }
+}
+
+void Application::SetFocus(std::shared_ptr<Widget> widget) {
+  auto previous = focused_widget_.lock();
+  if (previous.get() == widget.get()) {
+    return;
+  }
+  if (previous != nullptr) {
+    previous->OnBlur();
+  }
+  if (widget != nullptr && widget->IsFocusable()) {
+    widget->OnFocus();
+    focused_widget_ = widget;
+  } else {
+    focused_widget_.reset();
+  }
+  MarkFrameDirty();
+}
+
+std::shared_ptr<Widget> Application::GetFocusedWidget() const {
+  return focused_widget_.lock();
 }
 
 }  // namespace neoflux

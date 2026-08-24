@@ -53,6 +53,8 @@ class GlfwBridge final : public PlatformBridge {
   [[nodiscard]] int GetHeight() const noexcept override;
   [[nodiscard]] void* GetNativeHandle() const noexcept override;
   void SetInputCallback(InputEventCallback callback) override;
+  void SetKeyCallback(KeyEventCallback callback) override;
+  void SetCharCallback(CharEventCallback callback) override;
   void PollEvents() override;
   [[nodiscard]] bool ShouldClose() const noexcept override;
 
@@ -92,6 +94,7 @@ class GlfwBridge final : public PlatformBridge {
                                       int height);
   static void KeyCallback(GLFWwindow* window, int key, int scancode,
                           int action, int mods);
+  static void CharCallback(GLFWwindow* window, unsigned int codepoint);
   static void MouseButtonCallback(GLFWwindow* window, int button, int action,
                                   int mods);
   static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
@@ -101,6 +104,8 @@ class GlfwBridge final : public PlatformBridge {
   GLFWwindow* window_ = nullptr;
   bool initialized_ = false;
   InputEventCallback input_callback_{};
+  KeyEventCallback key_callback_{};
+  CharEventCallback char_callback_{};
   ScrollEventCallback scroll_callback_{};
   ResizeCallback resize_callback_{};
   MouseMoveCallback mouse_move_callback_{};

@@ -84,6 +84,14 @@ class MobileBridge final : public PlatformBridge {
     input_callback_ = std::move(callback);
   }
 
+  void SetKeyCallback(KeyEventCallback callback) override {
+    key_callback_ = std::move(callback);
+  }
+
+  void SetCharCallback(CharEventCallback callback) override {
+    char_callback_ = std::move(callback);
+  }
+
   void PollEvents() override {
     // Mobile events are delivered asynchronously via DispatchTouchEvent;
     // no polling is needed.
@@ -188,6 +196,8 @@ class MobileBridge final : public PlatformBridge {
   int height_ = 0;
   bool should_close_ = false;
   InputEventCallback input_callback_;
+  KeyEventCallback key_callback_;
+  CharEventCallback char_callback_;
 };
 
 }  // namespace

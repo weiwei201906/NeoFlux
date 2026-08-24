@@ -95,6 +95,12 @@ class Application : public NonCopyable {
                             const Point& pos);
   void DispatchPointerMove(const Point& pos);
   void DispatchScrollEvent(double xoffset, double yoffset);
+  void DispatchKeyEvent(const KeyEvent& event);
+  void DispatchCharEvent(const CharEvent& event);
+  // Sets the keyboard focus to the given widget (pass nullptr to clear focus).
+  void SetFocus(std::shared_ptr<Widget> widget);
+  // Returns the widget that currently has keyboard focus.
+  [[nodiscard]] std::shared_ptr<Widget> GetFocusedWidget() const;
   // Invalidates the hit-test cache. Called after layout or tree changes.
   void InvalidateHitCache() noexcept;
 
@@ -111,6 +117,9 @@ class Application : public NonCopyable {
   // high-frequency pointer-move events to avoid full-tree traversal.
   std::weak_ptr<Widget> hit_cache_{};
   bool hit_cache_valid_ = false;
+  // Widget that currently has keyboard focus. Stored as weak_ptr to avoid
+  // dangling references if the widget tree is rebuilt.
+  std::weak_ptr<Widget> focused_widget_{};
   std::uint16_t window_width_ = 800;
   std::uint16_t window_height_ = 600;
   // Directory to scan for font files. Configured via SetFontDir() before

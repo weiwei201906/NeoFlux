@@ -21,10 +21,12 @@
 #include "neoflux/widget/container.h"
 #include "neoflux/widget/expanded.h"
 #include "neoflux/widget/draggable.h"
+#include "neoflux/widget/media_widget.h"
 #include "neoflux/widget/route_registry.h"
 #include "neoflux/widget/scroll_view.h"
 #include "neoflux/widget/sized_box.h"
 #include "neoflux/widget/text.h"
+#include "neoflux/widget/text_field.h"
 #include "neoflux/widget/widget.h"
 
 // Application layer.

@@ -112,6 +112,20 @@ void Widget::OnPointerEnter() {}
 
 void Widget::OnPointerExit() {}
 
+bool Widget::OnKeyEvent(const KeyEvent& /*event*/) { return false; }
+
+bool Widget::OnCharEvent(const CharEvent& /*event*/) { return false; }
+
+void Widget::OnFocus() {}
+
+void Widget::OnBlur() {}
+
+void Widget::SetFocusable(bool focusable) noexcept { focusable_ = focusable; }
+
+bool Widget::IsFocusable() const noexcept { return focusable_; }
+
+bool Widget::HasFocus() const noexcept { return has_focus_; }
+
 std::shared_ptr<Widget> Widget::HitTest(
     const Point& parent_pos) const {
   // parent_pos is relative to this widget's parent. bounds_ is also relative

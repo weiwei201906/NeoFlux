@@ -42,6 +42,52 @@ enum class MouseButton : std::uint8_t {
 using InputEventCallback =
     std::function<void(MouseButton button, InputAction action, const Point& pos)>;
 
+// Keyboard modifier flags (bitmask).
+enum class KeyModifiers : std::uint8_t {
+  kNone = 0,
+  kShift = 1 << 0,
+  kControl = 1 << 1,
+  kAlt = 1 << 2,
+  kSuper = 1 << 3,
+};
+
+// Key codes (subset of GLFW key codes, platform-independent).
+enum class KeyCode : std::int32_t {
+  kUnknown = -1,
+  kBackspace = 259,
+  kTab = 258,
+  kEnter = 257,
+  kEscape = 256,
+  kDelete = 261,
+  kRight = 262,
+  kLeft = 263,
+  kDown = 264,
+  kUp = 265,
+  kHome = 268,
+  kEnd = 269,
+  kA = 65,
+  kC = 67,
+  kV = 86,
+  kX = 88,
+  kZ = 90,
+};
+
+// Keyboard key event.
+struct KeyEvent {
+  KeyCode key;
+  std::uint8_t modifiers;  // Bitmask of KeyModifiers.
+  bool pressed;            // true = press, false = release.
+};
+
+// Unicode character input event (after OS keyboard layout mapping).
+struct CharEvent {
+  std::uint32_t codepoint;  // Unicode code point (UTF-32).
+};
+
+// Callback signatures for keyboard events.
+using KeyEventCallback = std::function<void(const KeyEvent& event)>;
+using CharEventCallback = std::function<void(const CharEvent& event)>;
+
 // Abstract platform bridge. Concrete implementations exist for desktop
 // (GLFW) and mobile (Android/iOS native surfaces).
 class PlatformBridge {
@@ -67,6 +113,12 @@ class PlatformBridge {
 
   // Sets the callback invoked when input events arrive.
   virtual void SetInputCallback(InputEventCallback callback) = 0;
+
+  // Sets the callback invoked when keyboard key events arrive.
+  virtual void SetKeyCallback(KeyEventCallback callback) = 0;
+
+  // Sets the callback invoked when Unicode character input arrives.
+  virtual void SetCharCallback(CharEventCallback callback) = 0;
 
   // Polls for pending platform events (non-blocking). Called from the
   // main thread event loop.

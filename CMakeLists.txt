@@ -90,6 +90,8 @@ add_library(neoflux STATIC
   src/widget/sized_box.cpp
   src/widget/expanded.cpp
   src/widget/draggable.cpp
+  src/widget/text_field.cpp
+  src/widget/media_widget.cpp
   src/widget/route_registry.cpp
   src/app/application.cpp
   src/app/event_loop.cpp

@@ -19,6 +19,7 @@
 
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
+#include "neoflux/render/platform_bridge.h"
 
 // Opaque Taitank layout node (defined in taitank_node.h).
 namespace taitank { struct TaitankNode; }
@@ -118,6 +119,29 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Called when the pointer exits the widget's bounds.
   // Default implementation does nothing.
   virtual void OnPointerExit();
+
+  // Handles a keyboard key press/release event. Only called when the widget
+  // has keyboard focus. Returns true if the event was consumed.
+  virtual bool OnKeyEvent(const KeyEvent& event);
+
+  // Handles a Unicode character input event. Only called when the widget has
+  // keyboard focus. Returns true if the character was consumed.
+  virtual bool OnCharEvent(const CharEvent& event);
+
+  // Called when the widget gains keyboard focus.
+  virtual void OnFocus();
+
+  // Called when the widget loses keyboard focus.
+  virtual void OnBlur();
+
+  // Sets whether this widget can receive keyboard focus.
+  void SetFocusable(bool focusable) noexcept;
+
+  // Returns true if this widget can receive keyboard focus.
+  [[nodiscard]] bool IsFocusable() const noexcept;
+
+  // Returns true if this widget currently has keyboard focus.
+  [[nodiscard]] bool HasFocus() const noexcept;
 
   // Performs a hit test at the given global coordinates.
   //
@@ -231,6 +255,8 @@ class Widget : public std::enable_shared_from_this<Widget> {
   bool needs_build_ = true;
   WidgetState state_ = WidgetState::kIdle;
   taitank::TaitankNode* taitank_node_ = nullptr;  // Opaque Taitank node.
+  bool focusable_ = false;
+  bool has_focus_ = false;
 };
 
 // Mutable state for a StatefulWidget.
