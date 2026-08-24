@@ -55,3 +55,7 @@ node_modules/
 
 cache
 docs/.vitepress/dist/
+# FFmpeg (downloaded at build time, not in repo)
+ffmpeg.zip
+ffmpeg/
+thirdparty/ffmpeg*/

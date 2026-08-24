@@ -56,7 +56,12 @@ struct ProcessHandle {
 
 }  // namespace
 
-MediaWidget::MediaWidget() = default;
+MediaWidget::MediaWidget() {
+  EnableMeasureFunction();
+#ifdef NEOFLUX_FFPLAY_PATH
+  ffplay_path_ = NEOFLUX_FFPLAY_PATH;
+#endif
+}
 
 MediaWidget::~MediaWidget() { Stop(); }
 

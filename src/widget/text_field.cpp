@@ -17,6 +17,7 @@ namespace neoflux {
 
 TextField::TextField() {
   SetFocusable(true);
+  EnableMeasureFunction();
 }
 
 TextField::~TextField() = default;

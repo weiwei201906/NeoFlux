@@ -45,6 +45,9 @@ option(NEOFLUX_BUILD_TESTS    "Build unit tests"         OFF)
 option(NEOFLUX_BUILD_EXAMPLES "Build example applications" OFF)
 option(NEOFLUX_ENABLE_CLANG_TIDY "Enable clang-tidy as a build step (requires correct sysroot config)" OFF)
 option(NEOFLUX_USE_TGFX      "Use tgfx rendering backend (requires MSVC on Windows)" OFF)
+# Path to the ffplay executable used by MediaWidget. If empty, "ffplay" is
+# resolved from PATH at runtime. Set this to bundle a specific ffplay build.
+set(NEOFLUX_FFPLAY_PATH "" CACHE STRING "Path to ffplay executable (empty = use PATH)")
 
 # ---------------------------------------------------------------------------
 # Third-party dependencies
@@ -170,6 +173,13 @@ if(ANDROID OR IOS)
   target_compile_definitions(neoflux PUBLIC NEOFLUX_PLATFORM_MOBILE=1)
 else()
   target_compile_definitions(neoflux PUBLIC NEOFLUX_PLATFORM_DESKTOP=1)
+endif()
+
+# FFplay path for MediaWidget. If set, compiles in the path as a string
+# literal; otherwise MediaWidget resolves "ffplay" from PATH at runtime.
+if(NOT "${NEOFLUX_FFPLAY_PATH}" STREQUAL "")
+  target_compile_definitions(neoflux PRIVATE
+    NEOFLUX_FFPLAY_PATH="${NEOFLUX_FFPLAY_PATH}")
 endif()
 
 # ---------------------------------------------------------------------------
