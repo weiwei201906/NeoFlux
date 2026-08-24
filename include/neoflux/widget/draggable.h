@@ -61,8 +61,6 @@ class Draggable : public Container {
 
  private:
   Point drag_offset_{};
-  Point press_pos_{};
-  Point start_offset_{};
   bool dragging_ = false;
 };
 

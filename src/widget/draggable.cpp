@@ -43,10 +43,11 @@ std::shared_ptr<Widget> Draggable::HitTest(const Point& parent_pos) {
 }
 
 bool Draggable::OnPointerDown(const Point& local_pos) {
-  press_pos_ = local_pos;
-  start_offset_ = drag_offset_;
   dragging_ = true;
   SetState(WidgetState::kDragging);
+  // Immediately center the widget on the press point.
+  drag_offset_.x += local_pos.x - bounds_.width / 2.0F;
+  drag_offset_.y += local_pos.y - bounds_.height / 2.0F;
   return true;
 }
 
@@ -61,16 +62,12 @@ bool Draggable::OnPointerMove(const Point& local_pos) {
   if (!dragging_) {
     return false;
   }
-  // Paint-time translate only: update offset without triggering a full
-  // widget rebuild. The pointer event already marks the frame dirty, so
-  // Layout+Paint will run with the new offset. This avoids flooding the
-  // render queue with redundant full-tree rebuilds during high-frequency
-  // drag events (Flutter-style repaint without relayout).
-  //
-  // Absolute offset = start_offset + (current_pos - press_pos), where both
-  // positions are relative to the widget's visual top-left.
-  drag_offset_.x = start_offset_.x + (local_pos.x - press_pos_.x);
-  drag_offset_.y = start_offset_.y + (local_pos.y - press_pos_.y);
+  // Keep the widget centered on the cursor: local_pos is relative to the
+  // current visual top-left, so adding (local_pos - size/2) to drag_offset_
+  // moves the widget so its center lands on the cursor. Paint-time translate
+  // only: no full rebuild, frame dirty is set by pointer dispatch.
+  drag_offset_.x += local_pos.x - bounds_.width / 2.0F;
+  drag_offset_.y += local_pos.y - bounds_.height / 2.0F;
   return true;
 }
 
