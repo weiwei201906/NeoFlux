@@ -6,6 +6,9 @@ export default defineConfig({
   lastUpdated: true,
   cleanUrls: true,
   base: '/neoflux/',
+  markdown: {
+    math: true,
+  },
   locales: {
     root: {
       label: 'English',

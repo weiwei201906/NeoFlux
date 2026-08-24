@@ -250,6 +250,8 @@ class GlRendererImpl : public NonCopyable {
     // without re-initializing GL. u_resolution uses logical (layout) size,
     // not physical framebuffer size.
     gl.glUseProgram(program_);
+    current_program_ = program_;
+    current_use_texture_ = -1;  // force uniform update on first draw
     gl.glUniform2f(u_resolution_, static_cast<float>(width_),
                    static_cast<float>(height_));
     transform_stack_.clear();
@@ -275,13 +277,16 @@ class GlRendererImpl : public NonCopyable {
       rect.x, rect.y + rect.height, 0.0F, 0.0F,
     };
 
-    gl.glUseProgram(program_);
+    UseProgram(program_);
     gl.glUniform2f(u_translate_, t.x, t.y);
     gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
                    color.b / 255.0F, color.a / 255.0F);
-    gl.glUniform1i(u_use_texture_, 0);
-    gl.glBindVertexArray(vao_);
-    gl.glBindBuffer(0x8892, vbo_);
+    if (current_use_texture_ != 0) {
+      gl.glUniform1i(u_use_texture_, 0);
+      current_use_texture_ = 0;
+    }
+    BindVertexArray(vao_);
+    BindBuffer(vbo_);
     gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
     gl.glDrawArrays(0x0004, 0, 6);
   }
@@ -346,13 +351,16 @@ class GlRendererImpl : public NonCopyable {
     vertices[idx++] = 0.0F;
     vertices[idx++] = 0.0F;
 
-    gl.glUseProgram(program_);
+    UseProgram(program_);
     gl.glUniform2f(u_translate_, t.x, t.y);
     gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
                    color.b / 255.0F, color.a / 255.0F);
-    gl.glUniform1i(u_use_texture_, 0);
-    gl.glBindVertexArray(vao_);
-    gl.glBindBuffer(0x8892, vbo_);
+    if (current_use_texture_ != 0) {
+      gl.glUniform1i(u_use_texture_, 0);
+      current_use_texture_ = 0;
+    }
+    BindVertexArray(vao_);
+    BindBuffer(vbo_);
     gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
     gl.glDrawArrays(0x0006, 0, kVertexCount);  // GL_TRIANGLE_FAN
   }
@@ -371,15 +379,18 @@ class GlRendererImpl : public NonCopyable {
     float cursor_x = position.x;
     const float baseline_y = position.y;
 
-    gl.glUseProgram(program_);
+    UseProgram(program_);
     gl.glUniform2f(u_translate_, t.x, t.y);
     gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
                    color.b / 255.0F, color.a / 255.0F);
-    gl.glUniform1i(u_use_texture_, 1);
-    gl.glActiveTexture(0x84C0);
-    gl.glBindTexture(0x0DE1, atlas_texture_);
-    gl.glBindVertexArray(vao_);
-    gl.glBindBuffer(0x8892, vbo_);
+    if (current_use_texture_ != 1) {
+      gl.glUniform1i(u_use_texture_, 1);
+      current_use_texture_ = 1;
+    }
+    gl.glActiveTexture(0x84C0);  // GL_TEXTURE0
+    BindTexture(atlas_texture_);
+    BindVertexArray(vao_);
+    BindBuffer(vbo_);
 
     std::size_t i = 0;
     while (i < text.size()) {
@@ -811,6 +822,46 @@ class GlRendererImpl : public NonCopyable {
   int width_ = 0;
   int height_ = 0;
   bool gl_ready_ = false;
+
+  // Cached GL state to avoid redundant state-change calls (each gl* call
+  // may trigger an ioctl into the GPU driver, ~33% of CPU in profiling).
+  GlUint current_program_ = 0;
+  GlUint current_texture_ = 0;
+  GlUint current_vao_ = 0;
+  GlUint current_vbo_ = 0;
+  GlInt current_use_texture_ = -1;
+
+  // Binds a program only if different from the currently bound one.
+  void UseProgram(GlUint program) {
+    if (program != current_program_) {
+      gl.glUseProgram(program);
+      current_program_ = program;
+    }
+  }
+
+  // Binds a texture only if different from the currently bound one.
+  void BindTexture(GlUint texture) {
+    if (texture != current_texture_) {
+      gl.glBindTexture(0x0DE1, texture);  // GL_TEXTURE_2D
+      current_texture_ = texture;
+    }
+  }
+
+  // Binds a VAO only if different from the currently bound one.
+  void BindVertexArray(GlUint vao) {
+    if (vao != current_vao_) {
+      gl.glBindVertexArray(vao);
+      current_vao_ = vao;
+    }
+  }
+
+  // Binds a VBO only if different from the currently bound one.
+  void BindBuffer(GlUint vbo) {
+    if (vbo != current_vbo_) {
+      gl.glBindBuffer(0x8892, vbo);  // GL_ARRAY_BUFFER
+      current_vbo_ = vbo;
+    }
+  }
 
   GlUint program_ = 0;
   GlUint vao_ = 0;

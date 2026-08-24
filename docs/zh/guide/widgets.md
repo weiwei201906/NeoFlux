@@ -72,7 +72,7 @@ parent->AddChild(drag);
 - `HitTest`：重写以在基类命中测试前减去 `drag_offset_`。
 
 :::warning
-`Draggable` 使用绘制时平移，而非布局更改。拖拽期间 Widget 的 `bounds_`（布局位置）永远不变。这意味着兄弟 Widget 不会重排，拖拽每帧是 O(1)——不需要 Taitank 重新布局。
+`Draggable` 使用绘制时平移，而非布局更改。拖拽期间 Widget 的 `bounds_`（布局位置）永远不变。这意味着兄弟 Widget 不会重排，拖拽每帧是 $O(1)$——不需要 Taitank 重新布局。
 :::
 
 ```cpp

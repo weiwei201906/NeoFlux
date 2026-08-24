@@ -23,7 +23,7 @@ void Draggable::OnPointerMove(const Point& p) {
 }
 ```
 
-绘制时变换每帧 O(1)；布局更改 O(n)，n 为子树大小。
+绘制时变换每帧 $O(1)$；布局更改 $O(n)$，$n$ 为子树大小。
 
 ### 脏帧语义
 

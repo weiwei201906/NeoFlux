@@ -25,7 +25,7 @@ void Draggable::OnPointerMove(const Point& p) {
 }
 ```
 
-Paint-time transforms are O(1) per frame; layout changes are O(n) where n is
+Paint-time transforms are $O(1)$ per frame; layout changes are $O(n)$ where $n$ is
 the subtree size.
 
 ### Dirty Frame Semantics

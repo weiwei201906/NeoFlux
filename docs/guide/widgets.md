@@ -77,7 +77,7 @@ parent->AddChild(drag);
 :::warning
 `Draggable` uses paint-time translation, not layout changes. The widget's
 `bounds_` (layout position) never changes during a drag. This means sibling
-widgets do not reflow, and the drag is O(1) per frame — no Taitank relayout.
+widgets do not reflow, and the drag is $O(1)$ per frame — no Taitank relayout.
 :::
 
 ## Widget Lifecycle
