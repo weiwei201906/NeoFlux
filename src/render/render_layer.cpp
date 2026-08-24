@@ -255,7 +255,10 @@ void RenderLayer::RenderLoop() {
               platform_bridge_->SwapBuffers();
             }
             ++frames_rendered;
-            if (frames_rendered % 60 == 0) {
+            // Log every 64 frames using bitwise AND (2^6 - 1 = 63) instead
+            // of modulo 60. Bitwise AND is 1 cycle vs ~20-40 for integer
+            // division; 64 frames ~= 1.07s at 60 FPS, acceptable for logging.
+            if ((frames_rendered & 63U) == 0U) {
               LOG(INFO) << "Rendered " << frames_rendered << " frames";
             }
           }

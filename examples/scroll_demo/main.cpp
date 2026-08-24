@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // NeoFlux - Scroll View Demo
 //
 // Demonstrates the ScrollView widget:
@@ -72,7 +72,8 @@ std::shared_ptr<Widget> BuildScrollPage(BuildContext& /*context*/) {
       {.r = 255, .g = 152, .b = 0, .a = 255},   {.r = 255, .g = 87, .b = 34, .a = 255},
   };
   for (int i = 0; i < 14; ++i) {
-    content->AddChild(MakeListItem(i + 1, colors[i % 14]));
+    // i is always < 14, so direct indexing avoids modulo (i % 14 == i).
+    content->AddChild(MakeListItem(i + 1, colors[i]));
   }
 
   scroll->SetContent(content);

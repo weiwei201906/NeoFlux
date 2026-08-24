@@ -21,6 +21,64 @@ behavior.
 | `OnPointerExit()` | Handles pointer leaving widget bounds |
 | `OnPointerScroll(const Point&, x, y)` | Handles scroll events |
 | `GetWidgetName()` | Returns the widget's name for debugging (string_view) |
+| `GetPaintOffset()` | Returns paint-time transform offset (default zero) |
+
+:::tip
+`GetPaintOffset()` is virtual. Widgets that apply a paint-time transform
+(e.g. `Draggable` with its drag offset) **must** override it so that event
+dispatch correctly converts visual coordinates to widget-local coordinates.
+Without this, clicks at the widget's visual position will miss because
+`HitTest` and `local_pos` calculation use layout coordinates.
+:::
+
+## Paint-Time Transforms and Hit Testing
+
+Widgets may apply transforms at paint time (e.g. `Draggable` translates by
+`drag_offset_`). These transforms do **not** affect Taitank layout (`bounds_`
+stays at the layout position). To keep hit testing and event coordinates
+consistent with the visual position:
+
+1. **`GetPaintOffset()`** returns the visual offset (override in subclasses).
+2. **`HitTest(Point)`** subtracts the paint offset before delegating to the
+   base class, converting visual click coordinates to layout coordinates.
+3. **Event dispatch** (`DispatchPointerEvent`/`DispatchPointerMove`) subtracts
+   `GetPaintOffset()` when computing `local_pos`, so handlers receive
+   coordinates relative to the visual top-left.
+
+```
+Visual position  = Layout position + GetPaintOffset()
+local_pos        = cursor_global - visual_position
+```
+
+## Draggable
+
+`Draggable` is a container whose children follow the pointer during a drag.
+The widget **center always follows the cursor** — on press it jumps to center
+on the click point, and during movement it stays centered.
+
+```cpp
+auto drag = std::make_shared<Draggable>();
+drag->AddChild(box);  // any widget tree
+parent->AddChild(drag);
+```
+
+**How it works:**
+- `OnPointerDown`: sets `dragging_ = true` and immediately adjusts
+  `drag_offset_` so the widget center lands on the cursor.
+- `OnPointerMove`: `drag_offset_ += local_pos - bounds.size / 2`, keeping
+  the center on the cursor. No `MarkNeedsBuild()` — the offset is applied
+  at paint time only, so only `MarkFrameDirty()` (called by event dispatch)
+  is needed.
+- `OnPointerUp`: ends the drag, returns to `kIdle` state.
+- `Paint`: `context.Translate(drag_offset_)` before painting children.
+- `GetPaintOffset`: returns `drag_offset_` for correct hit testing.
+- `HitTest`: overridden to subtract `drag_offset_` before base-class hit test.
+
+:::warning
+`Draggable` uses paint-time translation, not layout changes. The widget's
+`bounds_` (layout position) never changes during a drag. This means sibling
+widgets do not reflow, and the drag is O(1) per frame — no Taitank relayout.
+:::
 
 ## Widget Lifecycle
 

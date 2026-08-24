@@ -14,6 +14,16 @@ Demonstrates the `Draggable` widget with pointer events and the "state machine a
 
 The `Draggable` widget extends `Container` and handles pointer events to track drag state. The drag offset is applied at paint time via `context.Translate()`, so Taitank layout is unaffected.
 
+**Center-follows-cursor behavior:** The widget center always follows the mouse cursor. On pointer-down, the widget immediately jumps so its center is at the click point. During movement, `drag_offset_ += local_pos - bounds.size / 2` keeps the center on the cursor. This is achieved without `MarkNeedsBuild()` — only `MarkFrameDirty()` (called by event dispatch) triggers a repaint.
+
+### Paint-Time Transform and Hit Testing
+
+Because `Draggable` applies a paint-time translate, three mechanisms keep coordinates consistent:
+
+1. `GetPaintOffset()` returns `drag_offset_` so event dispatch converts visual coords to local coords.
+2. `HitTest()` subtracts `drag_offset_` before the base-class test, so clicks at the visual position hit correctly.
+3. `DispatchPointerEvent/Move` subtract `GetPaintOffset()` when computing `local_pos`.
+
 ### State Machine
 
 The widget transitions between three states:

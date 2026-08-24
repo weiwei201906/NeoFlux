@@ -14,6 +14,16 @@
 
 `Draggable` 组件继承 `Container`，处理指针事件以跟踪拖拽状态。拖拽偏移在绘制时通过 `context.Translate()` 应用，不影响 Taitank 布局。
 
+**中心跟随光标行为：** 组件中心始终跟随鼠标光标。指针按下时，组件立即跳转使其中心位于点击点。移动过程中，`drag_offset_ += local_pos - bounds.size / 2` 保持中心在光标上。这不需要 `MarkNeedsBuild()`——仅需事件分发调用的 `MarkFrameDirty()` 触发重绘。
+
+### 绘制时变换与命中测试
+
+由于 `Draggable` 应用绘制时平移，三个机制保持坐标一致：
+
+1. `GetPaintOffset()` 返回 `drag_offset_`，使事件分发将视觉坐标转换为局部坐标。
+2. `HitTest()` 在基类测试前减去 `drag_offset_`，使视觉位置的点击正确命中。
+3. `DispatchPointerEvent/Move` 在计算 `local_pos` 时减去 `GetPaintOffset()`。
+
 ### 状态机
 
 组件在三种状态间转换：

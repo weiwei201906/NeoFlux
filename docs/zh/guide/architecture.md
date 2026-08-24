@@ -81,6 +81,25 @@ Application 层每帧按以下顺序执行：
 
 队列使用缓存行对齐的原子 head/tail 计数器避免伪共享，`std::construct_at` / `std::destroy_at` 安全构造/析构元素，支持 `std::string` 等非平凡可拷贝类型。位运算回绕（`index & (capacity - 1)`）替代取模。
 
+### 位运算索引回绕
+
+容量向上取整为 2 的幂（`std::bit_ceil`），使索引回绕使用单次位运算 AND 而非整数取模：
+
+```cpp
+// SpscRingQueue 中：
+mask_ = capacity_ - 1;           // 例如 capacity=2048 -> mask=2047 (0x7FF)
+next_head = (head + 1) & mask_;  // 1 周期 AND vs ~20-40 周期取模
+```
+
+:::tip
+这就是 `--render_queue_capacity` 会向上取整的原因：任何值都会变成 2 的幂，从而启用 `& mask_` 优化。容量 2048 实际存储 2047 个元素（保留一个槽位用于满/空区分）。
+:::
+
+相同模式应用于其他地方：
+- 帧率日志：`(frames_rendered & 63U) == 0U` 替代 `% 60`
+- 奇偶判断：`(x & 1U) == 0U` 替代 `x % 2 == 0`
+- 整数减半：`x >> 1` 替代 `x / 2`（仅限整数）
+
 ## 线程安全
 
 - Widget 树仅在主线程访问

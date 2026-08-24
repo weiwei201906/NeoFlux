@@ -94,6 +94,28 @@ The queue uses cache-line-aligned head/tail counters and `std::construct_at` /
 `std::destroy_at` for safe element construction, supporting non-trivially
 copyable types like `std::string`.
 
+### Bitwise Index Wrapping
+
+Capacity is rounded up to the next power of two (`std::bit_ceil`) so that
+index wrapping uses a single bitwise AND instead of integer modulo:
+
+```cpp
+// In SpscRingQueue:
+mask_ = capacity_ - 1;           // e.g. capacity=2048 -> mask=2047 (0x7FF)
+next_head = (head + 1) & mask_;  // 1 cycle AND vs ~20-40 cycles for %
+```
+
+:::tip
+This is why `--render_queue_capacity` is rounded up: any value becomes a
+power of two, enabling the `& mask_` optimization. A capacity of 2048 stores
+2047 elements (one slot is reserved for full/empty distinction).
+:::
+
+The same pattern applies elsewhere:
+- Frame logging: `(frames_rendered & 63U) == 0U` instead of `% 60`
+- Even/odd tests: `(x & 1U) == 0U` instead of `x % 2 == 0`
+- Integer halving: `x >> 1` instead of `x / 2` (integers only)
+
 ## Thread Safety
 
 - The widget tree is only accessed from the main thread.

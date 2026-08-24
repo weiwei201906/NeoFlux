@@ -121,6 +121,14 @@ Do not submit a PR until you have verified everything locally.
   `std::string_view` over `std::string` for non-owning parameters, use
   designated initializers for structs, and leverage C++20 ranges/views where
   appropriate.
+- **Bitwise optimizations**: Replace integer division/modulo by powers of two
+  with bit shifts and masks. Always comment the intent:
+  - `x / 2` → `x >> 1` (integer halving)
+  - `x % 2 == 0` → `(x & 1U) == 0U` (even/odd test)
+  - `x % 64` → `x & 63U` (wrap at power-of-two boundary)
+  - Ring queues use `mask_ = capacity - 1` with `index & mask_` instead of
+    `index % capacity` (1 cycle AND vs ~20-40 for division).
+  Floating-point division (`/ 2.0F`) **cannot** use bitwise shifts.
 - **No raw owning pointers**: Use `std::unique_ptr` / `std::shared_ptr` /
   `std::weak_ptr`. Never use `new`/`delete` in new code.
 - **RAII**: All resources (file handles, GPU contexts, memory) must be

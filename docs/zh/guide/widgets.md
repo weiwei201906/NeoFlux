@@ -34,6 +34,46 @@ NeoFlux 采用类 Flutter 的 Widget 开发模型。每个 UI 元素都是一个
 | `OnPointerExit()` | 指针离开 Widget 边界 |
 | `OnPointerScroll(const Point&, x, y)` | 处理滚动事件 |
 | `GetWidgetName()` | 返回 Widget 名称（string_view，用于调试） |
+| `GetPaintOffset()` | 返回绘制时的变换偏移（默认零） |
+
+:::tip
+`GetPaintOffset()` 是虚函数。在绘制时应用变换的 Widget（例如带拖拽偏移的 `Draggable`）**必须**重写它，这样事件分发才能正确地将视觉坐标转换为 Widget 局部坐标。否则，点击 Widget 的视觉位置会命中失败，因为 `HitTest` 和 `local_pos` 计算使用的是布局坐标。
+:::
+
+## 绘制时变换与命中测试
+
+Widget 可以在绘制时应用变换（例如 `Draggable` 按 `drag_offset_` 平移）。这些变换**不**影响 Taitank 布局（`bounds_` 保持在布局位置）。为了保持命中测试和事件坐标与视觉位置一致：
+
+1. **`GetPaintOffset()`** 返回视觉偏移（在子类中重写）。
+2. **`HitTest(Point)`** 在委托给基类之前减去绘制偏移，将视觉点击坐标转换为布局坐标。
+3. **事件分发**（`DispatchPointerEvent`/`DispatchPointerMove`）在计算 `local_pos` 时减去 `GetPaintOffset()`，使处理函数收到相对于视觉左上角的坐标。
+
+```
+视觉位置 = 布局位置 + GetPaintOffset()
+local_pos = 鼠标全局位置 - 视觉位置
+```
+
+## Draggable
+
+`Draggable` 是一个容器，其子组件在拖拽时跟随指针。Widget **中心始终跟随光标**——按下时立即跳转到以点击点为中心，移动过程中保持居中。
+
+```cpp
+auto drag = std::make_shared<Draggable>();
+drag->AddChild(box);  // 任意 Widget 树
+parent->AddChild(drag);
+```
+
+**工作原理：**
+- `OnPointerDown`：设置 `dragging_ = true`，立即调整 `drag_offset_` 使 Widget 中心落在光标上。
+- `OnPointerMove`：`drag_offset_ += local_pos - bounds.size / 2`，保持中心在光标上。不调用 `MarkNeedsBuild()`——偏移仅在绘制时应用，因此只需要事件分发调用的 `MarkFrameDirty()`。
+- `OnPointerUp`：结束拖拽，返回 `kIdle` 状态。
+- `Paint`：绘制子组件前 `context.Translate(drag_offset_)`。
+- `GetPaintOffset`：返回 `drag_offset_` 以正确命中测试。
+- `HitTest`：重写以在基类命中测试前减去 `drag_offset_`。
+
+:::warning
+`Draggable` 使用绘制时平移，而非布局更改。拖拽期间 Widget 的 `bounds_`（布局位置）永远不变。这意味着兄弟 Widget 不会重排，拖拽每帧是 O(1)——不需要 Taitank 重新布局。
+:::
 
 ```cpp
 class MyWidget : public Widget {
