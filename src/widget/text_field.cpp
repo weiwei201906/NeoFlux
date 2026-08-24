@@ -309,9 +309,15 @@ bool TextField::OnCharEvent(const CharEvent& event) {
   return true;
 }
 
-void TextField::OnFocus() { blink_counter_ = 0; }
+void TextField::OnFocus() {
+  Widget::OnFocus();
+  blink_counter_ = 0;
+}
 
-void TextField::OnBlur() { blink_counter_ = 0; }
+void TextField::OnBlur() {
+  Widget::OnBlur();
+  blink_counter_ = 0;
+}
 
 void TextField::SetText(std::string_view text) {
   text_ = std::string(text);
