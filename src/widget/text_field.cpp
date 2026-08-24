@@ -41,29 +41,31 @@ void TextField::Paint(RenderContext& context) {
     return;
   }
 
+  // RenderContext draws in widget-local coordinates (origin at 0,0).
+  const float w = b.width;
+  const float h = b.height;
+
   // Background.
-  context.DrawRoundedRect(b, background_color_, corner_radius_);
+  context.DrawRoundedRect({.x = 0.0F, .y = 0.0F, .width = w, .height = h},
+                          background_color_, corner_radius_);
 
   // Border (draw as a slightly larger rounded rect behind, then fill interior).
   const Color border = HasFocus() ? focus_border_color_ : border_color_;
   if (border_width_ > 0.0F) {
-    const Rect border_rect{.x = b.x,
-                           .y = b.y,
-                           .width = b.width,
-                           .height = b.height,};
-    context.DrawRoundedRect(border_rect, border, corner_radius_);
+    context.DrawRoundedRect({.x = 0.0F, .y = 0.0F, .width = w, .height = h},
+                            border, corner_radius_);
     // Inner fill to create border effect.
-    const Rect inner{.x = b.x + border_width_,
-                     .y = b.y + border_width_,
-                     .width = b.width - (2.0F * border_width_),
-                     .height = b.height - (2.0F * border_width_),};
-    context.DrawRoundedRect(inner, background_color_,
-                            corner_radius_ - border_width_);
+    context.DrawRoundedRect(
+        {.x = border_width_,
+         .y = border_width_,
+         .width = w - (2.0F * border_width_),
+         .height = h - (2.0F * border_width_),},
+        background_color_, corner_radius_ - border_width_);
   }
 
   // Text or placeholder.
-  const float text_x = b.x + 8.0F;
-  const float baseline_y = b.y + (b.height * 0.5F) + (font_size_ * 0.35F);
+  const float text_x = 8.0F;
+  const float baseline_y = (h * 0.5F) + (font_size_ * 0.35F);
   const float char_width = font_size_ * 0.6F;
 
   // Selection highlight (drawn behind text).
@@ -71,22 +73,22 @@ void TextField::Paint(RenderContext& context) {
     std::size_t sel_start = 0;
     std::size_t sel_end = 0;
     GetSelectionRange(sel_start, sel_end);
-    const float sel_x = text_x + (static_cast<float>(Utf8CharCount(text_, sel_start)) * char_width);
-    const float sel_w = static_cast<float>(Utf8CharCount(text_, sel_end) - Utf8CharCount(text_, sel_start)) * char_width;
+    const float sel_x =
+        text_x + (static_cast<float>(Utf8CharCount(text_, sel_start)) * char_width);
+    const float sel_w =
+        static_cast<float>(Utf8CharCount(text_, sel_end) -
+                           Utf8CharCount(text_, sel_start)) * char_width;
     const Color sel_color{.r = 180, .g = 210, .b = 255, .a = 255};
-    const Rect sel_rect{.x = sel_x,
-                        .y = b.y + 3.0F,
-                        .width = sel_w,
-                        .height = b.height - 6.0F,};
-    context.DrawRect(sel_rect, sel_color);
+    context.DrawRect({.x = sel_x, .y = 3.0F, .width = sel_w, .height = h - 6.0F},
+                     sel_color);
   }
 
   if (text_.empty() && !placeholder_.empty()) {
     context.DrawText(placeholder_, Point{.x = text_x, .y = baseline_y},
                      placeholder_color_, font_size_);
   } else if (!text_.empty()) {
-    context.DrawText(text_, Point{.x = text_x, .y = baseline_y},
-                     text_color_, font_size_);
+    context.DrawText(text_, Point{.x = text_x, .y = baseline_y}, text_color_,
+                     font_size_);
   }
 
   // Cursor (blink). Only show when focused.
@@ -98,30 +100,12 @@ void TextField::Paint(RenderContext& context) {
       // Approximate cursor x position: use font_size * 0.6 per character as
       // a rough estimate. A proper implementation would measure glyph
       // advances, but this is sufficient for the cursor indicator.
-      float cursor_x = text_x;
-      // Count characters before cursor_pos_ (UTF-8 aware).
-      std::size_t char_count = 0;
-      for (std::size_t i = 0; i < cursor_pos_ && i < text_.size();) {
-        const auto c = static_cast<unsigned char>(text_[i]);
-        int seq = 1;
-        if (c < 0x80) {
-          seq = 1;
-        } else if ((c & 0xE0) == 0xC0) {
-          seq = 2;
-        } else if ((c & 0xF0) == 0xE0) {
-          seq = 3;
-        } else if ((c & 0xF8) == 0xF0) {
-          seq = 4;
-        }
-        i += static_cast<std::size_t>(seq);
-        ++char_count;
-      }
-      cursor_x += (static_cast<float>(char_count) * font_size_ * 0.6F);
-      const Rect cursor{.x = cursor_x,
-                        .y = b.y + 4.0F,
-                        .width = 2.0F,
-                        .height = b.height - 8.0F,};
-      context.DrawRect(cursor, cursor_color_);
+      const float cursor_x =
+          text_x + (static_cast<float>(Utf8CharCount(text_, cursor_pos_)) *
+                    char_width);
+      context.DrawRect(
+          {.x = cursor_x, .y = 4.0F, .width = 2.0F, .height = h - 8.0F},
+          cursor_color_);
     }
   } else {
     blink_counter_ = 0;
