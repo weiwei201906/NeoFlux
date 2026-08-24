@@ -126,6 +126,27 @@ bool Widget::IsFocusable() const noexcept { return focusable_; }
 
 bool Widget::HasFocus() const noexcept { return has_focus_; }
 
+void Widget::SetTextInputCursor(bool enabled) noexcept {
+  text_input_cursor_ = enabled;
+}
+
+bool Widget::HasTextInputCursor() const noexcept {
+  return text_input_cursor_;
+}
+
+void Widget::SetApplication(Application* app) noexcept {
+  application_ = app;
+  for (auto& child : children_) {
+    if (child != nullptr) {
+      child->SetApplication(app);
+    }
+  }
+}
+
+Application* Widget::GetApplication() const noexcept {
+  return application_;
+}
+
 std::shared_ptr<Widget> Widget::HitTest(
     const Point& parent_pos) const {
   // parent_pos is relative to this widget's parent. bounds_ is also relative

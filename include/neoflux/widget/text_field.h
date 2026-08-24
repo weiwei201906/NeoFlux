@@ -140,9 +140,36 @@ class TextField : public Widget {
   // Converts a Unicode code point to UTF-8 and appends it to the string.
   static void CodepointToUtf8(std::uint32_t codepoint, std::string& out);
 
+  // Counts the number of UTF-8 characters in the first 'byte_limit' bytes
+  // of 'text'. Used to approximate cursor x position from byte offset.
+  static std::size_t Utf8CharCount(std::string_view text,
+                                   std::size_t byte_limit) noexcept;
+
+  // Returns true if there is an active text selection (anchor != cursor).
+  [[nodiscard]] bool HasSelection() const noexcept;
+
+  // Returns the selected text (empty if no selection).
+  [[nodiscard]] std::string_view GetSelectedText() const noexcept;
+
+  // Returns the selection range [start, end) in byte offsets, normalized
+  // so start <= end.
+  void GetSelectionRange(std::size_t& start, std::size_t& end) const noexcept;
+
+  // Deletes the selected text and clears the selection. Returns true if
+  // text was deleted.
+  bool DeleteSelection();
+
+  // Selects all text (anchor=0, cursor=end).
+  void SelectAll() noexcept;
+
+  // Clears the selection without deleting text (anchor = cursor).
+  void ClearSelection() noexcept;
+
   std::string text_{};
   std::string placeholder_{};
   std::size_t cursor_pos_ = 0;  // Byte offset into text_.
+  std::size_t selection_anchor_ = 0;  // Selection anchor byte offset. When
+                                      // equal to cursor_pos_, no selection.
   float font_size_ = 16.0F;
   float border_width_ = 1.0F;
   float corner_radius_ = 4.0F;

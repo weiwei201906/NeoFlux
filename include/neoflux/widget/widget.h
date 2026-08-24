@@ -143,6 +143,20 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Returns true if this widget currently has keyboard focus.
   [[nodiscard]] bool HasFocus() const noexcept;
 
+  // Sets whether hovering this widget should show the text-input (I-beam)
+  // cursor. TextField sets this to true; most widgets leave it false.
+  void SetTextInputCursor(bool enabled) noexcept;
+
+  // Returns true if hovering this widget should show the I-beam cursor.
+  [[nodiscard]] bool HasTextInputCursor() const noexcept;
+
+  // Sets the owning Application instance. Called by Application when the
+  // widget is added to the tree. Not owned by the widget.
+  void SetApplication(Application* app) noexcept;
+
+  // Returns the owning Application instance, or nullptr if not attached.
+  [[nodiscard]] Application* GetApplication() const noexcept;
+
   // Performs a hit test at the given global coordinates.
   //
   // Returns the deepest widget that contains the point, or nullptr if no
@@ -257,6 +271,8 @@ class Widget : public std::enable_shared_from_this<Widget> {
   taitank::TaitankNode* taitank_node_ = nullptr;  // Opaque Taitank node.
   bool focusable_ = false;
   bool has_focus_ = false;
+  bool text_input_cursor_ = false;
+  Application* application_ = nullptr;  // Not owned. Set when attached to tree.
 };
 
 // Mutable state for a StatefulWidget.

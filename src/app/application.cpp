@@ -198,6 +198,7 @@ void Application::PushRoute(std::string_view route_name) {
   BuildContext context(this);
   auto widget = RouteRegistry::Instance().BuildRoute(route_name, context);
   if (widget != nullptr) {
+    widget->SetApplication(this);
     navigation_stack_.push_back(std::move(widget));
     LOG(INFO) << "Pushed route: " << route_name
               << " (stack depth: " << navigation_stack_.size() << ")";
@@ -475,6 +476,19 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
         hit->OnPointerEnter();
       }
       hovered_widget_ = hit;
+      // Update the mouse cursor shape based on the hovered widget.
+      // TextField requests an I-beam cursor; clickable widgets may request
+      // a hand cursor; everything else uses the default arrow.
+      if (render_layer_ != nullptr) {
+        auto* bridge = render_layer_->GetPlatformBridge();
+        if (bridge != nullptr) {
+          if (hit != nullptr && hit->HasTextInputCursor()) {
+            bridge->SetCursor(PlatformBridge::CursorType::kIBeam);
+          } else {
+            bridge->SetCursor(PlatformBridge::CursorType::kArrow);
+          }
+        }
+      }
     }
   }
   // Deliver move event to the widget under the cursor.

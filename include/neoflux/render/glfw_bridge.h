@@ -17,6 +17,7 @@
 
 // Forward declaration of GLFW window to avoid including GLFW headers here.
 struct GLFWwindow;
+struct GLFWcursor;
 
 namespace neoflux {
 
@@ -57,6 +58,9 @@ class GlfwBridge final : public PlatformBridge {
   void SetCharCallback(CharEventCallback callback) override;
   void PollEvents() override;
   [[nodiscard]] bool ShouldClose() const noexcept override;
+  void SetCursor(CursorType type) override;
+  [[nodiscard]] std::string GetClipboardText() const override;
+  void SetClipboardText(std::string_view text) override;
 
   // --- GLFW-specific methods ---
 
@@ -111,6 +115,11 @@ class GlfwBridge final : public PlatformBridge {
   MouseMoveCallback mouse_move_callback_{};
   double last_cursor_x_ = 0.0;
   double last_cursor_y_ = 0.0;
+  // Cached standard cursors (lazily created, freed in destructor).
+  GLFWcursor* arrow_cursor_ = nullptr;
+  GLFWcursor* ibeam_cursor_ = nullptr;
+  GLFWcursor* hand_cursor_ = nullptr;
+  CursorType current_cursor_ = CursorType::kArrow;
 };
 
 }  // namespace neoflux

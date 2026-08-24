@@ -11,12 +11,15 @@
 
 #include <glog/logging.h>
 
+#include "neoflux/app/application.h"
 #include "neoflux/render/render_context.h"
+#include "neoflux/render/render_layer.h"
 
 namespace neoflux {
 
 TextField::TextField() {
   SetFocusable(true);
+  SetTextInputCursor(true);
   EnableMeasureFunction();
 }
 
@@ -61,6 +64,23 @@ void TextField::Paint(RenderContext& context) {
   // Text or placeholder.
   const float text_x = b.x + 8.0F;
   const float baseline_y = b.y + (b.height * 0.5F) + (font_size_ * 0.35F);
+  const float char_width = font_size_ * 0.6F;
+
+  // Selection highlight (drawn behind text).
+  if (HasSelection()) {
+    std::size_t sel_start = 0;
+    std::size_t sel_end = 0;
+    GetSelectionRange(sel_start, sel_end);
+    const float sel_x = text_x + (static_cast<float>(Utf8CharCount(text_, sel_start)) * char_width);
+    const float sel_w = static_cast<float>(Utf8CharCount(text_, sel_end) - Utf8CharCount(text_, sel_start)) * char_width;
+    const Color sel_color{.r = 180, .g = 210, .b = 255, .a = 255};
+    const Rect sel_rect{.x = sel_x,
+                        .y = b.y + 3.0F,
+                        .width = sel_w,
+                        .height = b.height - 6.0F,};
+    context.DrawRect(sel_rect, sel_color);
+  }
+
   if (text_.empty() && !placeholder_.empty()) {
     context.DrawText(placeholder_, Point{.x = text_x, .y = baseline_y},
                      placeholder_color_, font_size_);
@@ -139,6 +159,7 @@ bool TextField::OnPointerDown(const Point& local_pos) {
     }
     cursor_pos_ = byte_offset;
   }
+  selection_anchor_ = cursor_pos_;  // Click collapses selection.
   blink_counter_ = 0;  // Reset blink so cursor is immediately visible.
   return true;
 }
@@ -150,29 +171,136 @@ bool TextField::OnKeyEvent(const KeyEvent& event) {
   const bool ctrl =
       (event.modifiers & static_cast<std::uint8_t>(KeyModifiers::kControl)) !=
       0;
-  // Ctrl+A: select all (move cursor to end).
-  if (event.key == KeyCode::kA && ctrl) {
-    cursor_pos_ = text_.size();
+  const bool shift =
+      (event.modifiers & static_cast<std::uint8_t>(KeyModifiers::kShift)) != 0;
+
+  // --- Clipboard shortcuts ---
+  // Ctrl+C: copy selected text to clipboard.
+  if (event.key == KeyCode::kC && ctrl) {
+    if (HasSelection()) {
+      Application* app = GetApplication();
+      if (app != nullptr) {
+        PlatformBridge* bridge = app->GetRenderLayer().GetPlatformBridge();
+        if (bridge != nullptr) {
+          bridge->SetClipboardText(GetSelectedText());
+        }
+      }
+    }
     return true;
   }
+  // Ctrl+V: paste clipboard text at cursor (replaces selection).
+  if (event.key == KeyCode::kV && ctrl) {
+    DeleteSelection();
+    Application* app = GetApplication();
+    if (app != nullptr) {
+      PlatformBridge* bridge = app->GetRenderLayer().GetPlatformBridge();
+      if (bridge != nullptr) {
+        const std::string clip = bridge->GetClipboardText();
+        // Clipboard text is UTF-8; insert byte-by-byte which preserves
+        // multi-byte sequences correctly.
+        text_.insert(cursor_pos_, clip);
+        cursor_pos_ += clip.size();
+      }
+    }
+    if (on_change_ != nullptr) {
+      on_change_(text_);
+    }
+    return true;
+  }
+  // Ctrl+X: cut selected text to clipboard.
+  if (event.key == KeyCode::kX && ctrl) {
+    if (HasSelection()) {
+      Application* app = GetApplication();
+      if (app != nullptr) {
+        PlatformBridge* bridge = app->GetRenderLayer().GetPlatformBridge();
+        if (bridge != nullptr) {
+          bridge->SetClipboardText(GetSelectedText());
+        }
+      }
+      DeleteSelection();
+    }
+    return true;
+  }
+  // Ctrl+A: select all.
+  if (event.key == KeyCode::kA && ctrl) {
+    SelectAll();
+    return true;
+  }
+
+  // --- Navigation (with Shift = extend selection) ---
   switch (event.key) {
     case KeyCode::kBackspace:
-      DeleteBackward();
+      if (HasSelection()) {
+        DeleteSelection();
+      } else {
+        DeleteBackward();
+      }
       return true;
     case KeyCode::kDelete:
-      DeleteForward();
+      if (HasSelection()) {
+        DeleteSelection();
+      } else {
+        DeleteForward();
+      }
       return true;
     case KeyCode::kLeft:
-      MoveCursorLeft();
+      if (shift) {
+        if (selection_anchor_ == cursor_pos_) {
+          selection_anchor_ = cursor_pos_;
+        }
+        MoveCursorLeft();
+      } else {
+        if (HasSelection()) {
+          // Collapse selection to its start without moving further.
+          std::size_t start = 0;
+          std::size_t end = 0;
+          GetSelectionRange(start, end);
+          cursor_pos_ = start;
+          selection_anchor_ = start;
+        } else {
+          MoveCursorLeft();
+        }
+      }
       return true;
     case KeyCode::kRight:
-      MoveCursorRight();
+      if (shift) {
+        if (selection_anchor_ == cursor_pos_) {
+          selection_anchor_ = cursor_pos_;
+        }
+        MoveCursorRight();
+      } else {
+        if (HasSelection()) {
+          std::size_t start = 0;
+          std::size_t end = 0;
+          GetSelectionRange(start, end);
+          cursor_pos_ = end;
+          selection_anchor_ = end;
+        } else {
+          MoveCursorRight();
+        }
+      }
       return true;
     case KeyCode::kHome:
-      MoveCursorToStart();
+      if (shift) {
+        if (selection_anchor_ == cursor_pos_) {
+          selection_anchor_ = cursor_pos_;
+        }
+        MoveCursorToStart();
+      } else {
+        MoveCursorToStart();
+        ClearSelection();
+      }
       return true;
     case KeyCode::kEnd:
-      MoveCursorToEnd();
+      if (shift) {
+        if (selection_anchor_ == cursor_pos_) {
+          selection_anchor_ = cursor_pos_;
+        }
+        MoveCursorToEnd();
+      } else {
+        MoveCursorToEnd();
+        ClearSelection();
+      }
       return true;
     case KeyCode::kEnter:
       if (on_submit_ != nullptr) {
@@ -190,6 +318,8 @@ bool TextField::OnCharEvent(const CharEvent& event) {
     return false;
   }
   VLOG(1) << "TextField::OnCharEvent codepoint=" << event.codepoint;
+  // If there is an active selection, typing replaces it.
+  DeleteSelection();
   InsertCodepoint(event.codepoint);
   return true;
 }
@@ -346,6 +476,73 @@ void TextField::CodepointToUtf8(std::uint32_t codepoint, std::string& out) {
     out.push_back(static_cast<char>(0x80U | ((codepoint >> 6) & 0x3FU)));
     out.push_back(static_cast<char>(0x80U | (codepoint & 0x3FU)));
   }
+}
+
+bool TextField::HasSelection() const noexcept {
+  return selection_anchor_ != cursor_pos_;
+}
+
+std::string_view TextField::GetSelectedText() const noexcept {
+  if (!HasSelection()) {
+    return {};
+  }
+  std::size_t start = 0;
+  std::size_t end = 0;
+  GetSelectionRange(start, end);
+  return std::string_view(text_).substr(start, end - start);
+}
+
+void TextField::GetSelectionRange(std::size_t& start,
+                                  std::size_t& end) const noexcept {
+  start = std::min(selection_anchor_, cursor_pos_);
+  end = std::max(selection_anchor_, cursor_pos_);
+}
+
+bool TextField::DeleteSelection() {
+  if (!HasSelection()) {
+    return false;
+  }
+  std::size_t start = 0;
+  std::size_t end = 0;
+  GetSelectionRange(start, end);
+  text_.erase(start, end - start);
+  cursor_pos_ = start;
+  selection_anchor_ = start;
+  if (on_change_ != nullptr) {
+    on_change_(text_);
+  }
+  return true;
+}
+
+void TextField::SelectAll() noexcept {
+  selection_anchor_ = 0;
+  cursor_pos_ = text_.size();
+}
+
+void TextField::ClearSelection() noexcept {
+  selection_anchor_ = cursor_pos_;
+}
+
+std::size_t TextField::Utf8CharCount(std::string_view text,
+                                     std::size_t byte_limit) noexcept {
+  std::size_t count = 0;
+  const std::size_t limit = std::min(byte_limit, text.size());
+  for (std::size_t i = 0; i < limit;) {
+    const auto c = static_cast<unsigned char>(text[i]);
+    int seq = 1;
+    if (c < 0x80) {
+      seq = 1;
+    } else if ((c & 0xE0) == 0xC0) {
+      seq = 2;
+    } else if ((c & 0xF0) == 0xE0) {
+      seq = 3;
+    } else if ((c & 0xF8) == 0xF0) {
+      seq = 4;
+    }
+    i += static_cast<std::size_t>(seq);
+    ++count;
+  }
+  return count;
 }
 
 }  // namespace neoflux

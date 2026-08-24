@@ -109,6 +109,20 @@ void GlfwBridge::Shutdown() {
     return;
   }
 
+  // Free cached standard cursors.
+  if (arrow_cursor_ != nullptr) {
+    glfwDestroyCursor(arrow_cursor_);
+    arrow_cursor_ = nullptr;
+  }
+  if (ibeam_cursor_ != nullptr) {
+    glfwDestroyCursor(ibeam_cursor_);
+    ibeam_cursor_ = nullptr;
+  }
+  if (hand_cursor_ != nullptr) {
+    glfwDestroyCursor(hand_cursor_);
+    hand_cursor_ = nullptr;
+  }
+
   if (window_ != nullptr) {
     auto* user_data =
         static_cast<WindowUserData*>(glfwGetWindowUserPointer(window_));
@@ -330,6 +344,60 @@ void GlfwBridge::ScrollCallback(GLFWwindow* window, double xoffset,
   }
 }
 
+void GlfwBridge::SetCursor(CursorType type) {
+  if (window_ == nullptr || type == current_cursor_) {
+    return;
+  }
+  current_cursor_ = type;
+  GLFWcursor* cursor = nullptr;
+  switch (type) {
+    case CursorType::kArrow:
+      if (arrow_cursor_ == nullptr) {
+        arrow_cursor_ = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+      }
+      cursor = arrow_cursor_;
+      break;
+    case CursorType::kIBeam:
+      if (ibeam_cursor_ == nullptr) {
+        ibeam_cursor_ = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+      }
+      cursor = ibeam_cursor_;
+      break;
+    case CursorType::kHand:
+      if (hand_cursor_ == nullptr) {
+        hand_cursor_ = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+      }
+      cursor = hand_cursor_;
+      break;
+    case CursorType::kResize:
+      if (arrow_cursor_ == nullptr) {
+        arrow_cursor_ = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+      }
+      cursor = arrow_cursor_;
+      break;
+  }
+  glfwSetCursor(window_, cursor);
+}
+
+std::string GlfwBridge::GetClipboardText() const {
+  if (window_ == nullptr) {
+    return {};
+  }
+  const char* text = glfwGetClipboardString(window_);
+  if (text == nullptr) {
+    return {};
+  }
+  return std::string(text);
+}
+
+void GlfwBridge::SetClipboardText(std::string_view text) {
+  if (window_ == nullptr) {
+    return;
+  }
+  std::string buffer(text);
+  glfwSetClipboardString(window_, buffer.c_str());
+}
+
 }  // namespace neoflux
 
 #else  // !NEOFLUX_PLATFORM_DESKTOP
@@ -378,6 +446,9 @@ void GlfwBridge::CursorPosCallback(GLFWwindow* /*window*/, double /*xpos*/,
                                    double /*ypos*/) {}
 void GlfwBridge::ScrollCallback(GLFWwindow* /*window*/, double /*xoffset*/,
                                 double /*yoffset*/) {}
+void GlfwBridge::SetCursor(CursorType /*type*/) {}
+std::string GlfwBridge::GetClipboardText() const { return {}; }
+void GlfwBridge::SetClipboardText(std::string_view /*text*/) {}
 
 }  // namespace neoflux
 

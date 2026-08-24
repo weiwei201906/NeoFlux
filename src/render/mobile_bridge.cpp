@@ -101,6 +101,19 @@ class MobileBridge final : public PlatformBridge {
     return should_close_;
   }
 
+  void SetCursor(CursorType /*type*/) override {
+    // No mouse cursor on touch-only mobile platforms.
+  }
+
+  [[nodiscard]] std::string GetClipboardText() const override {
+    // Mobile clipboard requires platform-specific integration (JNI / UIKit).
+    return {};
+  }
+
+  void SetClipboardText(std::string_view /*text*/) override {
+    // Mobile clipboard requires platform-specific integration.
+  }
+
   // Called by the platform (JNI / UIKit) when a touch event occurs.
   // Converts the platform touch into a NeoFlux input event and dispatches it.
   void DispatchTouchEvent(MouseButton button, InputAction action,

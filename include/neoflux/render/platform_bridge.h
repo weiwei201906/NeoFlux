@@ -17,6 +17,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
+#include <string_view>
 
 #include "neoflux/core/types.h"
 
@@ -126,6 +128,25 @@ class PlatformBridge {
 
   // Returns true if the window has been closed by the user.
   [[nodiscard]] virtual bool ShouldClose() const noexcept = 0;
+
+  // Mouse cursor types.
+  enum class CursorType : std::uint8_t {
+    kArrow = 0,   // Standard arrow pointer.
+    kIBeam = 1,   // Text input cursor.
+    kHand = 2,    // Clickable link/button cursor.
+    kResize = 3,  // Resize/move cursor.
+  };
+
+  // Sets the mouse cursor shape. Called when pointer enters/leaves widgets
+  // that request a specific cursor (e.g. TextField -> I-beam).
+  virtual void SetCursor(CursorType type) = 0;
+
+  // Returns the current clipboard text (UTF-8). Empty string if clipboard
+  // is empty or contains non-text data.
+  [[nodiscard]] virtual std::string GetClipboardText() const = 0;
+
+  // Sets the clipboard text (UTF-8).
+  virtual void SetClipboardText(std::string_view text) = 0;
 };
 
 }  // namespace neoflux
