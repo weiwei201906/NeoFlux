@@ -55,9 +55,11 @@ export default defineConfig({
           items: [
             { text: 'Rendering Pipeline', link: '/guide/rendering' },
             { text: 'Font System', link: '/guide/fonts' },
+            { text: 'Performance', link: '/guide/performance' },
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Cross-Platform', link: '/guide/cross-platform' },
             { text: 'Testing', link: '/guide/testing' },
+            { text: 'FAQ', link: '/guide/faq' },
             { text: 'Contributing', link: '/guide/contributing' },
           ],
         },
@@ -133,9 +135,11 @@ export default defineConfig({
           items: [
             { text: '渲染管线', link: '/zh/guide/rendering' },
             { text: '字体系统', link: '/zh/guide/fonts' },
+            { text: '性能优化', link: '/zh/guide/performance' },
             { text: '配置', link: '/zh/guide/configuration' },
             { text: '跨平台', link: '/zh/guide/cross-platform' },
             { text: '测试', link: '/zh/guide/testing' },
+            { text: '常见问题', link: '/zh/guide/faq' },
             { text: '贡献指南', link: '/zh/guide/contributing' },
           ],
         },
