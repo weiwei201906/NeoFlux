@@ -47,6 +47,9 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   }
 
   command_queue_.Init(FLAGS_render_queue_capacity);
+  // Reset the promise so a fresh future can be obtained. A promise can only
+  // produce one future; without this, a second Start() would throw.
+  render_ready_ = std::promise<void>{};
 
   window_width_ = static_cast<std::uint16_t>(width);
   window_height_ = static_cast<std::uint16_t>(height);
@@ -113,6 +116,12 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
 #endif
 
   running_.store(true);
+  // Obtain the future BEFORE launching the render thread. A default-constructed
+  // std::future has no shared state and wait_for() would throw std::future_error.
+  // Getting the future here also avoids a race where the render thread calls
+  // set_value() before the main thread has called get_future() (which would
+  // also throw).
+  render_ready_future_ = render_ready_.get_future();
   render_thread_ = std::make_unique<std::thread>([this]() { RenderLoop(); });
 
   // Block until the render thread has made the context current and performed
