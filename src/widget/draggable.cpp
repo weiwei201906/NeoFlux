@@ -50,9 +50,13 @@ bool Draggable::OnPointerMove(const Point& local_pos) {
   if (!dragging_) {
     return false;
   }
+  // Paint-time translate only: update offset without triggering a full
+  // widget rebuild. The pointer event already marks the frame dirty, so
+  // Layout+Paint will run with the new offset. This avoids flooding the
+  // render queue with redundant full-tree rebuilds during high-frequency
+  // drag events (Flutter-style repaint without relayout).
   drag_offset_.x = local_pos.x - press_pos_.x;
   drag_offset_.y = local_pos.y - press_pos_.y;
-  MarkNeedsBuild();
   return true;
 }
 

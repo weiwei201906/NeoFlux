@@ -138,7 +138,7 @@ class DragDemoRoot : public Container {
     drag_box_->SetJustifyContent(HAlign::kCenter);
     drag_box_->SetAlignItems(VAlign::kCenter);
 
-    auto box_label = std::make_shared<Text>("Drag Me");
+    const auto box_label = std::make_shared<Text>("Drag Me");
     box_label->SetFontSize(14.0F)
         .SetTextColor({.r = 255, .g = 255, .b = 255, .a = 255});
     drag_box_->AddChild(box_label);
@@ -152,7 +152,7 @@ class DragDemoRoot : public Container {
   }
 
  private:
-  void UpdateStatus(WidgetState state, const Point& offset) {
+  void UpdateStatus(WidgetState state, const Point& offset) const {
     std::string state_str;
     switch (state) {
       case WidgetState::kIdle:

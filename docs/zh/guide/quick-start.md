@@ -134,7 +134,6 @@ FetchContent_Declare(
   GIT_TAG main
   SOURCE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/neoflux
 )
-)
 FetchContent_MakeAvailable(neoflux)
 
 add_executable(my_app main.cpp)

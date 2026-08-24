@@ -404,6 +404,9 @@ void Application::DispatchPointerEvent(
     }
     pressed_widget_.reset();
   }
+  // Press/release changes visual state (button press, drag start/end), so
+  // always mark the frame dirty for a repaint.
+  MarkFrameDirty();
 }
 
 void Application::InvalidateHitCache() noexcept { hit_cache_valid_ = false; }
@@ -465,6 +468,10 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
     const Point local{.x = pos.x - global_pos.x, .y = pos.y - global_pos.y};
     hit->OnPointerMove(local);
   }
+  // Move may change visual state (drag offset, hover), so mark the frame
+  // dirty for a repaint. This replaces the old MarkNeedsBuild() approach
+  // that caused full widget-tree rebuilds during high-frequency drags.
+  MarkFrameDirty();
 }
 
 void Application::DispatchScrollEvent(
