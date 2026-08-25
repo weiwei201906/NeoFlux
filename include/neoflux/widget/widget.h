@@ -95,12 +95,15 @@ class Widget : public std::enable_shared_from_this<Widget> {
   //
   // Leaf widgets with intrinsic size (Text, Button) override this to report
   // their desired dimensions. Called by the Taitank engine during layout via
-  // the measure function.
+  // the measure function. Default implementation returns zero size (suitable
+  // for layout containers that defer sizing to children).
   [[nodiscard]] virtual Size OnMeasure(float width, int width_mode,
-                                       float height, int height_mode) = 0;
+                                       float height, int height_mode);
 
   // Paints this widget and its children onto the given render context.
-  virtual void Paint(RenderContext& context) = 0;
+  // Default implementation paints children with appropriate translation.
+  // Subclasses override to draw custom content (background, text, etc.).
+  virtual void Paint(RenderContext& context);
 
   // Handles a pointer down event at the given local coordinates.
   //
@@ -345,13 +348,6 @@ class StatefulWidget : public Widget {
 
   // Builds the widget subtree using the associated State.
   [[nodiscard]] std::shared_ptr<Widget> Build(BuildContext& context) override;
-
-  // StatefulWidget delegates painting to its built child.
-  void Paint(RenderContext& context) override;
-
-  // StatefulWidget has no intrinsic size; delegates to layout.
-  [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
-                               int height_mode) override;
 
   // Returns the associated state, or nullptr if not yet created.
   [[nodiscard]] State<StatefulWidget>* GetState() const noexcept;

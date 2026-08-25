@@ -70,11 +70,6 @@ class Container : public Widget {
 
   void Paint(RenderContext& context) override;
 
-  // Container has no intrinsic size; its size is determined by layout and
-  // children. Returns {0, 0}.
-  [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
-                               int height_mode) override;
-
  private:
   void ApplyPaddingToTaitank() noexcept;
   void ApplyMarginToTaitank() noexcept;

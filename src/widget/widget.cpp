@@ -98,6 +98,17 @@ std::shared_ptr<Widget> Widget::Build(BuildContext& /*context*/) {
   return nullptr;
 }
 
+Size Widget::OnMeasure(float /*width*/, int /*width_mode*/,
+                       float /*height*/, int /*height_mode*/) {
+  // Default: zero intrinsic size. Layout containers defer sizing to children.
+  return {.width = 0.0F, .height = 0.0F};
+}
+
+void Widget::Paint(RenderContext& context) {
+  // Default: paint children with appropriate translation.
+  PaintChildren(context);
+}
+
 bool Widget::OnPointerDown(const Point& /*local_pos*/) { return false; }
 
 void Widget::OnPointerUp(const Point& /*local_pos*/) {}
@@ -363,13 +374,6 @@ StatefulWidget::~StatefulWidget() {
 
 std::string_view StatefulWidget::GetWidgetName() const noexcept {
   return "StatefulWidget";
-}
-
-void StatefulWidget::Paint(RenderContext& context) { PaintChildren(context); }
-
-Size StatefulWidget::OnMeasure(float /*width*/, int /*width_mode*/,
-                                float /*height*/, int /*height_mode*/) {
-  return {.width = 0.0F, .height = 0.0F};
 }
 
 std::shared_ptr<Widget> StatefulWidget::Build(BuildContext& context) {

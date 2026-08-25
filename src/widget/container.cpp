@@ -158,11 +158,6 @@ Container& Container::SetBorderRadius(float radius) noexcept {
   return *this;
 }
 
-Size Container::OnMeasure(float /*width*/, int /*width_mode*/,
-                          float /*height*/, int /*height_mode*/) {
-  return {.width = 0.0F, .height = 0.0F};
-}
-
 void Container::Paint(RenderContext& context) {
   if (has_background_) {
     if (border_radius_ > 0.0F) {

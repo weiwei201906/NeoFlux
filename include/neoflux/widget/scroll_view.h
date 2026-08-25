@@ -53,10 +53,6 @@ class ScrollView : public Widget {
 
   void Paint(RenderContext& context) override;
 
-  // ScrollView has no intrinsic size; fills available space.
-  [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
-                               int height_mode) override;
-
   // Consumes scroll events to pan the content.
   bool OnPointerScroll(const Point& local_pos, double xoffset,
                        double yoffset) override;

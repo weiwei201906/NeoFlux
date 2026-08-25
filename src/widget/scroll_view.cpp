@@ -74,11 +74,6 @@ void ScrollView::Paint(RenderContext& context) {
   context.Restore();
 }
 
-Size ScrollView::OnMeasure(float /*width*/, int /*width_mode*/,
-                           float /*height*/, int /*height_mode*/) {
-  return {.width = 0.0F, .height = 0.0F};
-}
-
 bool ScrollView::OnPointerScroll(const Point& /*local_pos*/, double xoffset,
                                  double yoffset) {
   // Scroll speed: 32 pixels per wheel notch.
