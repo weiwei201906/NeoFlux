@@ -275,6 +275,71 @@ idle.
 | `kRestore` | Pop transform/clip state |
 | `kTranslate` | Apply translation offset |
 | `kClipRect` | Set clipping rectangle |
+
+## Memory Safety
+
+NeoFlux employs multiple layers of memory safety guarantees:
+
+### RAII Everywhere
+
+- All widget tree nodes use `std::shared_ptr<Widget>` with `std::enable_shared_from_this`.
+- Taitank layout nodes are wrapped in `std::unique_ptr<TaitankNode, TaitankNodeDeleter>`.
+- Font faces are owned by `FontEntry` (MappedMemory + FT_Face), ensuring the mapped
+  font data outlives the FreeType face.
+- Mapped memory is managed by `MappedMemory` RAII wrapper (mmap/VirtualAlloc +
+  munmap/VirtualFree in destructor).
+
+### Guard Pages
+
+The SPSC ring queue storage is allocated via `mmap`/`VirtualAlloc` with a trailing
+guard page (`PROT_NONE` / `PAGE_NOACCESS`). Any out-of-bounds write triggers an
+immediate access fault instead of silently corrupting adjacent memory:
+
+```cpp
+// MappedMemory allocates usable_size + page_size, then mprotect's the last page.
+storage_.emplace(capacity_ * sizeof(T), /*guard_page=*/true);
+// Writing past the last element crashes here: SIGSEGV (POSIX) / AV (Windows)
+```
+
+### Weak Pointer Lifeguards
+
 - `pressed_widget_` uses `std::weak_ptr` to avoid dangling references across
-  frames.
-- `frame_dirty_` is an `std::atomic<bool>` for lock-free dirty flag checks.
+  frames. If a widget is destroyed between press and release, `lock()` returns
+  nullptr and the release is safely ignored.
+- `hovered_widget_` and `hit_cache_` similarly use `std::weak_ptr`.
+- Long-press detection coroutines accept `std::weak_ptr<Button>` and check
+  `lock()` before accessing the widget, preventing use-after-free.
+
+### Integer Overflow Protection
+
+`SpscRingQueue::Init()` clamps capacity to `SIZE_MAX / sizeof(T)` before
+`std::bit_ceil`, preventing overflow in `capacity * sizeof(T)` storage allocation:
+
+```cpp
+constexpr std::size_t kMaxSafeCapacity =
+    (std::numeric_limits<std::size_t>::max)() / sizeof(T);
+const std::size_t safe_capacity =
+    (capacity > kMaxSafeCapacity) ? kMaxSafeCapacity : capacity;
+capacity_ = std::bit_ceil(safe_capacity);
+```
+
+## Memory-Mapped Optimizations
+
+NeoFlux uses `mmap`/`MapViewOfFile` for three performance-critical paths:
+
+### Ring Queue Storage
+
+Allocated via anonymous `mmap(MAP_PRIVATE | MAP_ANONYMOUS)` with a guard page.
+Bypasses the heap allocator for large queues and provides page-aligned storage.
+
+### Font Files
+
+Loaded via `MappedMemory::FromFile()` → `FT_New_Memory_Face(data, size)`. Avoids
+FreeType's internal `fopen`/`fread` path; the OS page cache manages the bytes, and
+only rasterized glyphs trigger page faults.
+
+### Texture Upload (PBO)
+
+Glyph bitmaps are uploaded via Pixel Buffer Object: `glMapBufferRange` maps the
+PBO, `memcpy` writes into it, then `glTexSubImage2D(nullptr)` DMA's from the PBO
+to the texture. The CPU returns immediately instead of stalling for GPU consumption.

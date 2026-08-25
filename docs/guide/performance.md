@@ -114,6 +114,41 @@ void SetFontDir(std::string_view dir) noexcept;  // no copy
 Only convert to `std::string` when ownership is needed (e.g., storing as a
 member).
 
+## Memory-Mapped Optimizations
+
+NeoFlux uses `mmap`/`MapViewOfFile` for three performance-critical paths:
+
+### Ring Queue Storage (mmap + Guard Page)
+
+The SPSC ring queue storage is allocated via anonymous `mmap` instead of
+`std::vector`. Benefits:
+
+- **No heap allocator overhead** for large queues (bypasses malloc/free).
+- **Page-aligned base address** — better for SIMD and cache line behavior.
+- **Guard page** — a trailing `PROT_NONE` page catches out-of-bounds writes
+  with an immediate fault instead of silent memory corruption.
+
+### Font Files (mmap + FT_New_Memory_Face)
+
+Fonts are loaded via `MappedMemory::FromFile()` → `FT_New_Memory_Face()`:
+
+- No `fopen`/`fread` syscalls; the OS page cache manages the bytes.
+- No user-space buffer copy (FreeType's `FT_New_Face` reads into its own buffer).
+- Lazy page faults: only rasterized glyphs trigger physical page allocation.
+
+### Texture Upload (PBO + glMapBufferRange)
+
+Glyph bitmaps are uploaded via Pixel Buffer Object:
+
+```
+CPU writes → mapped PBO → (DMA) → texture
+```
+
+- `glTexSubImage2D(nullptr)` reads from the bound PBO via DMA; the CPU returns
+  immediately instead of stalling for GPU consumption.
+- Orphan pattern (`glBufferData` with `nullptr`) avoids waiting for in-flight
+  GPU reads.
+
 ## Rendering Optimizations
 
 ### SPSC Ring Queue

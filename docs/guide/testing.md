@@ -25,6 +25,7 @@ Or run individual test binaries:
 
 ```bash
 ./bin/ring_queue_test
+./bin/ring_queue_stress_test
 ./bin/widget_test
 ./bin/route_registry_test
 ./bin/render_command_test
@@ -32,15 +33,38 @@ Or run individual test binaries:
 
 ## Test Suites
 
-### Ring Queue Tests
+### Ring Queue Unit Tests (`ring_queue_test`)
 
-Tests the SPSC lock-free ring queue:
+8 tests covering:
 
-- Push/pop single elements
+- Initially empty state
+- Push and pop single elements
+- Pop from empty returns false
+- Fill to capacity
 - FIFO ordering
-- Capacity overflow behavior
-- Concurrent producer/consumer
-- Non-trivially-copyable types (std::string)
+- Wrap-around behavior
+- Move-only type support
+- Single producer / single consumer concurrency
+
+### Ring Queue Stress Tests (`ring_queue_stress_test`)
+
+6 stress tests designed to catch race conditions, memory corruption, and
+integer overflow bugs that unit tests might miss:
+
+| Test | Description | Scale |
+|------|-------------|-------|
+| `FifoOrderingMultiThread` | Producer pushes 0..N-1, consumer verifies strict ordering | 1M items |
+| `NoLossNoDuplicate` | Checksum verify: sum of pushed == sum of popped | 1M items |
+| `MinimumCapacity` | Capacity=2 holds exactly 1 element | Boundary |
+| `FullEmptyOscillation` | Capacity=4, rapid full/empty transitions | 100K ops |
+| `MoveOnlyTypeStress` | Move-only items, live_count==0 at end (no leak/double-free) | 50K items |
+| `LargeCapacity` | 1M slot allocation + 10K fill/drain | 1M slots |
+
+:::tip
+Stress tests use `std::atomic` counters and checksums to detect subtle
+concurrency bugs. Run them with `-DNEOFLUX_BUILD_TESTS=ON` and a Debug build
+for maximum assertion coverage.
+:::
 
 ### Widget Tests
 
