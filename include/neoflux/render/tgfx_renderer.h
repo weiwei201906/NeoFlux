@@ -22,6 +22,10 @@
 
 namespace neoflux {
 
+// Forward declaration of the platform-specific renderer implementation.
+// Defined in tgfx_renderer.cpp (GlRendererImpl for desktop/mobile).
+class GlRendererImpl;
+
 // tgfx-backed renderer that executes render commands.
 class TgfxRenderer : public NonCopyable {
  public:
@@ -53,23 +57,7 @@ class TgfxRenderer : public NonCopyable {
   [[nodiscard]] int GetHeight() const noexcept;
 
  private:
-  void DrawRectImpl(const Rect& rect, const Color& color);
-  void DrawTextImpl(std::string_view text, const Point& position,
-                    const Color& color, float font_size,
-                    std::string_view font_name);
-  void SaveImpl();
-  void RestoreImpl();
-  void TranslateImpl(float delta_x, float delta_y);
-  void ClipRectImpl(const Rect& rect);
-
-  // Opaque tgfx objects (owned by this renderer).
-  void* device_ = nullptr;       // tgfx::Device subclass (GLFW).
-  void* window_ = nullptr;       // tgfx::Window subclass (GLFW).
-  void* context_ = nullptr;      // tgfx::Context* (locked during frame).
-  void* surface_ = nullptr;      // shared_ptr<tgfx::Surface>.
-  void* canvas_ = nullptr;       // tgfx::Canvas*.
-  void* typeface_ = nullptr;     // shared_ptr<tgfx::Typeface>.
-  void* impl_ = nullptr;         // GlRendererImpl (fallback path).
+  std::unique_ptr<GlRendererImpl> impl_;
   int width_ = 0;
   int height_ = 0;
   bool initialized_ = false;

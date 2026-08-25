@@ -231,6 +231,8 @@ struct FontEntry {
 // ---------------------------------------------------------------------------
 // Lightweight OpenGL fallback renderer.
 // ---------------------------------------------------------------------------
+}  // namespace
+
 class GlRendererImpl : public NonCopyable {
  public:
   GlRendererImpl() = default;
@@ -548,12 +550,10 @@ class GlRendererImpl : public NonCopyable {
       result = {.x = x1, .y = y1, .width = std::max(0.0F, x2 - x1),
                 .height = std::max(0.0F, y2 - y1)};
     }
-    // NOLINTNEXTLINE(bugprone-branch-clone)
     if (clip_stack_.empty()) {
-      clip_stack_.push_back(result);
-    } else {
-      clip_stack_.back() = result;
+      clip_stack_.resize(1);
     }
+    clip_stack_.back() = result;
     ApplyClip(result);
   }
 
@@ -837,9 +837,9 @@ class GlRendererImpl : public NonCopyable {
 
     if (w == 0 || h == 0) {
       GlyphInfo info;
-      info.advance = static_cast<float>(
-          // NOLINTNEXTLINE(bugprone-signed-bitwise) - cast to uint32_t before shift
-          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);
+      const std::uint32_t advance_fixed =
+          static_cast<std::uint32_t>(face->glyph->advance.x);
+      info.advance = static_cast<float>(advance_fixed >> 6U);
       glyph_cache_[key] = info;
       last_glyph_key_ = key;
       last_glyph_ptr_ = &glyph_cache_[key];
@@ -862,17 +862,15 @@ class GlRendererImpl : public NonCopyable {
     const int pitch = bitmap.pitch;
     if (pitch >= 0) {
       for (int row = 0; row < h; ++row) {
-        std::memcpy(packed.data() + static_cast<std::size_t>(row) * w,
-                    bitmap.buffer + row * pitch,
-                    static_cast<std::size_t>(w));
+        std::copy_n(bitmap.buffer + row * pitch, w,
+                    packed.data() + static_cast<std::size_t>(row) * w);
       }
     } else {
       // Negative pitch: bitmap is bottom-up. Read from bottom row.
       for (int row = 0; row < h; ++row) {
-        std::memcpy(packed.data() + static_cast<std::size_t>(row) *
-                                        static_cast<std::size_t>(w),
-                    bitmap.buffer + (h - 1 - row) * (-pitch),
-                    static_cast<std::size_t>(w));
+        std::copy_n(bitmap.buffer + (h - 1 - row) * (-pitch), w,
+                    packed.data() + static_cast<std::size_t>(row) *
+                                        static_cast<std::size_t>(w));
       }
     }
 
@@ -889,8 +887,8 @@ class GlRendererImpl : public NonCopyable {
     void* mapped = gl.glMapBufferRange(
         0x88EC, 0, upload_size, 0x0001U | 0x0008U);  // WRITE | INVALIDATE
     if (mapped != nullptr) {
-      std::memcpy(mapped, packed.data(),
-                  static_cast<std::size_t>(upload_size));
+      std::copy_n(packed.data(), static_cast<std::size_t>(upload_size),
+                  static_cast<unsigned char*>(mapped));
       gl.glUnmapBuffer(0x88EC);
     }
     BindTexture(atlas_texture_);
@@ -908,8 +906,9 @@ class GlRendererImpl : public NonCopyable {
     info.v1 = static_cast<float>(atlas_y_ + h) / kAtlasSize;
     info.bearing_x = static_cast<float>(face->glyph->bitmap_left);
     info.bearing_y = static_cast<float>(face->glyph->bitmap_top);
-    info.advance = static_cast<float>(
-        static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);  // NOLINT(bugprone-signed-bitwise)
+    const std::uint32_t advance_fixed =
+        static_cast<std::uint32_t>(face->glyph->advance.x);
+    info.advance = static_cast<float>(advance_fixed >> 6U);
     info.width = w;
     info.height = h;
     glyph_cache_[key] = info;
@@ -1042,16 +1041,14 @@ class GlRendererImpl : public NonCopyable {
     // This covers all common Latin text; CJK and other scripts remain
     // lazy-loaded on first use.
     constexpr float kPreloadSize = 16.0F;
-    for (std::uint32_t cp = 0x20; cp <= 0x7E; ++cp) {
-      (void)GetGlyph(face, cp, kPreloadSize);
+    for (int cp = 0x20; cp <= 0x7E; ++cp) {
+      (void)GetGlyph(face, static_cast<std::uint32_t>(cp), kPreloadSize);
     }
     glyphs_preloaded_ = true;
     VLOG(1) << "Preloaded " << (0x7E - 0x20 + 1)
             << " ASCII glyphs at 16px";
   }
 };
-
-}  // namespace
 
 #endif  // NEOFLUX_PLATFORM_DESKTOP || NEOFLUX_PLATFORM_MOBILE
 
@@ -1061,11 +1058,7 @@ class GlRendererImpl : public NonCopyable {
 
 TgfxRenderer::TgfxRenderer() = default;
 
-TgfxRenderer::~TgfxRenderer() {
-#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
-  delete static_cast<GlRendererImpl*>(impl_);
-#endif
-}
+TgfxRenderer::~TgfxRenderer() = default;
 
 bool TgfxRenderer::Init(int width, int height, std::string_view font_dir,
                         void* native_handle) {
@@ -1073,12 +1066,11 @@ bool TgfxRenderer::Init(int width, int height, std::string_view font_dir,
     return true;
   }
 #if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
-  auto* impl = new GlRendererImpl();
+  auto impl = std::make_unique<GlRendererImpl>();
   if (!impl->Init(width, height, font_dir, native_handle)) {
-    delete impl;
     return false;
   }
-  impl_ = impl;
+  impl_ = std::move(impl);
   width_ = width;
   height_ = height;
   initialized_ = true;
@@ -1094,7 +1086,7 @@ bool TgfxRenderer::Init(int width, int height, std::string_view font_dir,
 void TgfxRenderer::BeginFrame(const Color& clear_color) {
 #if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   if (impl_ != nullptr) {
-    static_cast<GlRendererImpl*>(impl_)->BeginFrame(clear_color);
+    impl_->BeginFrame(clear_color);
   }
 #else
   (void)clear_color;
@@ -1104,7 +1096,7 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
 void TgfxRenderer::EndFrame() {
 #if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   if (impl_ != nullptr) {
-    static_cast<GlRendererImpl*>(impl_)->EndFrame();
+    impl_->EndFrame();
   }
 #endif
 }
@@ -1114,33 +1106,34 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
   if (impl_ == nullptr) {
     return;
   }
-  auto* impl = static_cast<GlRendererImpl*>(impl_);
-  switch (command.type) {
+  // Each case dispatches to a distinct renderer method; clang-tidy's
+  // branch-clone check flags the similar structure but the calls differ.
+  switch (command.type) {  // NOLINT(bugprone-branch-clone)
     case RenderCommandType::kDrawRect:
-      impl->DrawRect(command.rect, command.color);
+      impl_->DrawRect(command.rect, command.color);
       break;
     case RenderCommandType::kDrawRoundedRect:
-      impl->DrawRoundedRect(command.rect, command.color,
+      impl_->DrawRoundedRect(command.rect, command.color,
                             command.corner_radius);
       break;
     case RenderCommandType::kDrawText:
-      impl->DrawText(command.text, command.point, command.color,
+      impl_->DrawText(command.text, command.point, command.color,
                      command.font_size, command.font_name);
       break;
     case RenderCommandType::kDrawTexture:
-      impl->DrawTexture(command.texture_id, command.rect);
+      impl_->DrawTexture(command.texture_id, command.rect);
       break;
     case RenderCommandType::kSave:
-      impl->Save();
+      impl_->Save();
       break;
     case RenderCommandType::kRestore:
-      impl->Restore();
+      impl_->Restore();
       break;
     case RenderCommandType::kTranslate:
-      impl->Translate(command.translate_x, command.translate_y);
+      impl_->Translate(command.translate_x, command.translate_y);
       break;
     case RenderCommandType::kClipRect:
-      impl->ClipRect(command.rect);
+      impl_->ClipRect(command.rect);
       break;
     default:
       break;
@@ -1155,7 +1148,7 @@ void TgfxRenderer::Resize(int width, int height) {
   height_ = height;
 #if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   if (impl_ != nullptr) {
-    static_cast<GlRendererImpl*>(impl_)->Resize(width, height);
+    impl_->Resize(width, height);
   }
 #endif
 }

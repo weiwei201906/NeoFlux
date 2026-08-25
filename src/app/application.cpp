@@ -91,10 +91,8 @@ bool Application::Init(int argc, char** argv, int window_width,
       filtered_argv.push_back(argv[i]);
     }
   }
-  int filtered_argc =  // NOLINT(cppcoreguidelines-init-variables)
-      static_cast<int>(filtered_argv.size());
-  char** filtered_argv_ptr =  // NOLINT(cppcoreguidelines-init-variables)
-      filtered_argv.data();
+  int filtered_argc = static_cast<int>(filtered_argv.size());
+  char** filtered_argv_ptr = filtered_argv.data();
 
   // Initialize glog first so its built-in flags are accessible. Route initial
   // log messages to stderr temporarily until the log destination is configured,
