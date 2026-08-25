@@ -13,6 +13,7 @@
 
 #include <bit>
 #include <cassert>
+#include <limits>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -37,11 +38,19 @@ void SpscRingQueue<T>::Init(const std::size_t capacity) {
   static_assert(std::is_move_constructible_v<T> ||
                     std::is_copy_constructible_v<T>,
                 "T must be move-constructible or copy-constructible");
+  // Guard against integer overflow in capacity * sizeof(T). If the requested
+  // capacity would overflow size_t when multiplied by element size, clamp to
+  // the maximum safe power of two. This prevents mmap of a truncated size
+  // (which would cause out-of-bounds access on later Push).
+  constexpr std::size_t kMaxSafeCapacity =
+      (std::numeric_limits<std::size_t>::max)() / sizeof(T);
+  const std::size_t safe_capacity =
+      (capacity > kMaxSafeCapacity) ? kMaxSafeCapacity : capacity;
 
   // Round up to the next power of two so that index wrapping can use a
   // single bitwise AND (& mask_) instead of an integer modulo (%).
   // Integer division is ~20-40 cycles; bitwise AND is 1 cycle.
-  capacity_ = std::bit_ceil(capacity);
+  capacity_ = std::bit_ceil(safe_capacity);
   mask_ = capacity_ - 1;
   // Allocate page-aligned storage via mmap/VirtualAlloc with a trailing
   // guard page. Out-of-bounds writes trigger SIGSEGV/access violation
