@@ -30,6 +30,16 @@ namespace neoflux {
 class Application;
 class RenderContext;
 
+// Stateless deleter for Taitank nodes. Defined in widget.cpp (calls
+// taitank::NodeFree). Empty type so unique_ptr<TaitankNode, Deleter> has the
+// same size as a raw pointer (no extra function-pointer storage).
+struct TaitankNodeDeleter {
+  void operator()(taitank::TaitankNode* node) const noexcept;
+};
+
+// RAII smart pointer for Taitank layout nodes.
+using TaitankNodePtr = std::unique_ptr<taitank::TaitankNode, TaitankNodeDeleter>;
+
 // Build context passed to widget build() methods.
 //
 // Provides access to the owning Application and convenience methods for
@@ -224,7 +234,6 @@ class Widget : public std::enable_shared_from_this<Widget> {
 
   // Returns the opaque Taitank node handle (for subclasses to set styles).
   [[nodiscard]] taitank::TaitankNode* GetTaitankNode() const noexcept;
-
   // Sets the widget's lifecycle state. If the state changes, OnStateChanged()
   // is called with the old and new states. Subclasses override OnStateChanged()
   // to launch coroutines, mark frames dirty, or trigger side effects.
@@ -268,7 +277,8 @@ class Widget : public std::enable_shared_from_this<Widget> {
   Widget* parent_ = nullptr;
   bool needs_build_ = true;
   WidgetState state_ = WidgetState::kIdle;
-  taitank::TaitankNode* taitank_node_ = nullptr;  // Opaque Taitank node.
+  // RAII-managed Taitank layout node. Automatically freed on widget destruction.
+  TaitankNodePtr taitank_node_{};
   bool focusable_ = false;
   bool has_focus_ = false;
   bool text_input_cursor_ = false;

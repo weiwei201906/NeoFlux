@@ -26,7 +26,9 @@
 #include "neoflux/core/types.h"
 #include "neoflux/render/render_context.h"
 #include "neoflux/render/render_layer.h"
+#ifdef NEOFLUX_PLATFORM_DESKTOP
 #include "neoflux/native/desktop/glfw_bridge.h"
+#endif
 #include "neoflux/widget/route_registry.h"
 #include "neoflux/widget/widget.h"
 

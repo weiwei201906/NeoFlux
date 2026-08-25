@@ -17,10 +17,15 @@
 #include "neoflux/app/event_loop.h"
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
-#include "neoflux/native/desktop/glfw_bridge.h"
 #include "neoflux/render/render_context.h"
 #include "neoflux/render/render_layer.h"
 #include "neoflux/widget/widget.h"
+
+// Desktop-only: GLFW bridge for window creation and input. Mobile platforms
+// use the platform bridge (EGL/EAGL) provided by RenderLayer directly.
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+#include "neoflux/native/desktop/glfw_bridge.h"
+#endif
 
 namespace neoflux {
 

@@ -70,11 +70,26 @@ class Task {
     std::exception_ptr exception;
     std::coroutine_handle<> continuation;
 
+    // Custom final-suspend awaitable that resumes the caller (continuation)
+    // after the coroutine completes. Without this, co_await Task<T>() would
+    // suspend forever because the default suspend_always does not resume the
+    // awaiting coroutine.
+    struct FinalAwaiter {
+      bool await_ready() const noexcept { return false; }
+      template <typename Promise>
+      void await_suspend(std::coroutine_handle<Promise> h) noexcept {
+        if (h.promise().continuation) {
+          h.promise().continuation.resume();
+        }
+      }
+      void await_resume() const noexcept {}
+    };
+
     Task get_return_object() {
       return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
     }
     std::suspend_always initial_suspend() const noexcept { return {}; }
-    std::suspend_always final_suspend() const noexcept { return {}; }
+    FinalAwaiter final_suspend() const noexcept { return {}; }
     void unhandled_exception() { exception = std::current_exception(); }
 
     template <typename U>
@@ -157,11 +172,23 @@ class Task<void> {
     std::exception_ptr exception;
     std::coroutine_handle<> continuation;
 
+    // See Task<T>::promise_type::FinalAwaiter for rationale.
+    struct FinalAwaiter {
+      bool await_ready() const noexcept { return false; }
+      template <typename Promise>
+      void await_suspend(std::coroutine_handle<Promise> h) noexcept {
+        if (h.promise().continuation) {
+          h.promise().continuation.resume();
+        }
+      }
+      void await_resume() const noexcept {}
+    };
+
     Task get_return_object() {
       return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
     }
     std::suspend_always initial_suspend() const noexcept { return {}; }
-    std::suspend_always final_suspend() const noexcept { return {}; }
+    FinalAwaiter final_suspend() const noexcept { return {}; }
     void unhandled_exception() { exception = std::current_exception(); }
     void return_void() {}
   };
