@@ -470,7 +470,7 @@ class GlRendererImpl : public NonCopyable {
       current_use_texture_ = 1;
     }
     gl.glActiveTexture(0x84C0);  // GL_TEXTURE0
-    gl.glBindTexture(0x0DE1, texture_id);  // GL_TEXTURE_2D
+    BindTexture(texture_id);
     BindVertexArray(vao_);
     BindBuffer(vbo_);
 
@@ -832,7 +832,7 @@ class GlRendererImpl : public NonCopyable {
       }
     }
 
-    gl.glBindTexture(0x0DE1, atlas_texture_);
+    BindTexture(atlas_texture_);
     gl.glPixelStorei(0x0CF5, 1);  // GL_UNPACK_ALIGNMENT = 1
     gl.glTexSubImage2D(0x0DE1, 0, atlas_x_, atlas_y_, w, h, 0x1903, 0x1401,
                        packed.data());

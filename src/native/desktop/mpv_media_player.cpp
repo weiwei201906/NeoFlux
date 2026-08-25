@@ -262,11 +262,11 @@ void MpvMediaPlayer::InitRender() {
   gl_init_params.get_proc_address = GetProcAddress;
   gl_init_params.get_proc_address_ctx = nullptr;
 
-  // NOLINTNEXTLINE(modernize-use-designated-initializers,cppcoreguidelines-pro-type-const-cast)
+  // mpv API takes char* for API type string; the literal is never modified.
   mpv_render_param params[] = {
-      {MPV_RENDER_PARAM_API_TYPE, const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},  // NOLINT
-      {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl_init_params},
-      {MPV_RENDER_PARAM_INVALID, nullptr},
+      {.type = MPV_RENDER_PARAM_API_TYPE, .data = const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},  // NOLINT(cppcoreguidelines-pro-type-const-cast)
+      {.type = MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, .data = &gl_init_params},
+      {.type = MPV_RENDER_PARAM_INVALID, .data = nullptr},
   };
 
   const int ret = mpv_render_context_create(&render_ctx_, mpv_, params);
@@ -340,10 +340,9 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
   fbo_params.h = height;
   fbo_params.internal_format = 0;
 
-  // NOLINTNEXTLINE(modernize-use-designated-initializers)
   mpv_render_param render_params[] = {
-      {MPV_RENDER_PARAM_OPENGL_FBO, &fbo_params},
-      {MPV_RENDER_PARAM_INVALID, nullptr},
+      {.type = MPV_RENDER_PARAM_OPENGL_FBO, .data = &fbo_params},
+      {.type = MPV_RENDER_PARAM_INVALID, .data = nullptr},
   };
 
   mpv_render_context_render(render_ctx_, render_params);
@@ -394,7 +393,9 @@ void MpvMediaPlayer::SetPropertyDouble(const char* name, double value) {
 }
 
 double MpvMediaPlayer::GetPropertyDouble(const char* name) const {
-  if (mpv_ == nullptr) return 0.0;
+  if (mpv_ == nullptr) {
+    return 0.0;
+  }
   double value = 0.0;
   mpv_get_property(mpv_, name, MPV_FORMAT_DOUBLE, &value);
   return value;
