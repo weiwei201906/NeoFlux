@@ -22,6 +22,7 @@ function(neoflux_add_test test_name)
 endfunction()
 
 neoflux_add_test(ring_queue_test ring_queue_test.cpp)
+neoflux_add_test(ring_queue_stress_test ring_queue_stress_test.cpp)
 neoflux_add_test(widget_test widget_test.cpp)
 neoflux_add_test(route_registry_test route_registry_test.cpp)
 neoflux_add_test(render_command_test render_command_test.cpp)
