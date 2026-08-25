@@ -156,18 +156,21 @@ Fonts are loaded via `MappedMemory::FromFile()` → `FT_New_Memory_Face()`:
 - No user-space buffer copy (FreeType's `FT_New_Face` reads into its own buffer).
 - Lazy page faults: only rasterized glyphs trigger physical page allocation.
 
-### Texture Upload (PBO + glMapBufferRange)
+### Texture Upload (Direct glTexSubImage2D)
 
-Glyph bitmaps are uploaded via Pixel Buffer Object:
+Glyph bitmaps are uploaded directly to the atlas texture:
 
 ```
-CPU writes → mapped PBO → (DMA) → texture
+CPU buffer → glTexSubImage2D → texture
 ```
 
-- `glTexSubImage2D(nullptr)` reads from the bound PBO via DMA; the CPU returns
-  immediately instead of stalling for GPU consumption.
-- Orphan pattern (`glBufferData` with `nullptr`) avoids waiting for in-flight
-  GPU reads.
+- `GL_UNPACK_ALIGNMENT=1` handles tightly packed grayscale bitmaps.
+- Each glyph is uploaded once and cached; subsequent frames sample from the
+  atlas at zero upload cost.
+- A PBO-based async path was removed: `glMapBufferRange` returned `nullptr`
+  on some drivers when PBO storage was not pre-allocated with `glBufferData`,
+  causing all glyph bitmaps to be silently dropped and text to render as
+  fully transparent.
 
 ### Glyph Pre-Rendering (First-Paint Jank Elimination)
 

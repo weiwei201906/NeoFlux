@@ -338,8 +338,11 @@ Loaded via `MappedMemory::FromFile()` → `FT_New_Memory_Face(data, size)`. Avoi
 FreeType's internal `fopen`/`fread` path; the OS page cache manages the bytes, and
 only rasterized glyphs trigger page faults.
 
-### Texture Upload (PBO)
+### Texture Upload
 
-Glyph bitmaps are uploaded via Pixel Buffer Object: `glMapBufferRange` maps the
-PBO, `memcpy` writes into it, then `glTexSubImage2D(nullptr)` DMA's from the PBO
-to the texture. The CPU returns immediately instead of stalling for GPU consumption.
+Glyph bitmaps are uploaded directly via `glTexSubImage2D` with
+`GL_UNPACK_ALIGNMENT=1`. Each glyph is uploaded only once (cached in the
+atlas), so the synchronous upload cost is amortized across all subsequent
+frames. A PBO-based async path was removed because `glMapBufferRange`
+returned `nullptr` on some drivers when PBO storage was not pre-allocated,
+causing silent glyph upload failure and invisible text.

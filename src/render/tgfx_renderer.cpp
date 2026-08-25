@@ -702,10 +702,6 @@ class GlRendererImpl : public NonCopyable {
                          0x1401, zeros.data());
     }
 
-    // Create PBO for asynchronous texture upload. Size matches the atlas
-    // (1024x1024 = 1 MiB). GL_STREAM_DRAW: updated frequently, used once.
-    gl.glGenBuffers(1, &upload_pbo_);
-
     gl.glEnable(0x0BE2);
     gl.glBlendFunc(0x0302, 0x0303);
 
@@ -874,30 +870,16 @@ class GlRendererImpl : public NonCopyable {
       }
     }
 
-    // Upload glyph bitmap to the atlas via PBO for asynchronous DMA.
-    // Path: CPU -> mapped PBO -> (DMA) -> texture. glTexSubImage2D with
-    // nullptr reads from the bound PIXEL_UNPACK_BUFFER and returns
-    // immediately (no CPU stall waiting for GPU).
-    const GlSizeiptr upload_size = static_cast<GlSizeiptr>(w) * h;
-    gl.glBindBuffer(0x88EC, upload_pbo_);  // GL_PIXEL_UNPACK_BUFFER
-    // Orphan the PBO: reallocate without waiting for in-flight GPU reads.
-    gl.glBufferData(0x88EC, upload_size, nullptr, 0x88E0);  // GL_STREAM_DRAW
-    // Map with WRITE + INVALIDATE: driver can return a fresh allocation
-    // instead of synchronizing with previous contents.
-    void* mapped = gl.glMapBufferRange(
-        0x88EC, 0, upload_size, 0x0001U | 0x0008U);  // WRITE | INVALIDATE
-    if (mapped != nullptr) {
-      std::copy_n(packed.data(), static_cast<std::size_t>(upload_size),
-                  static_cast<unsigned char*>(mapped));
-      gl.glUnmapBuffer(0x88EC);
-    }
+    // Upload glyph bitmap directly to the atlas texture. PBO was removed
+    // because glMapBufferRange returned nullptr on some drivers (PBO storage
+    // not properly allocated), causing silent glyph upload failure and
+    // invisible text. Direct upload is synchronous but reliable; the atlas
+    // cache ensures each glyph is uploaded only once.
     BindTexture(atlas_texture_);
     gl.glPixelStorei(0x0CF5, 1);  // GL_UNPACK_ALIGNMENT = 1
-    // nullptr data pointer: source is the bound PBO (DMA transfer).
     gl.glTexSubImage2D(0x0DE1, 0, atlas_x_, atlas_y_, w, h, 0x1903, 0x1401,
-                       nullptr);
+                       packed.data());
     gl.glPixelStorei(0x0CF5, 4);  // reset to default
-    gl.glBindBuffer(0x88EC, 0);  // unbind PBO
 
     GlyphInfo info;
     info.u0 = static_cast<float>(atlas_x_) / kAtlasSize;
@@ -925,7 +907,6 @@ class GlRendererImpl : public NonCopyable {
     if (gl_ready_) {
       gl.glDeleteTextures(1, &atlas_texture_);
       gl.glDeleteBuffers(1, &vbo_);
-      gl.glDeleteBuffers(1, &upload_pbo_);
       gl.glDeleteVertexArrays(1, &vao_);
       gl.glDeleteProgram(program_);
     }
@@ -994,10 +975,6 @@ class GlRendererImpl : public NonCopyable {
   GlUint vao_ = 0;
   GlUint vbo_ = 0;
   GlUint atlas_texture_ = 0;
-  // Pixel Buffer Object for asynchronous texture upload. glMapBufferRange
-  // maps the PBO into client memory; glTexSubImage2D then DMA's from the
-  // PBO to the texture without stalling the CPU.
-  GlUint upload_pbo_ = 0;
 
   GlInt u_resolution_ = -1;
   GlInt u_translate_ = -1;
