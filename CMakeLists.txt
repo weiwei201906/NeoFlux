@@ -102,6 +102,7 @@ add_library(neoflux STATIC
   src/render/render_command.cpp
   src/render/render_context.cpp
   src/render/tgfx_renderer.cpp
+  src/native/mapped_memory.cpp
   src/native/desktop/mpv_media_player.cpp
   src/media/media_player_factory.cpp
 )
