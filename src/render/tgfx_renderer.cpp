@@ -190,6 +190,11 @@ constexpr GlSizeiptr kMaxVboBytes = 64LL * 1024;
 // Texture atlas dimensions for glyph caching.
 constexpr int kAtlasSize = 1024;
 
+// Color normalization scale: 8-bit channel (0-255) -> float (0.0-1.0).
+// Precompute reciprocal so each conversion is a multiply (~4 cycles) instead
+// of a divide (~14 cycles). Used for every glUniform4f color upload.
+constexpr float kColorScale = 1.0F / 255.0F;
+
 // Per-glyph metadata stored in the atlas cache.
 struct GlyphInfo {
   float u0 = 0.0F;
@@ -256,8 +261,8 @@ class GlRendererImpl : public NonCopyable {
       width_ = win_width;
       height_ = win_height;
     }
-    gl.glClearColor(clear.r / 255.0F, clear.g / 255.0F, clear.b / 255.0F,
-                    clear.a / 255.0F);
+    gl.glClearColor(clear.r * kColorScale, clear.g * kColorScale, clear.b * kColorScale,
+                    clear.a * kColorScale);
     gl.glClear(0x00004000U | 0x00000100U);
     // Update u_resolution every frame so window resizes take effect
     // without re-initializing GL. u_resolution uses logical (layout) size,
@@ -292,8 +297,8 @@ class GlRendererImpl : public NonCopyable {
 
     UseProgram(program_);
     gl.glUniform2f(u_translate_, t.x, t.y);
-    gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
-                   color.b / 255.0F, color.a / 255.0F);
+    gl.glUniform4f(u_color_, color.r * kColorScale, color.g * kColorScale,
+                   color.b * kColorScale, color.a * kColorScale);
     if (current_use_texture_ != 0) {
       gl.glUniform1i(u_use_texture_, 0);
       current_use_texture_ = 0;
@@ -366,8 +371,8 @@ class GlRendererImpl : public NonCopyable {
 
     UseProgram(program_);
     gl.glUniform2f(u_translate_, t.x, t.y);
-    gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
-                   color.b / 255.0F, color.a / 255.0F);
+    gl.glUniform4f(u_color_, color.r * kColorScale, color.g * kColorScale,
+                   color.b * kColorScale, color.a * kColorScale);
     if (current_use_texture_ != 0) {
       gl.glUniform1i(u_use_texture_, 0);
       current_use_texture_ = 0;
@@ -394,8 +399,8 @@ class GlRendererImpl : public NonCopyable {
 
     UseProgram(program_);
     gl.glUniform2f(u_translate_, t.x, t.y);
-    gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
-                   color.b / 255.0F, color.a / 255.0F);
+    gl.glUniform4f(u_color_, color.r * kColorScale, color.g * kColorScale,
+                   color.b * kColorScale, color.a * kColorScale);
     if (current_use_texture_ != 1) {
       gl.glUniform1i(u_use_texture_, 1);
       current_use_texture_ = 1;

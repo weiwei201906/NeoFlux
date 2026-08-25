@@ -115,7 +115,8 @@ void Text::Paint(RenderContext& context) {
   const float text_width = EstimateTextWidth(text_, font_size_);
   const float text_x =
       (alignment_ == HAlign::kCenter)
-          ? (bounds_.width - text_width) / 2.0F
+          // Center: multiply by 0.5 (FP multiply ~4c vs divide ~14c).
+          ? (bounds_.width - text_width) * 0.5F
           : (alignment_ == HAlign::kRight ? bounds_.width - text_width : 0.0F);
   // Baseline at font_size from top (approximate descent).
   context.DrawText(text_, {.x = text_x, .y = font_size_}, text_color_,

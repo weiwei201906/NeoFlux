@@ -153,7 +153,8 @@ void Button::Paint(RenderContext& context) {
       background);
 
   const float label_width = EstimateLabelWidth(label_, font_size_);
-  const float label_x = (bounds_.width - label_width) / 2.0F;
+  // Center horizontally: multiply by 0.5 (FP multiply ~4c vs divide ~14c).
+  const float label_x = (bounds_.width - label_width) * 0.5F;
   const float label_y = vertical_padding_ + font_size_;
   context.DrawText(label_, {.x = label_x, .y = label_y}, text_color_,
                    font_size_, font_name_);

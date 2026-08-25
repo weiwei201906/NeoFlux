@@ -46,8 +46,10 @@ bool Draggable::OnPointerDown(const Point& local_pos) {
   dragging_ = true;
   SetState(WidgetState::kDragging);
   // Immediately center the widget on the press point.
-  drag_offset_.x += local_pos.x - bounds_.width / 2.0F;
-  drag_offset_.y += local_pos.y - bounds_.height / 2.0F;
+  // Multiply by 0.5 instead of divide by 2.0: FP multiply is ~4 cycles vs
+  // divide ~14 cycles on most architectures.
+  drag_offset_.x += local_pos.x - bounds_.width * 0.5F;
+  drag_offset_.y += local_pos.y - bounds_.height * 0.5F;
   return true;
 }
 
@@ -66,8 +68,9 @@ bool Draggable::OnPointerMove(const Point& local_pos) {
   // current visual top-left, so adding (local_pos - size/2) to drag_offset_
   // moves the widget so its center lands on the cursor. Paint-time translate
   // only: no full rebuild, frame dirty is set by pointer dispatch.
-  drag_offset_.x += local_pos.x - bounds_.width / 2.0F;
-  drag_offset_.y += local_pos.y - bounds_.height / 2.0F;
+  // Multiply by 0.5 instead of divide by 2.0 (FP multiply ~4c vs divide ~14c).
+  drag_offset_.x += local_pos.x - bounds_.width * 0.5F;
+  drag_offset_.y += local_pos.y - bounds_.height * 0.5F;
   return true;
 }
 
