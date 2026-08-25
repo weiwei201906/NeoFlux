@@ -35,8 +35,10 @@
 
 namespace neoflux {
 
+#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
 #ifdef NEOFLUX_PLATFORM_DESKTOP
 #include <GLFW/glfw3.h>
+#endif
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
@@ -563,8 +565,15 @@ class GlRendererImpl : public NonCopyable {
       return false;
     }
 
-    static const char* kVertSrc = R"(
-      #version 330 core
+    // Shader version differs between desktop OpenGL (330 core) and OpenGL ES
+    // (300 es + precision qualifier). The rest of the shader is compatible.
+#ifdef NEOFLUX_PLATFORM_MOBILE
+    static const char* kGlVersion = "#version 300 es\nprecision mediump float;\n";
+#else
+    static const char* kGlVersion = "#version 330 core\n";
+#endif
+
+    static const char* kVertBody = R"(
       layout(location = 0) in vec4 a_pos;
       uniform vec2 u_resolution;
       uniform vec2 u_translate;
@@ -575,8 +584,7 @@ class GlRendererImpl : public NonCopyable {
         gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
         v_uv = a_pos.zw;
       })";
-    static const char* kFragSrc = R"(
-      #version 330 core
+    static const char* kFragBody = R"(
       in vec2 v_uv;
       uniform vec4 u_color;
       uniform sampler2D u_texture;
@@ -591,10 +599,16 @@ class GlRendererImpl : public NonCopyable {
         }
       })";
 
+    // Concatenate version header + body.
+    std::string vert_src = std::string(kGlVersion) + kVertBody;
+    std::string frag_src = std::string(kGlVersion) + kFragBody;
+    const char* vert_ptr = vert_src.c_str();
+    const char* frag_ptr = frag_src.c_str();
+
     const GlUint vs = gl.glCreateShader(0x8B31);
     const GlUint fs = gl.glCreateShader(0x8B30);
-    gl.glShaderSource(vs, 1, &kVertSrc, nullptr);
-    gl.glShaderSource(fs, 1, &kFragSrc, nullptr);
+    gl.glShaderSource(vs, 1, &vert_ptr, nullptr);
+    gl.glShaderSource(fs, 1, &frag_ptr, nullptr);
     gl.glCompileShader(vs);
     gl.glCompileShader(fs);
 
@@ -941,7 +955,7 @@ class GlRendererImpl : public NonCopyable {
 
 }  // namespace
 
-#endif  // NEOFLUX_PLATFORM_DESKTOP
+#endif  // NEOFLUX_PLATFORM_DESKTOP || NEOFLUX_PLATFORM_MOBILE
 
 // =============================================================================
 // TgfxRenderer public interface
@@ -950,7 +964,7 @@ class GlRendererImpl : public NonCopyable {
 TgfxRenderer::TgfxRenderer() = default;
 
 TgfxRenderer::~TgfxRenderer() {
-#ifdef NEOFLUX_PLATFORM_DESKTOP
+#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   delete static_cast<GlRendererImpl*>(impl_);
 #endif
 }
@@ -960,7 +974,7 @@ bool TgfxRenderer::Init(int width, int height, std::string_view font_dir,
   if (initialized_) {
     return true;
   }
-#ifdef NEOFLUX_PLATFORM_DESKTOP
+#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   auto* impl = new GlRendererImpl();
   if (!impl->Init(width, height, font_dir, native_handle)) {
     delete impl;
@@ -980,7 +994,7 @@ bool TgfxRenderer::Init(int width, int height, std::string_view font_dir,
 }
 
 void TgfxRenderer::BeginFrame(const Color& clear_color) {
-#ifdef NEOFLUX_PLATFORM_DESKTOP
+#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   if (impl_ != nullptr) {
     static_cast<GlRendererImpl*>(impl_)->BeginFrame(clear_color);
   }
@@ -990,7 +1004,7 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
 }
 
 void TgfxRenderer::EndFrame() {
-#ifdef NEOFLUX_PLATFORM_DESKTOP
+#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   if (impl_ != nullptr) {
     static_cast<GlRendererImpl*>(impl_)->EndFrame();
   }
@@ -998,7 +1012,7 @@ void TgfxRenderer::EndFrame() {
 }
 
 void TgfxRenderer::Execute(const RenderCommand& command) {
-#ifdef NEOFLUX_PLATFORM_DESKTOP
+#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   if (impl_ == nullptr) {
     return;
   }
@@ -1041,7 +1055,7 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
 void TgfxRenderer::Resize(int width, int height) {
   width_ = width;
   height_ = height;
-#ifdef NEOFLUX_PLATFORM_DESKTOP
+#if defined(NEOFLUX_PLATFORM_DESKTOP) || defined(NEOFLUX_PLATFORM_MOBILE)
   if (impl_ != nullptr) {
     static_cast<GlRendererImpl*>(impl_)->Resize(width, height);
   }
