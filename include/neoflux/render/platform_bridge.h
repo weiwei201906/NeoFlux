@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -90,6 +91,47 @@ struct CharEvent {
 using KeyEventCallback = std::function<void(const KeyEvent& event)>;
 using CharEventCallback = std::function<void(const CharEvent& event)>;
 
+// Abstract native text input field. On desktop platforms this wraps the OS
+// native text control (Win32 EDIT, GTK Entry, NSTextField) to get full IME,
+// clipboard, caret, and selection support for free. On mobile platforms the
+// widget renders its own text via tgfx (see TextField).
+class NativeTextField {
+ public:
+  virtual ~NativeTextField() = default;
+
+  // Sets the text content (UTF-8).
+  virtual void SetText(std::string_view text) = 0;
+
+  // Returns the current text content (UTF-8).
+  [[nodiscard]] virtual std::string GetText() const = 0;
+
+  // Sets the placeholder text shown when the field is empty (UTF-8).
+  virtual void SetPlaceholder(std::string_view text) = 0;
+
+  // Moves the control to the given position in window coordinates (pixels).
+  virtual void SetPosition(float x, float y) = 0;
+
+  // Resizes the control to the given dimensions (pixels).
+  virtual void SetSize(float width, float height) = 0;
+
+  // Sets the font size in pixels.
+  virtual void SetFontSize(float size) = 0;
+
+  // Gives keyboard focus to the native control.
+  virtual void SetFocus() = 0;
+
+  // Shows the control.
+  virtual void Show() = 0;
+
+  // Hides the control.
+  virtual void Hide() = 0;
+
+  // Registers a callback invoked whenever the text changes. The callback
+  // receives the new text (UTF-8).
+  virtual void SetOnTextChanged(
+      std::function<void(std::string_view)> callback) = 0;
+};
+
 // Abstract platform bridge. Concrete implementations exist for desktop
 // (GLFW) and mobile (Android/iOS native surfaces).
 class PlatformBridge {
@@ -147,6 +189,11 @@ class PlatformBridge {
 
   // Sets the clipboard text (UTF-8).
   virtual void SetClipboardText(std::string_view text) = 0;
+
+  // Creates a platform-native text input field. Returns nullptr on platforms
+  // that do not support native text fields (mobile uses tgfx-rendered fields).
+  [[nodiscard]] virtual std::unique_ptr<NativeTextField>
+  CreateNativeTextField() = 0;
 };
 
 }  // namespace neoflux

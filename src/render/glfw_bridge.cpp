@@ -17,6 +17,17 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#ifdef NEOFLUX_PLATFORM_WINDOWS
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#include <windows.h>
+#include <commctrl.h>
+#include <unordered_map>
+#endif  // NEOFLUX_PLATFORM_WINDOWS
+
 namespace neoflux {
 
 namespace {
@@ -55,6 +66,199 @@ InputAction ConvertInputAction(int glfw_action) {
       return InputAction::kRelease;
   }
 }
+
+#ifdef NEOFLUX_PLATFORM_WINDOWS
+// Forward declaration.
+class Win32NativeTextField;
+
+// Global state for subclassing the GLFW window to receive WM_COMMAND from
+// child EDIT controls. We subclass once and route EN_CHANGE notifications
+// to the correct Win32NativeTextField instance by control ID.
+WNDPROC g_original_wndproc = nullptr;
+std::unordered_map<int, Win32NativeTextField*> g_text_fields;
+
+// Forward declaration: defined after Win32NativeTextField class.
+LRESULT CALLBACK GlfwWndProcSubclass(HWND hwnd, UINT msg, WPARAM wparam,
+                                     LPARAM lparam);
+
+// Win32 native single-line text input (EDIT control). Embedded as a child
+// window of the GLFW window to get full IME, caret, selection, and clipboard
+// support from the OS.
+class Win32NativeTextField final : public NativeTextField {
+ public:
+  explicit Win32NativeTextField(GLFWwindow* window)
+      : window_(window), control_id_(next_control_id_++) {
+    hwnd_ = glfwGetWin32Window(window);
+
+    // Subclass the GLFW window once to intercept WM_COMMAND.
+    if (g_original_wndproc == nullptr) {
+      g_original_wndproc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(
+          hwnd_, GWLP_WNDPROC,
+          reinterpret_cast<LONG_PTR>(GlfwWndProcSubclass)));
+    }
+
+    // Create the EDIT control. ES_AUTOHSCROLL enables horizontal scrolling
+    // for long text; WS_BORDER gives a thin border consistent with the
+    // widget's focus border.
+    edit_hwnd_ = CreateWindowExW(
+        0, L"EDIT", L"",
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | WS_BORDER | ES_LEFT,
+        0, 0, 100, 24, hwnd_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(control_id_)),
+        GetModuleHandleW(nullptr), nullptr);
+
+    g_text_fields[control_id_] = this;
+  }
+
+  ~Win32NativeTextField() override {
+    g_text_fields.erase(control_id_);
+    if (font_ != nullptr) {
+      DeleteObject(font_);
+    }
+    if (edit_hwnd_ != nullptr) {
+      DestroyWindow(edit_hwnd_);
+    }
+  }
+
+  // Non-copyable, non-movable: owns native window and font handles.
+  Win32NativeTextField(const Win32NativeTextField&) = delete;
+  Win32NativeTextField& operator=(const Win32NativeTextField&) = delete;
+  Win32NativeTextField(Win32NativeTextField&&) = delete;
+  Win32NativeTextField& operator=(Win32NativeTextField&&) = delete;
+
+  void SetText(std::string_view text) override {
+    if (edit_hwnd_ == nullptr) {
+      return;
+    }
+    const int wide_len = MultiByteToWideChar(
+        CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring wide(static_cast<std::size_t>(wide_len), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(),
+                        static_cast<int>(text.size()), wide.data(), wide_len);
+    SetWindowTextW(edit_hwnd_, wide.c_str());
+  }
+
+  [[nodiscard]] std::string GetText() const override {
+    if (edit_hwnd_ == nullptr) {
+      return {};
+    }
+    const int len = GetWindowTextLengthW(edit_hwnd_);
+    std::wstring wide(static_cast<std::size_t>(len), L'\0');
+    GetWindowTextW(edit_hwnd_, wide.data(), len + 1);
+    const int utf8_len = WideCharToMultiByte(
+        CP_UTF8, 0, wide.c_str(), len, nullptr, 0, nullptr, nullptr);
+    std::string utf8(static_cast<std::size_t>(utf8_len), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), len, utf8.data(),
+                        utf8_len, nullptr, nullptr);
+    return utf8;
+  }
+
+  void SetPlaceholder(std::string_view text) override {
+    if (edit_hwnd_ == nullptr) {
+      return;
+    }
+    const int wide_len = MultiByteToWideChar(
+        CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring wide(static_cast<std::size_t>(wide_len), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(),
+                        static_cast<int>(text.size()), wide.data(), wide_len);
+    // EM_SETCUEBANNER shows the cue banner when the edit control is empty.
+    SendMessageW(edit_hwnd_, EM_SETCUEBANNER, TRUE,
+                 reinterpret_cast<LPARAM>(wide.c_str()));
+  }
+
+  void SetPosition(float x, float y) override {
+    if (edit_hwnd_ == nullptr) {
+      return;
+    }
+    SetWindowPos(edit_hwnd_, nullptr, static_cast<int>(x),
+                 static_cast<int>(y), 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+  }
+
+  void SetSize(float width, float height) override {
+    if (edit_hwnd_ == nullptr) {
+      return;
+    }
+    SetWindowPos(edit_hwnd_, nullptr, 0, 0, static_cast<int>(width),
+                 static_cast<int>(height),
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+  }
+
+  void SetFontSize(float size) override {
+    if (edit_hwnd_ == nullptr) {
+      return;
+    }
+    if (font_ != nullptr) {
+      DeleteObject(font_);
+    }
+    // Create a font. Negative height means character height (not cell height).
+    font_ = CreateFontW(
+        -static_cast<int>(size), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei");
+    SendMessageW(edit_hwnd_, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(font_), TRUE);
+  }
+
+  void SetFocus() override {
+    if (edit_hwnd_ != nullptr) {
+      ::SetFocus(edit_hwnd_);
+    }
+  }
+
+  void Show() override {
+    if (edit_hwnd_ != nullptr) {
+      ShowWindow(edit_hwnd_, SW_SHOWNOACTIVATE);
+    }
+  }
+
+  void Hide() override {
+    if (edit_hwnd_ != nullptr) {
+      ShowWindow(edit_hwnd_, SW_HIDE);
+    }
+  }
+
+  void SetOnTextChanged(
+      std::function<void(std::string_view)> callback) override {
+    on_text_changed_ = std::move(callback);
+  }
+
+  // Called from the subclassed window procedure when EN_CHANGE arrives.
+  void OnTextChanged() {
+    if (on_text_changed_ != nullptr) {
+      on_text_changed_(GetText());
+    }
+  }
+
+ private:
+  GLFWwindow* window_;
+  HWND hwnd_ = nullptr;
+  HWND edit_hwnd_ = nullptr;
+  HFONT font_ = nullptr;
+  int control_id_ = 0;
+  std::function<void(std::string_view)> on_text_changed_{};
+
+  static int next_control_id_;
+};
+
+int Win32NativeTextField::next_control_id_ = 1000;
+
+// Subclass procedure for the GLFW window to handle WM_COMMAND from EDIT
+// controls. Defined after Win32NativeTextField so it can call OnTextChanged.
+LRESULT CALLBACK GlfwWndProcSubclass(HWND hwnd, UINT msg, WPARAM wparam,
+                                     LPARAM lparam) {
+  if (msg == WM_COMMAND) {
+    const int control_id = LOWORD(wparam);
+    const int notify_code = HIWORD(wparam);
+    auto it = g_text_fields.find(control_id);
+    if (it != g_text_fields.end() && notify_code == EN_CHANGE) {
+      it->second->OnTextChanged();
+    }
+  }
+  return CallWindowProc(g_original_wndproc, hwnd, msg, wparam, lparam);
+}
+#endif  // NEOFLUX_PLATFORM_WINDOWS
 
 }  // namespace
 
@@ -396,6 +600,19 @@ void GlfwBridge::SetClipboardText(std::string_view text) {
   }
   std::string buffer(text);
   glfwSetClipboardString(window_, buffer.c_str());
+}
+
+std::unique_ptr<NativeTextField> GlfwBridge::CreateNativeTextField() {
+#ifdef NEOFLUX_PLATFORM_WINDOWS
+  if (window_ == nullptr) {
+    return nullptr;
+  }
+  return std::make_unique<Win32NativeTextField>(window_);
+#else
+  // Linux (GTK) and macOS (Cocoa) native text fields are not yet implemented.
+  // Fall back to nullptr so TextField uses its tgfx-rendered path.
+  return nullptr;
+#endif  // NEOFLUX_PLATFORM_WINDOWS
 }
 
 }  // namespace neoflux

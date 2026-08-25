@@ -116,9 +116,9 @@ bool Widget::OnKeyEvent(const KeyEvent& /*event*/) { return false; }
 
 bool Widget::OnCharEvent(const CharEvent& /*event*/) { return false; }
 
-void Widget::OnFocus() {}
+void Widget::OnFocus() { has_focus_ = true; }
 
-void Widget::OnBlur() {}
+void Widget::OnBlur() { has_focus_ = false; }
 
 void Widget::SetFocusable(bool focusable) noexcept { focusable_ = focusable; }
 
@@ -206,6 +206,9 @@ void Widget::AddChild(std::shared_ptr<Widget> child) {
     return;
   }
   child->SetParent(this);
+  // Inherit the application pointer so newly built widgets can access the
+  // render layer, platform bridge, and frame dirty mechanism.
+  child->SetApplication(application_);
   children_.push_back(std::move(child));
   if (taitank_node_ != nullptr) {
     const auto& added = children_.back();

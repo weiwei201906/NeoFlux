@@ -41,6 +41,9 @@ void TextField::Paint(RenderContext& context) {
     return;
   }
 
+  // Lazily create the platform-native text field on first paint.
+  EnsureNativeField();
+
   // RenderContext draws in widget-local coordinates (origin at 0,0).
   const float w = b.width;
   const float h = b.height;
@@ -62,6 +65,14 @@ void TextField::Paint(RenderContext& context) {
          .height = h - (2.0F * border_width_),},
         background_color_, corner_radius_ - border_width_);
   }
+
+  // When a native text field is active, the OS renders text, caret, and
+  // selection. We only draw the background and border above.
+  if (native_field_ != nullptr) {
+    return;
+  }
+
+  // --- Fallback tgfx-rendered path (mobile / platforms without native fields) ---
 
   // Text or placeholder.
   const float text_x = 8.0F;
@@ -97,9 +108,6 @@ void TextField::Paint(RenderContext& context) {
     // Cursor visible for ~1 second, invisible for ~1 second at 60fps.
     // 64 frames ~= 1.07s. Use bitwise AND for fast modulo at power-of-two.
     if ((blink_counter_ & 63U) < 32U) {
-      // Approximate cursor x position: use font_size * 0.6 per character as
-      // a rough estimate. A proper implementation would measure glyph
-      // advances, but this is sufficient for the cursor indicator.
       const float cursor_x =
           text_x + (static_cast<float>(Utf8CharCount(text_, cursor_pos_)) *
                     char_width);
@@ -149,6 +157,10 @@ bool TextField::OnPointerDown(const Point& local_pos) {
 }
 
 bool TextField::OnKeyEvent(const KeyEvent& event) {
+  // When a native text field is active, the OS handles all keyboard input.
+  if (native_field_ != nullptr) {
+    return false;
+  }
   if (!event.pressed) {
     return false;  // Only handle key press (not release).
   }
@@ -298,11 +310,14 @@ bool TextField::OnKeyEvent(const KeyEvent& event) {
 }
 
 bool TextField::OnCharEvent(const CharEvent& event) {
+  // When a native text field is active, the OS handles all character input.
+  if (native_field_ != nullptr) {
+    return false;
+  }
   // Ignore control characters (handled by OnKeyEvent).
   if (event.codepoint < 32U) {
     return false;
   }
-  VLOG(1) << "TextField::OnCharEvent codepoint=" << event.codepoint;
   // If there is an active selection, typing replaces it.
   DeleteSelection();
   InsertCodepoint(event.codepoint);
@@ -312,6 +327,9 @@ bool TextField::OnCharEvent(const CharEvent& event) {
 void TextField::OnFocus() {
   Widget::OnFocus();
   blink_counter_ = 0;
+  if (native_field_ != nullptr) {
+    native_field_->SetFocus();
+  }
 }
 
 void TextField::OnBlur() {
@@ -322,6 +340,9 @@ void TextField::OnBlur() {
 void TextField::SetText(std::string_view text) {
   text_ = std::string(text);
   cursor_pos_ = text_.size();
+  if (native_field_ != nullptr) {
+    native_field_->SetText(text_);
+  }
   if (on_change_ != nullptr) {
     on_change_(text_);
   }
@@ -331,9 +352,17 @@ std::string_view TextField::GetText() const noexcept { return text_; }
 
 void TextField::SetPlaceholder(std::string_view placeholder) {
   placeholder_ = std::string(placeholder);
+  if (native_field_ != nullptr) {
+    native_field_->SetPlaceholder(placeholder_);
+  }
 }
 
-void TextField::SetFontSize(float size) noexcept { font_size_ = size; }
+void TextField::SetFontSize(float size) noexcept {
+  font_size_ = size;
+  if (native_field_ != nullptr) {
+    native_field_->SetFontSize(size);
+  }
+}
 
 void TextField::SetOnSubmit(SubmitCallback callback) {
   on_submit_ = std::move(callback);
@@ -547,6 +576,69 @@ void TextField::RequestRepaint() noexcept {
   if (app != nullptr) {
     app->MarkFrameDirty();
   }
+}
+
+void TextField::EnsureNativeField() noexcept {
+  if (native_field_initialized_) {
+    return;
+  }
+  native_field_initialized_ = true;
+
+  Application* app = GetApplication();
+  if (app == nullptr) {
+    return;
+  }
+  PlatformBridge* bridge = app->GetRenderLayer().GetPlatformBridge();
+  if (bridge == nullptr) {
+    return;
+  }
+  native_field_ = bridge->CreateNativeTextField();
+  if (native_field_ == nullptr) {
+    return;
+  }
+
+  // Sync all current state to the native control.
+  native_field_->SetText(text_);
+  native_field_->SetPlaceholder(placeholder_);
+  native_field_->SetFontSize(font_size_);
+  UpdateNativeGeometry();
+
+  // Forward text changes from the native control to the widget state and
+  // the user's OnChange callback. Use a raw pointer captured by value; the
+  // callback is invoked only while this widget is alive because the native
+  // field is owned by this widget and destroyed in ~TextField.
+  TextField* self = this;
+  native_field_->SetOnTextChanged([self](std::string_view new_text) {
+    self->text_ = std::string(new_text);
+    self->cursor_pos_ = self->text_.size();
+    if (self->on_change_ != nullptr) {
+      self->on_change_(self->text_);
+    }
+  });
+}
+
+void TextField::UpdateNativeGeometry() noexcept {
+  if (native_field_ == nullptr) {
+    return;
+  }
+  // The native control is positioned in window coordinates. We need the
+  // absolute position of this widget, which is the sum of all ancestor
+  // bounds offsets. Walk up the parent chain to accumulate the position.
+  float abs_x = bounds_.x;
+  float abs_y = bounds_.y;
+  Widget* parent = GetParent();
+  while (parent != nullptr) {
+    abs_x += parent->GetBounds().x;
+    abs_y += parent->GetBounds().y;
+    parent = parent->GetParent();
+  }
+  native_field_->SetPosition(abs_x, abs_y);
+  native_field_->SetSize(bounds_.width, bounds_.height);
+}
+
+void TextField::ReadLayoutRecursive() {
+  Widget::ReadLayoutRecursive();
+  UpdateNativeGeometry();
 }
 
 }  // namespace neoflux

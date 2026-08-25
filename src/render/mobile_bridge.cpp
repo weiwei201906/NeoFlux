@@ -114,6 +114,12 @@ class MobileBridge final : public PlatformBridge {
     // Mobile clipboard requires platform-specific integration.
   }
 
+  [[nodiscard]] std::unique_ptr<NativeTextField> CreateNativeTextField()
+      override {
+    // Mobile renders text fields via tgfx (see TextField).
+    return nullptr;
+  }
+
   // Called by the platform (JNI / UIKit) when a touch event occurs.
   // Converts the platform touch into a NeoFlux input event and dispatches it.
   void DispatchTouchEvent(MouseButton button, InputAction action,

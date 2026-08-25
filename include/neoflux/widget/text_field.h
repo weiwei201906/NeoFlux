@@ -12,9 +12,11 @@
 #define NEOFLUX_WIDGET_TEXT_FIELD_H_
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 
+#include "neoflux/render/platform_bridge.h"
 #include "neoflux/widget/widget.h"
 
 namespace neoflux {
@@ -65,6 +67,9 @@ class TextField : public Widget {
 
   // Called when the field loses keyboard focus.
   void OnBlur() override;
+
+  // Reads layout bounds from Taitank and updates the native control position.
+  void ReadLayoutRecursive() override;
 
   // --- Configuration ---
 
@@ -170,6 +175,15 @@ class TextField : public Widget {
   // Clears the selection without deleting text (anchor = cursor).
   void ClearSelection() noexcept;
 
+  // Creates the platform-native text field if available. Called lazily on
+  // first Paint when the widget is attached to an application. On platforms
+  // without native field support (mobile, Linux/macOS stub), this is a no-op
+  // and the widget falls back to tgfx-rendered text.
+  void EnsureNativeField() noexcept;
+
+  // Updates the native control's position and size from the current bounds.
+  void UpdateNativeGeometry() noexcept;
+
   std::string text_{};
   std::string placeholder_{};
   std::size_t cursor_pos_ = 0;  // Byte offset into text_.
@@ -192,6 +206,12 @@ class TextField : public Widget {
   // Frame counter for cursor blink. Incremented each Paint; cursor visible
   // when (blink_counter_ & 64) == 0 (roughly 1 second at 60fps).
   std::uint64_t blink_counter_ = 0;
+
+  // Platform-native text input control. Owned by this widget. When non-null,
+  // the OS handles text rendering, caret, selection, IME, and clipboard; the
+  // widget only draws the background/border and positions the control.
+  std::unique_ptr<NativeTextField> native_field_{};
+  bool native_field_initialized_ = false;
 };
 
 }  // namespace neoflux

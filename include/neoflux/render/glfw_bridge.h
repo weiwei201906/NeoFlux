@@ -61,6 +61,8 @@ class GlfwBridge final : public PlatformBridge {
   void SetCursor(CursorType type) override;
   [[nodiscard]] std::string GetClipboardText() const override;
   void SetClipboardText(std::string_view text) override;
+  [[nodiscard]] std::unique_ptr<NativeTextField> CreateNativeTextField()
+      override;
 
   // --- GLFW-specific methods ---
 

@@ -390,8 +390,6 @@ void Application::DispatchPointerEvent(
 
   if (action == InputAction::kPress) {
     std::shared_ptr<Widget> hit = root->HitTest(scaled_pos);
-    VLOG(1) << "Pointer press at (" << scaled_pos.x << "," << scaled_pos.y
-            << ") hit: " << (hit ? hit->GetWidgetName() : "null");
     if (hit != nullptr) {
       const Point global_pos = hit->GetGlobalPosition();
       const Point paint_offset = hit->GetPaintOffset();
