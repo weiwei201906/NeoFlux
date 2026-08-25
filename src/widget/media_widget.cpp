@@ -1,69 +1,46 @@
 // =============================================================================
 // NeoFlux - media_widget.cpp
 //
-// Implementation of MediaWidget. Uses ffplay as an external subprocess for
-// media decoding and rendering. Child process management is platform-specific:
-//   Windows: CreateProcess / TerminateProcess
-//   POSIX:   fork/execvp / kill
+// Integrated media playback widget. Uses the platform MediaPlayer backend to
+// decode video frames into an OpenGL texture, then composites the texture into
+// the widget's bounding rectangle via the render layer.
 // =============================================================================
 
 #include "neoflux/widget/media_widget.h"
 
-#include <algorithm>
-#include <array>
-#include <cstring>
-#include <sstream>
-#include <utility>
-#include <vector>
-
 #include <glog/logging.h>
 
-#include "neoflux/render/render_context.h"
+#include <algorithm>
 
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-// windows.h defines DrawText as a macro (DrawTextA/DrawTextW), which conflicts
-// with RenderContext::DrawText. Undefine it after including windows.h.
-#undef DrawText
-#undef GetMessage
-#undef SendMessage
-#else
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
+#include "neoflux/app/application.h"
+#include "neoflux/media/media_player.h"
+#include "neoflux/render/render_context.h"
 
 namespace neoflux {
 
 namespace {
-
-// Platform-specific process handle wrapper.
-#ifdef _WIN32
-struct ProcessHandle {
-  PROCESS_INFORMATION pi{};
-  bool valid = false;
-};
-#else
-struct ProcessHandle {
-  pid_t pid = -1;
-  bool valid = false;
-};
-#endif
-
+// Default 16:9 aspect ratio for intrinsic sizing.
+constexpr float kDefaultWidth = 480.0F;
+constexpr float kDefaultHeight = 270.0F;
 }  // namespace
 
 MediaWidget::MediaWidget() {
   EnableMeasureFunction();
-#ifdef NEOFLUX_FFPLAY_PATH
-  ffplay_path_ = NEOFLUX_FFPLAY_PATH;
-#endif
+  player_ = CreateMediaPlayer();
+  if (player_ != nullptr) {
+    player_->SetStateCallback([this](MediaState state) {
+      if (state == MediaState::kPlaying || state == MediaState::kPaused) {
+        MarkNeedsBuild();
+      }
+    });
+  }
 }
 
-MediaWidget::~MediaWidget() { Stop(); }
+MediaWidget::~MediaWidget() {
+  if (player_ != nullptr) {
+    player_->Stop();
+  }
+}
 
 std::string_view MediaWidget::GetWidgetName() const noexcept {
   return "MediaWidget";
@@ -71,8 +48,7 @@ std::string_view MediaWidget::GetWidgetName() const noexcept {
 
 Size MediaWidget::OnMeasure(float /*width*/, int /*width_mode*/,
                             float /*height*/, int /*height_mode*/) {
-  // Default 16:9 aspect ratio intrinsic size.
-  return Size{.width = 480.0F, .height = 270.0F};
+  return Size{.width = kDefaultWidth, .height = kDefaultHeight};
 }
 
 void MediaWidget::Paint(RenderContext& context) {
@@ -81,230 +57,141 @@ void MediaWidget::Paint(RenderContext& context) {
     return;
   }
 
-  // Background surface.
-  context.DrawRoundedRect(b, background_color_, 8.0F);
+  // Initialize the player's render context on first paint (render thread).
+  EnsurePlayerInit();
 
-  // Play/pause button (centered circle).
-  const float btn_size = std::min(b.width, b.height) * 0.25F;
-  const float btn_x = b.x + ((b.width - btn_size) * 0.5F);
-  const float btn_y = b.y + ((b.height - btn_size) * 0.5F);
-  const Rect btn_rect{.x = btn_x,
-                      .y = btn_y,
-                      .width = btn_size,
-                      .height = btn_size,};
-  context.DrawRoundedRect(btn_rect, button_color_, btn_size * 0.5F);
-
-  // Play triangle or pause bars inside the button.
-  const float cx = btn_x + (btn_size * 0.5F);
-  const float cy = btn_y + (btn_size * 0.5F);
-  const float tri = btn_size * 0.3F;
-  if (state_ == MediaState::kPlaying) {
-    // Pause icon: two vertical bars.
-    const float bar_w = btn_size * 0.1F;
-    const float bar_h = btn_size * 0.35F;
-    const Rect bar1{.x = cx - (tri * 0.5F) - (bar_w * 0.5F),
-                    .y = cy - (bar_h * 0.5F),
-                    .width = bar_w,
-                    .height = bar_h,};
-    const Rect bar2{.x = cx + (tri * 0.5F) - (bar_w * 0.5F),
-                    .y = cy - (bar_h * 0.5F),
-                    .width = bar_w,
-                    .height = bar_h,};
-    context.DrawRect(bar1, text_color_);
-    context.DrawRect(bar2, text_color_);
-  } else {
-    // Play icon: triangle (approximated by a small rect rotated is complex;
-    // use three rects to form a right-pointing triangle).
-    const Rect tri_body{.x = cx - (tri * 0.2F),
-                        .y = cy - (tri * 0.5F),
-                        .width = tri * 0.4F,
-                        .height = tri,};
-    context.DrawRect(tri_body, text_color_);
+  // Update the video texture if a new frame is available.
+  if (player_ != nullptr) {
+    current_texture_ = player_->UpdateTexture();
+    texture_width_ = player_->GetVideoWidth();
+    texture_height_ = player_->GetVideoHeight();
   }
 
-  // Filename label at the bottom.
-  if (!source_.empty()) {
-    const float label_y = b.y + b.height - 24.0F;
-    // Extract filename from path.
-    std::size_t slash = source_.find_last_of("/\\");
-    std::string_view filename =
-        (slash != std::string_view::npos)
-            ? std::string_view(source_).substr(slash + 1)
-            : std::string_view(source_);
-    context.DrawText(filename, Point{.x = b.x + 8.0F, .y = label_y},
-                     text_color_, 12.0F);
+  // Draw placeholder background.
+  context.DrawRoundedRect({.x = 0.0F, .y = 0.0F, .width = b.width,
+                           .height = b.height,},
+                          background_color_, 4.0F);
+
+  // Draw the video texture if available.
+  if (current_texture_ != 0) {
+    context.DrawTexture(current_texture_,
+                        {.x = 0.0F, .y = 0.0F, .width = b.width,
+                         .height = b.height,});
+  } else {
+    // Draw placeholder text when no video frame is available.
+    const char* msg = "No media loaded";
+    if (player_ != nullptr && !player_->GetSource().empty()) {
+      msg = "Loading...";
+    }
+    const float text_y = (b.height * 0.5F) + 6.0F;
+    context.DrawText(msg, Point{.x = 12.0F, .y = text_y}, text_color_, 14.0F);
   }
 }
 
-bool MediaWidget::OnPointerDown(const Point& local_pos) {
-  if (HitPlayButton(local_pos)) {
-    if (state_ == MediaState::kPlaying) {
-      Pause();
-    } else {
-      Play();
-    }
-    return true;
+bool MediaWidget::OnPointerDown(const Point& /*local_pos*/) {
+  if (player_ == nullptr) {
+    return false;
   }
-  return false;
+  if (player_->GetState() == MediaState::kPlaying) {
+    player_->Pause();
+  } else {
+    player_->Play();
+  }
+  return true;
 }
 
 void MediaWidget::SetSource(std::string_view source) {
-  source_ = std::string(source);
-  if (auto_play_ && !source_.empty()) {
-    Play();
+  if (player_ != nullptr) {
+    player_->SetSource(source);
   }
 }
 
-std::string_view MediaWidget::GetSource() const noexcept { return source_; }
-
-void MediaWidget::SetFfplayPath(std::string_view path) {
-  ffplay_path_ = std::string(path);
-}
-
-void MediaWidget::SetExtraArgs(std::string_view args) {
-  extra_args_ = std::string(args);
-}
-
-void MediaWidget::SetAutoPlay(bool auto_play) noexcept {
-  auto_play_ = auto_play;
+std::string_view MediaWidget::GetSource() const noexcept {
+  if (player_ != nullptr) {
+    return player_->GetSource();
+  }
+  return {};
 }
 
 void MediaWidget::Play() {
-  if (source_.empty()) {
-    LOG(WARNING) << "MediaWidget::Play: no source set";
-    return;
+  if (player_ != nullptr) {
+    player_->Play();
+    MarkNeedsBuild();
   }
-  if (state_ == MediaState::kPlaying) {
-    return;
-  }
-  LaunchFfplay();
-  state_ = MediaState::kPlaying;
 }
 
 void MediaWidget::Pause() {
-  // ffplay has no IPC pause mechanism; stopping is the only option.
-  Stop();
-  state_ = MediaState::kPaused;
+  if (player_ != nullptr) {
+    player_->Pause();
+  }
 }
 
 void MediaWidget::Stop() {
-  TerminateFfplay();
-  state_ = MediaState::kStopped;
+  if (player_ != nullptr) {
+    player_->Stop();
+    current_texture_ = 0;
+  }
 }
 
-MediaState MediaWidget::GetState() const noexcept { return state_; }
+void MediaWidget::Seek(double position_seconds) {
+  if (player_ != nullptr) {
+    player_->Seek(position_seconds);
+  }
+}
+
+void MediaWidget::SetVolume(double volume) {
+  if (player_ != nullptr) {
+    player_->SetVolume(volume);
+  }
+}
+
+double MediaWidget::GetVolume() const noexcept {
+  if (player_ != nullptr) {
+    return player_->GetVolume();
+  }
+  return 0.0;
+}
+
+double MediaWidget::GetPosition() const noexcept {
+  if (player_ != nullptr) {
+    return player_->GetPosition();
+  }
+  return 0.0;
+}
+
+double MediaWidget::GetDuration() const noexcept {
+  if (player_ != nullptr) {
+    return player_->GetDuration();
+  }
+  return 0.0;
+}
+
+MediaState MediaWidget::GetState() const noexcept {
+  if (player_ != nullptr) {
+    return player_->GetState();
+  }
+  return MediaState::kIdle;
+}
+
+MediaPlayer* MediaWidget::GetPlayer() noexcept {
+  return player_.get();
+}
 
 void MediaWidget::SetBackgroundColor(const Color& color) noexcept {
   background_color_ = color;
-}
-
-void MediaWidget::SetButtonColor(const Color& color) noexcept {
-  button_color_ = color;
 }
 
 void MediaWidget::SetTextColor(const Color& color) noexcept {
   text_color_ = color;
 }
 
-void MediaWidget::LaunchFfplay() {
-  if (process_handle_ != nullptr) {
-    TerminateFfplay();
-  }
-
-#ifdef _WIN32
-  auto* handle = new ProcessHandle();
-  std::string cmd = "\"" + ffplay_path_ + "\" -autoexit";
-  if (!extra_args_.empty()) {
-    cmd += " " + extra_args_;
-  }
-  cmd += " \"" + source_ + "\"";
-  STARTUPINFOA si{};
-  si.cb = sizeof(si);
-  if (!CreateProcessA(nullptr, cmd.data(), nullptr, nullptr, FALSE, 0,
-                      nullptr, nullptr, &si, &handle->pi)) {
-    LOG(ERROR) << "MediaWidget: CreateProcess failed for ffplay: "
-               << GetLastError();
-    delete handle;
+void MediaWidget::EnsurePlayerInit() {
+  if (player_ == nullptr || render_init_requested_) {
     return;
   }
-  handle->valid = true;
-  process_handle_ = handle;
-  LOG(INFO) << "MediaWidget: launched ffplay (pid=" << handle->pi.dwProcessId
-            << ")";
-#else
-  auto* handle = new ProcessHandle();
-  pid_t pid = fork();
-  if (pid < 0) {
-    LOG(ERROR) << "MediaWidget: fork failed";
-    delete handle;
-    return;
-  }
-  if (pid == 0) {
-    // Child process: exec ffplay with extra args if provided.
-    // Build argument vector dynamically to support extra_args_.
-    std::vector<std::string> arg_storage;
-    arg_storage.emplace_back(ffplay_path_);
-    arg_storage.emplace_back("-autoexit");
-    if (!extra_args_.empty()) {
-      // Split extra_args_ by spaces (simple tokenizer; does not handle
-      // quoted args with spaces). For complex args, users should set
-      // ffplay_path_ to a wrapper script.
-      std::istringstream iss(extra_args_);
-      std::string token;
-      while (iss >> token) {
-        arg_storage.emplace_back(std::move(token));
-      }
-    }
-    arg_storage.emplace_back(source_);
-    std::vector<char*> args;
-    args.reserve(arg_storage.size() + 1);
-    for (auto& s : arg_storage) {
-      args.push_back(s.data());
-    }
-    args.push_back(nullptr);
-    execvp(ffplay_path_.c_str(), args.data());
-    // If exec returns, it failed.
-    _exit(127);
-  }
-  handle->pid = pid;
-  handle->valid = true;
-  process_handle_ = handle;
-  LOG(INFO) << "MediaWidget: launched ffplay (pid=" << pid << ")";
-#endif
-}
-
-void MediaWidget::TerminateFfplay() {
-  if (process_handle_ == nullptr) {
-    return;
-  }
-  auto* handle = static_cast<ProcessHandle*>(process_handle_);
-  if (handle->valid) {
-#ifdef _WIN32
-    TerminateProcess(handle->pi.hProcess, 0);
-    WaitForSingleObject(handle->pi.hProcess, 1000);
-    CloseHandle(handle->pi.hProcess);
-    CloseHandle(handle->pi.hThread);
-#else
-    if (handle->pid > 0) {
-      kill(handle->pid, SIGTERM);
-      // Reap the child to avoid zombies.
-      int status = 0;
-      waitpid(handle->pid, &status, WNOHANG);
-    }
-#endif
-    handle->valid = false;
-  }
-  delete handle;
-  process_handle_ = nullptr;
-}
-
-bool MediaWidget::HitPlayButton(const Point& local_pos) const noexcept {
-  const Rect& b = GetBounds();
-  const float btn_size = std::min(b.width, b.height) * 0.25F;
-  const float btn_x = (b.width - btn_size) * 0.5F;
-  const float btn_y = (b.height - btn_size) * 0.5F;
-  return local_pos.x >= btn_x && local_pos.x <= btn_x + btn_size &&
-         local_pos.y >= btn_y && local_pos.y <= btn_y + btn_size;
+  render_init_requested_ = true;
+  player_->InitRender();
+  LOG(INFO) << "MediaWidget: player render context initialized";
 }
 
 }  // namespace neoflux

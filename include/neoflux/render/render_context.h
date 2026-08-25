@@ -37,6 +37,11 @@ class RenderContext {
                 const Color& color, float font_size,
                 std::string_view font_name = "");
 
+  // Draws an OpenGL texture into the given rectangle. Used for video playback
+  // and other externally-generated textures (e.g. libmpv output). The texture
+  // is expected to be in GL_RGBA format.
+  void DrawTexture(std::uint32_t texture_id, const Rect& rect);
+
   // Saves the current transform/clip state.
   void Save();
 

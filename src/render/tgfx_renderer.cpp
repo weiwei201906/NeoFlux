@@ -439,6 +439,41 @@ class GlRendererImpl : public NonCopyable {
     }
   }
 
+  // Draws an external GL texture into the given rectangle. Used for video
+  // playback (libmpv output) and other externally-generated textures.
+  // Texture is flipped vertically because most video APIs output frames with
+  // origin at bottom-left, while NeoFlux uses top-left origin.
+  void DrawTexture(std::uint32_t texture_id, const Rect& rect) {
+    if (!gl_ready_ || texture_id == 0) {
+      return;
+    }
+    const Transform& t = transform_stack_.back();
+    UseProgram(program_);
+    gl.glUniform2f(u_translate_, t.x, t.y);
+    // White color: texture provides RGB, multiply by 1.0.
+    gl.glUniform4f(u_color_, 1.0F, 1.0F, 1.0F, 1.0F);
+    if (current_use_texture_ != 1) {
+      gl.glUniform1i(u_use_texture_, 1);
+      current_use_texture_ = 1;
+    }
+    gl.glActiveTexture(0x84C0);  // GL_TEXTURE0
+    gl.glBindTexture(0x0DE1, texture_id);  // GL_TEXTURE_2D
+    BindVertexArray(vao_);
+    BindBuffer(vbo_);
+
+    // Texture coordinates: flip Y (0,1 top-left -> 1,0 bottom-left in GL).
+    const float vertices[] = {
+      rect.x, rect.y,                             0.0F, 1.0F,
+      rect.x + rect.width, rect.y,                1.0F, 1.0F,
+      rect.x, rect.y + rect.height,               0.0F, 0.0F,
+      rect.x + rect.width, rect.y,                1.0F, 1.0F,
+      rect.x + rect.width, rect.y + rect.height,  1.0F, 0.0F,
+      rect.x, rect.y + rect.height,               0.0F, 0.0F,
+    };
+    gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
+    gl.glDrawArrays(0x0004, 0, 6);  // GL_TRIANGLES
+  }
+
   void Save() {
     transform_stack_.push_back(transform_stack_.empty()
                                    ? Transform{0.0F, 0.0F}
@@ -968,6 +1003,9 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
     case RenderCommandType::kDrawText:
       impl->DrawText(command.text, command.point, command.color,
                      command.font_size, command.font_name);
+      break;
+    case RenderCommandType::kDrawTexture:
+      impl->DrawTexture(command.texture_id, command.rect);
       break;
     case RenderCommandType::kSave:
       impl->Save();

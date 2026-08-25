@@ -24,6 +24,7 @@ enum class RenderCommandType : uint8_t {
   kDrawRect,
   kDrawRoundedRect,
   kDrawText,
+  kDrawTexture,
   kSave,
   kRestore,
   kTranslate,
@@ -46,6 +47,7 @@ struct RenderCommand {
   float translate_x = 0.0F;        // kTranslate
   float translate_y = 0.0F;        // kTranslate
   float corner_radius = 0.0F;      // kDrawRoundedRect
+  std::uint32_t texture_id = 0;    // kDrawTexture (GL texture name)
 
   // Factory: create a draw-rect command.
   [[nodiscard]] static RenderCommand MakeDrawRect(const Rect& rect,
@@ -62,6 +64,10 @@ struct RenderCommand {
                                                   const Color& color,
                                                   float font_size,
                                                   std::string font_name);
+
+  // Factory: create a draw-texture command.
+  [[nodiscard]] static RenderCommand MakeDrawTexture(std::uint32_t texture_id,
+                                                     const Rect& rect);
 
   // Factory: create a save command.
   [[nodiscard]] static RenderCommand MakeSave();

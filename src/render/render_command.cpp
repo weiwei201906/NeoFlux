@@ -48,6 +48,15 @@ RenderCommand RenderCommand::MakeDrawText(std::string text,
   return cmd;
 }
 
+RenderCommand RenderCommand::MakeDrawTexture(std::uint32_t texture_id,
+                                             const Rect& rect) {
+  RenderCommand cmd;
+  cmd.type = RenderCommandType::kDrawTexture;
+  cmd.texture_id = texture_id;
+  cmd.rect = rect;
+  return cmd;
+}
+
 RenderCommand RenderCommand::MakeSave() {
   RenderCommand cmd;
   cmd.type = RenderCommandType::kSave;

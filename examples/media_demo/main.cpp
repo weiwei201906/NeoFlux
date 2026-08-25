@@ -1,16 +1,16 @@
 // =============================================================================
 // NeoFlux - Media player example
 //
-// Demonstrates the MediaWidget backed by ffplay:
-//   - Media file selection via text field
-//   - Play/stop controls
-//   - ffplay subprocess launch and termination
+// Demonstrates the integrated MediaWidget backed by libmpv:
+//   - Video texture composited directly into the widget tree
+//   - Play/pause via tap or button
+//   - Seek and volume controls
 //   - Taitank flex layout
 //
-// Requirements: ffplay must be on the system PATH.
-//   Windows: https://ffmpeg.org/download.html (add bin/ to PATH)
-//   Linux:   sudo apt install ffmpeg
-//   macOS:   brew install ffmpeg
+// Requirements: libmpv must be installed (https://mpv.io/).
+//   Windows: download libmpv dev package, set mpv_DIR in CMake
+//   Linux:   sudo apt install libmpv-dev
+//   macOS:   brew install mpv
 // =============================================================================
 
 #include <neoflux/app/application.h>
@@ -53,7 +53,6 @@ class MediaPlayerState : public State<StatefulWidget> {
 
     media_widget_ = std::make_shared<MediaWidget>();
     media_widget_->SetBackgroundColor({.r = 15, .g = 15, .b = 20, .a = 255});
-    media_widget_->SetButtonColor({.r = 66, .g = 133, .b = 244, .a = 255});
 
     auto url_field = std::make_shared<TextField>();
     url_field->SetPlaceholder("Enter media file path or URL...");
@@ -85,6 +84,16 @@ class MediaPlayerState : public State<StatefulWidget> {
           }
         });
 
+    auto pause_btn = std::make_shared<Button>("Pause");
+    pause_btn->SetFontSize(14.0F)
+        .SetBackgroundColor({.r = 200, .g = 160, .b = 60, .a = 255})
+        .SetTextColor({.r = 255, .g = 255, .b = 255, .a = 255})
+        .SetOnPressed([this] {
+          if (media_widget_ != nullptr) {
+            media_widget_->Pause();
+          }
+        });
+
     auto stop_btn = std::make_shared<Button>("Stop");
     stop_btn->SetFontSize(14.0F)
         .SetBackgroundColor({.r = 200, .g = 60, .b = 60, .a = 255})
@@ -96,10 +105,11 @@ class MediaPlayerState : public State<StatefulWidget> {
         });
 
     btn_row->AddChild(play_btn);
+    btn_row->AddChild(pause_btn);
     btn_row->AddChild(stop_btn);
 
     auto hint = std::make_shared<Text>(
-        "Enter a file path or URL, then press Play. ffplay must be on PATH.");
+        "Enter a file path or URL, then press Play. libmpv required.");
     hint->SetFontSize(12.0F)
         .SetTextColor({.r = 160, .g = 160, .b = 170, .a = 255})
         .SetAlignment(HAlign::kCenter);
@@ -148,7 +158,7 @@ int main(int argc, char** argv) {
 
   Application app;
   app.SetFontDir("thirdparty/fonts");
-  if (!app.Init(argc, argv, 540, 460, "NeoFlux Media Demo")) {
+  if (!app.Init(argc, argv, 540, 520, "NeoFlux Media Demo")) {
     return 1;
   }
   app.PushRoute("/");

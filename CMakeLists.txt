@@ -102,6 +102,8 @@ add_library(neoflux STATIC
   src/render/render_command.cpp
   src/render/render_context.cpp
   src/render/tgfx_renderer.cpp
+  src/media/mpv_media_player.cpp
+  src/media/media_player_factory.cpp
 )
 
 # Platform-specific bridge implementations.
@@ -147,6 +149,35 @@ endif()
 # GLFW is only available on desktop platforms.
 if(TARGET glfw)
   target_link_libraries(neoflux PRIVATE glfw)
+endif()
+
+# libmpv: integrated media player backend (desktop only).
+# Provides video decoding + OpenGL texture output via the mpv render API.
+# On Windows, set mpv_DIR to the directory containing mpv.lib and mpv/client.h.
+option(NEOFLUX_USE_MPV "Enable libmpv media player backend" ON)
+if(NEOFLUX_USE_MPV AND NOT ANDROID AND NOT IOS)
+  find_package(mpv QUIET)
+  if(mpv_FOUND)
+    target_link_libraries(neoflux PRIVATE mpv::mpv)
+    target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
+    message(STATUS "NeoFlux: libmpv media backend enabled")
+  else()
+    # Fallback: try pkg-config
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+      pkg_check_modules(MPV QUIET mpv)
+      if(MPV_FOUND)
+        target_link_libraries(neoflux PRIVATE ${MPV_LIBRARIES})
+        target_include_directories(neoflux PRIVATE ${MPV_INCLUDE_DIRS})
+        target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
+        message(STATUS "NeoFlux: libmpv media backend enabled (pkg-config)")
+      else()
+        message(STATUS "NeoFlux: libmpv not found, media widget will be non-functional")
+      endif()
+    else()
+      message(STATUS "NeoFlux: libmpv not found, media widget will be non-functional")
+    endif()
+  endif()
 endif()
 
 target_compile_features(neoflux PUBLIC cxx_std_20)
