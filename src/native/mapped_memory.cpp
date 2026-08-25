@@ -18,7 +18,9 @@
 #endif
 #include <windows.h>
 #else
+#include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -88,12 +90,53 @@ MappedMemory::MappedMemory(std::size_t size, bool guard_page)
 #endif
 }
 
+MappedMemory::MappedMemory(MappedMemory&& other) noexcept
+    : mapping_(other.mapping_),
+      usable_size_(other.usable_size_),
+      total_size_(other.total_size_),
+      has_guard_(other.has_guard_),
+      is_file_mapping_(other.is_file_mapping_) {
+  other.mapping_ = nullptr;
+  other.usable_size_ = 0;
+  other.total_size_ = 0;
+}
+
+MappedMemory& MappedMemory::operator=(MappedMemory&& other) noexcept {
+  if (this != &other) {
+    // Release current mapping first.
+    if (mapping_ != nullptr) {
+#if defined(_WIN32)
+      if (is_file_mapping_) {
+        UnmapViewOfFile(mapping_);
+      } else {
+        VirtualFree(mapping_, 0, MEM_RELEASE);
+      }
+#else
+      munmap(mapping_, total_size_);
+#endif
+    }
+    mapping_ = other.mapping_;
+    usable_size_ = other.usable_size_;
+    total_size_ = other.total_size_;
+    has_guard_ = other.has_guard_;
+    is_file_mapping_ = other.is_file_mapping_;
+    other.mapping_ = nullptr;
+    other.usable_size_ = 0;
+    other.total_size_ = 0;
+  }
+  return *this;
+}
+
 MappedMemory::~MappedMemory() {
   if (mapping_ == nullptr) {
     return;
   }
 #if defined(_WIN32)
-  VirtualFree(mapping_, 0, MEM_RELEASE);
+  if (is_file_mapping_) {
+    UnmapViewOfFile(mapping_);
+  } else {
+    VirtualFree(mapping_, 0, MEM_RELEASE);
+  }
 #else
   munmap(mapping_, total_size_);
 #endif
@@ -110,6 +153,82 @@ const void* MappedMemory::Data() const noexcept {
 
 std::size_t MappedMemory::Size() const noexcept {
   return usable_size_;
+}
+
+std::optional<MappedMemory> MappedMemory::FromFile(std::string_view path) {
+  if (path.empty()) {
+    return std::nullopt;
+  }
+
+#if defined(_WIN32)
+  // Open file for reading.
+  const HANDLE file_handle = CreateFileA(
+      path.data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file_handle == INVALID_HANDLE_VALUE) {
+    return std::nullopt;
+  }
+
+  // Get file size.
+  LARGE_INTEGER file_size;
+  if (!GetFileSizeEx(file_handle, &file_size) || file_size.QuadPart <= 0) {
+    CloseHandle(file_handle);
+    return std::nullopt;
+  }
+  const auto size = static_cast<std::size_t>(file_size.QuadPart);
+
+  // Create file mapping object.
+  const HANDLE mapping_handle = CreateFileMappingA(
+      file_handle, nullptr, PAGE_READONLY, 0, 0, nullptr);
+  CloseHandle(file_handle);  // Mapping holds a reference; file handle no longer needed.
+  if (mapping_handle == nullptr) {
+    return std::nullopt;
+  }
+
+  // Map the entire file into memory (read-only).
+  void* addr = MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, size);
+  CloseHandle(mapping_handle);  // View holds a reference; mapping handle no longer needed.
+  if (addr == nullptr) {
+    return std::nullopt;
+  }
+
+  MappedMemory result;
+  result.mapping_ = addr;
+  result.usable_size_ = size;
+  result.total_size_ = size;
+  result.has_guard_ = false;
+  result.is_file_mapping_ = true;
+  return result;
+#else
+  // Open file for reading.
+  const int fd = open(path.data(), O_RDONLY);
+  if (fd < 0) {
+    return std::nullopt;
+  }
+
+  // Get file size.
+  struct stat st;
+  if (fstat(fd, &st) != 0 || st.st_size <= 0) {
+    close(fd);
+    return std::nullopt;
+  }
+  const auto size = static_cast<std::size_t>(st.st_size);
+
+  // Map the entire file (read-only, private copy-on-write).
+  void* addr = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+  close(fd);  // Mapping holds a reference; file descriptor no longer needed.
+  if (addr == MAP_FAILED) {
+    return std::nullopt;
+  }
+
+  MappedMemory result;
+  result.mapping_ = addr;
+  result.usable_size_ = size;
+  result.total_size_ = size;
+  result.has_guard_ = false;
+  result.is_file_mapping_ = false;  // POSIX: munmap works for both anon and file
+  return result;
+#endif
 }
 
 }  // namespace neoflux

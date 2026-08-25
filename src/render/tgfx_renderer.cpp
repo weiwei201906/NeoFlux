@@ -31,6 +31,7 @@
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/font_manager.h"
 #include "neoflux/core/types.h"
+#include "neoflux/native/mapped_memory.h"
 #include "neoflux/render/render_command.h"
 
 namespace neoflux {
@@ -218,6 +219,13 @@ struct GlyphInfo {
 struct Transform {
   float x = 0.0F;
   float y = 0.0F;
+};
+
+// Font face with its backing memory-mapped file. FT_New_Memory_Face stores
+// a pointer to the data, so the mapping must outlive the FT_Face.
+struct FontEntry {
+  MappedMemory mapping;  // mmap'd font file (owns the bytes)
+  FT_Face face = nullptr;
 };
 
 // ---------------------------------------------------------------------------
@@ -753,7 +761,7 @@ class GlRendererImpl : public NonCopyable {
 
     const auto it = font_faces_.find(name);
     if (it != font_faces_.end()) {
-      return it->second;
+      return it->second.face;
     }
 
     const std::string path = font_manager_.GetPath(name);
@@ -762,13 +770,30 @@ class GlRendererImpl : public NonCopyable {
       return nullptr;
     }
 
-    FT_Face face = nullptr;
-    if (FT_New_Face(ft_library_, path.c_str(), 0, &face) != 0) {
-      LOG(ERROR) << "Failed to load font: " << path;
+    // Memory-map the font file and load via FT_New_Memory_Face. This avoids
+    // FreeType's internal fopen/fread path (one read() syscall + user-space
+    // buffer copy) and lets the OS page-cache manage the font bytes.
+    auto mapping = MappedMemory::FromFile(path);
+    if (!mapping.has_value()) {
+      LOG(ERROR) << "Failed to mmap font: " << path;
       return nullptr;
     }
-    font_faces_[name] = face;
-    LOG(INFO) << "Loaded font: " << name << " (" << path << ")";
+
+    FT_Face face = nullptr;
+    const FT_Error err = FT_New_Memory_Face(
+        ft_library_, static_cast<const FT_Byte*>(mapping->Data()),
+        static_cast<FT_Long>(mapping->Size()), 0, &face);
+    if (err != 0) {
+      LOG(ERROR) << "Failed to load font: " << path << " (FT error " << err
+                 << ")";
+      return nullptr;
+    }
+
+    FontEntry entry;
+    entry.mapping = std::move(mapping.value());
+    entry.face = face;
+    font_faces_[name] = std::move(entry);
+    LOG(INFO) << "Loaded font (mmap): " << name << " (" << path << ")";
     return face;
   }
 
@@ -902,10 +927,14 @@ class GlRendererImpl : public NonCopyable {
       gl.glDeleteVertexArrays(1, &vao_);
       gl.glDeleteProgram(program_);
     }
-    for (auto& [name, face] : font_faces_) {
-      if (face != nullptr) {
-        FT_Done_Face(face);
+    // FT_Done_Face must be called before the backing memory is unmapped,
+    // because FT_Face holds pointers into the mapped font data.
+    for (auto& [name, entry] : font_faces_) {
+      if (entry.face != nullptr) {
+        FT_Done_Face(entry.face);
+        entry.face = nullptr;
       }
+      // entry.mapping destructor (via font_faces_.clear()) unmaps the file.
     }
     font_faces_.clear();
     if (ft_library_ != nullptr) {
@@ -976,7 +1005,7 @@ class GlRendererImpl : public NonCopyable {
 
   FT_Library ft_library_ = nullptr;
   FontManager font_manager_{};
-  std::unordered_map<std::string, FT_Face> font_faces_{};
+  std::unordered_map<std::string, FontEntry> font_faces_{};
 
   std::unordered_map<std::uint64_t, GlyphInfo> glyph_cache_{};
   // Single-entry fast cache for the most recently looked-up glyph. Text
