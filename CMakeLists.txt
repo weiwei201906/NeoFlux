@@ -102,7 +102,7 @@ add_library(neoflux STATIC
   src/render/render_command.cpp
   src/render/render_context.cpp
   src/render/tgfx_renderer.cpp
-  src/media/mpv_media_player.cpp
+  src/media/desktop/mpv_media_player.cpp
   src/media/media_player_factory.cpp
 )
 
@@ -115,11 +115,11 @@ endif()
 
 # Platform-specific media player implementations.
 if(ANDROID)
-  target_sources(neoflux PRIVATE src/media/android_media_player.cpp)
+  target_sources(neoflux PRIVATE src/media/android/android_media_player.cpp)
 elseif(APPLE AND IOS)
-  target_sources(neoflux PRIVATE src/media/ios_media_player.mm)
+  target_sources(neoflux PRIVATE src/media/ios/ios_media_player.mm)
   # Enable Objective-C++ for the iOS media player implementation.
-  set_source_files_properties(src/media/ios_media_player.mm
+  set_source_files_properties(src/media/ios/ios_media_player.mm
     PROPERTIES COMPILE_FLAGS "-x objective-c++")
 endif()
 

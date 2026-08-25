@@ -109,8 +109,18 @@ struct GlLoader {
 
   bool Load() {
 // NOLINTBEGIN(bugprone-macro-parentheses)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+#define NEOFLUX_GL_GET_PROC(name) glfwGetProcAddress(name)
+#elif defined(ANDROID)
+#include <EGL/egl.h>
+#define NEOFLUX_GL_GET_PROC(name) eglGetProcAddress(name)
+#else
+// iOS: EAGL contexts provide GL functions directly; dlsym as fallback.
+#include <dlfcn.h>
+#define NEOFLUX_GL_GET_PROC(name) dlsym(RTLD_DEFAULT, name)
+#endif
 #define NEOFLUX_LOAD_GL(name)                                       \
-  name = reinterpret_cast<decltype(name)>(glfwGetProcAddress(#name)); \
+  name = reinterpret_cast<decltype(name)>(NEOFLUX_GL_GET_PROC(#name)); \
   if (name == nullptr) {                                            \
     LOG(ERROR) << "Failed to load " << #name;                       \
     return false;                                                   \
@@ -163,6 +173,7 @@ struct GlLoader {
     NEOFLUX_LOAD_GL(glGetError)
   // NOLINTEND(bugprone-macro-parentheses)
 #undef NEOFLUX_LOAD_GL
+#undef NEOFLUX_GL_GET_PROC
     return true;
   }
 };
