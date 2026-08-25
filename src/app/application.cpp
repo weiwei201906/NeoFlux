@@ -453,6 +453,7 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
   if (root == nullptr || render_layer_ == nullptr) {
     return;
   }
+  bool hover_changed = false;
   // Scale cursor coordinates from actual window size to layout size.
   Point pos = raw_pos;
   int actual_w = 0;
@@ -490,6 +491,7 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
   if (pressed_widget_.expired()) {
     auto previous = hovered_widget_.lock();
     if (hit.get() != previous.get()) {
+      hover_changed = true;
       if (previous != nullptr) {
         previous->OnPointerExit();
       }
@@ -513,17 +515,26 @@ void Application::DispatchPointerMove(const Point& raw_pos) {
     }
   }
   // Deliver move event to the widget under the cursor.
+  bool consumed = false;
   if (hit != nullptr) {
     const Point global_pos = hit->GetGlobalPosition();
     const Point paint_offset = hit->GetPaintOffset();
     const Point local{.x = pos.x - global_pos.x - paint_offset.x,
                       .y = pos.y - global_pos.y - paint_offset.y,};
-    hit->OnPointerMove(local);
+    consumed = hit->OnPointerMove(local);
   }
-  // Move may change visual state (drag offset, hover), so mark the frame
-  // dirty for a repaint. This replaces the old MarkNeedsBuild() approach
-  // that caused full widget-tree rebuilds during high-frequency drags.
-  MarkFrameDirty();
+  // Throttling: only mark the frame dirty when there is actual work to do.
+  // - Dragging (pressed widget exists) requires continuous repaint for
+  //   drag offset / scroll position updates.
+  // - Hover transition (enter/exit) changes cursor and widget hover state.
+  // - Widget consumed the move event (e.g. custom drag logic).
+  // Pure cursor movement over static widgets does not need a repaint,
+  // avoiding thundering-herd wakeups of the render thread at 1000Hz mouse
+  // report rates.
+  const bool is_dragging = !pressed_widget_.expired();
+  if (is_dragging || hover_changed || consumed) {
+    MarkFrameDirty();
+  }
 }
 
 void Application::DispatchScrollEvent(

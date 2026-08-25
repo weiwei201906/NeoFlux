@@ -194,6 +194,21 @@ class PlatformBridge {
   // that do not support native text fields (mobile uses tgfx-rendered fields).
   [[nodiscard]] virtual std::unique_ptr<NativeTextField>
   CreateNativeTextField() = 0;
+
+  // Called when the platform destroys the rendering surface (e.g. Android
+  // app sent to background, screen off). The EGL/Metal surface is invalidated;
+  // subsequent MakeContextCurrent() will fail until OnSurfaceCreated() is
+  // called. The GL context and resources (textures, shaders) are preserved.
+  // Default implementation does nothing (desktop windows are not destroyed
+  // by the OS in this way).
+  virtual void OnSurfaceDestroyed() {}
+
+  // Called when the platform recreates the rendering surface (e.g. Android
+  // app brought to foreground). `new_surface` is the new native surface handle
+  // (ANativeWindow* on Android, CAMetalLayer* on iOS). Re-creates the EGL
+  // surface from the new native window. Returns true on success.
+  // Default implementation does nothing and returns true (desktop).
+  virtual bool OnSurfaceCreated(void* /*new_surface*/) { return true; }
 };
 
 }  // namespace neoflux

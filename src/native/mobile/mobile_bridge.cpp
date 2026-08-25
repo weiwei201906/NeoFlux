@@ -105,6 +105,72 @@ class MobileBridge final : public PlatformBridge {
     // No mouse cursor on touch-only mobile platforms.
   }
 
+  // Called when the OS destroys the surface (app backgrounded, screen off).
+  // Destroys the EGL surface but preserves the context and display so GL
+  // resources (textures, shaders) survive. The render thread must stop
+  // calling MakeContextCurrent/SwapBuffers until OnSurfaceCreated.
+  void OnSurfaceDestroyed() override {
+#if defined(ANDROID)
+    if (egl_surface_ != EGL_NO_SURFACE) {
+      // Release the current context first to avoid EGL_BAD_SURFACE errors.
+      eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE,
+                     EGL_NO_CONTEXT);
+      eglDestroySurface(egl_display_, egl_surface_);
+      egl_surface_ = EGL_NO_SURFACE;
+      LOG(INFO) << "MobileBridge: EGL surface destroyed (context preserved)";
+    }
+#endif
+    native_surface_ = nullptr;
+  }
+
+  // Called when the OS recreates the surface (app foregrounded). Creates a
+  // new EGL surface from the new native window. The EGL context is reused,
+  // so all GL resources remain valid.
+  bool OnSurfaceCreated(void* new_surface) override {
+#if defined(ANDROID)
+    native_surface_ = new_surface;
+    auto* window = static_cast<ANativeWindow*>(native_surface_);
+    if (window == nullptr || egl_display_ == EGL_NO_DISPLAY) {
+      LOG(ERROR) << "MobileBridge::OnSurfaceCreated: invalid window or display";
+      return false;
+    }
+    // Destroy stale surface if one exists (should not happen, but safe).
+    if (egl_surface_ != EGL_NO_SURFACE) {
+      eglDestroySurface(egl_display_, egl_surface_);
+      egl_surface_ = EGL_NO_SURFACE;
+    }
+    // Recreate the EGL config (same attributes as InitializeEGL).
+    const EGLint config_attribs[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_BLUE_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_RED_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_DEPTH_SIZE, 16,
+        EGL_NONE,
+    };
+    EGLConfig config = nullptr;
+    EGLint num_configs = 0;
+    eglChooseConfig(egl_display_, config_attribs, &config, 1, &num_configs);
+    if (config == nullptr) {
+      LOG(ERROR) << "MobileBridge::OnSurfaceCreated: eglChooseConfig failed";
+      return false;
+    }
+    egl_surface_ = eglCreateWindowSurface(egl_display_, config, window, nullptr);
+    if (egl_surface_ == EGL_NO_SURFACE) {
+      LOG(ERROR) << "MobileBridge::OnSurfaceCreated: eglCreateWindowSurface failed: "
+                 << eglGetError();
+      return false;
+    }
+    LOG(INFO) << "MobileBridge: EGL surface recreated (context reused)";
+    return true;
+#else
+    (void)new_surface;
+    return true;
+#endif
+  }
+
   [[nodiscard]] std::string GetClipboardText() const override {
     // Mobile clipboard requires platform-specific integration (JNI / UIKit).
     return {};

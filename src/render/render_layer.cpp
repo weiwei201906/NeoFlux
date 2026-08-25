@@ -223,6 +223,32 @@ void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
   height = static_cast<int>(window_height_);
 }
 
+void RenderLayer::OnSurfaceDestroyed() {
+  surface_valid_.store(false);
+  if (platform_bridge_ != nullptr) {
+    platform_bridge_->OnSurfaceDestroyed();
+  }
+  LOG(INFO) << "RenderLayer: surface destroyed, rendering paused";
+}
+
+bool RenderLayer::OnSurfaceCreated(void* new_surface) {
+  if (platform_bridge_ != nullptr) {
+    const bool ok = platform_bridge_->OnSurfaceCreated(new_surface);
+    if (ok) {
+      surface_valid_.store(true);
+      // Wake the render thread so it re-makes the context and resumes.
+      {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        frame_ready_ = true;
+      }
+      frame_cv_.notify_one();
+      LOG(INFO) << "RenderLayer: surface recreated, rendering resumed";
+    }
+    return ok;
+  }
+  return false;
+}
+
 void RenderLayer::RenderLoop() {
   LOG(INFO) << "Render thread started";
 
@@ -250,6 +276,12 @@ void RenderLayer::RenderLoop() {
 
     RenderCommand cmd;
     while (running_.load() && command_queue_.TryPop(cmd)) {
+      // If the surface is invalid (app backgrounded), drain the queue but
+      // skip all rendering. This prevents GL calls without a current context
+      // (which would crash with EGL_BAD_SURFACE).
+      if (!surface_valid_.load()) {
+        continue;
+      }
       switch (cmd.type) {
         case RenderCommandType::kBeginFrame:
           if (renderer_ != nullptr) {
