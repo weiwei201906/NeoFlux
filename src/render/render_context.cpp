@@ -30,7 +30,7 @@ void RenderContext::DrawText(std::string_view text, const Point& position,
                              const Color& color, float font_size,
                              std::string_view font_name) {
   commands_.push_back(RenderCommand::MakeDrawText(
-      std::string(text), position, color, font_size, std::string(font_name)));
+      std::string(text), position, color, font_size, font_name));
 }
 
 void RenderContext::DrawTexture(std::uint32_t texture_id, const Rect& rect) {

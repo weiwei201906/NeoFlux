@@ -37,14 +37,14 @@ RenderCommand RenderCommand::MakeDrawText(std::string text,
                                           const Point& position,
                                           const Color& color,
                                           float font_size,
-                                          std::string font_name) {
+                                          std::string_view font_name) {
   RenderCommand cmd;
   cmd.type = RenderCommandType::kDrawText;
   cmd.text = std::move(text);
   cmd.point = position;
   cmd.color = color;
   cmd.font_size = font_size;
-  cmd.font_name = std::move(font_name);
+  cmd.font_name = font_name;
   return cmd;
 }
 

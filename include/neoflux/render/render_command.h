@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "neoflux/core/types.h"
 
@@ -41,7 +42,7 @@ struct RenderCommand {
   Rect rect{};                     // kDrawRect, kClipRect
   Color color{};                   // kDrawRect, kDrawText
   std::string text{};              // kDrawText (UTF-8)
-  std::string font_name{};         // kDrawText (font name, resolved by FontManager)
+  std::string_view font_name{};    // kDrawText (font name, resolved by FontManager)
   Point point{};                   // kDrawText
   float font_size = 14.0F;         // kDrawText
   float translate_x = 0.0F;        // kTranslate
@@ -63,7 +64,7 @@ struct RenderCommand {
                                                   const Point& position,
                                                   const Color& color,
                                                   float font_size,
-                                                  std::string font_name);
+                                                  std::string_view font_name);
 
   // Factory: create a draw-texture command.
   [[nodiscard]] static RenderCommand MakeDrawTexture(std::uint32_t texture_id,
