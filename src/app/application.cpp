@@ -52,22 +52,6 @@ Application::~Application() { Stop(); }
 bool Application::Init(int argc, char** argv, int window_width,
                        int window_height, std::string_view window_title,
                        void* platform_surface) {
-  // On Windows, third-party DLLs (glog, libmpv) are stored in bin/lib/ and
-  // delay-loaded. Add that directory to PATH before any dependency is resolved.
-#ifdef _WIN32
-  {
-    wchar_t exe_path[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
-    const std::filesystem::path exe_dir =
-        std::filesystem::path(exe_path).parent_path();
-    const std::string lib_dir = (exe_dir / "lib").string();
-    const char* old_path = std::getenv("PATH");
-    const std::string new_path =
-        lib_dir + ";" + (old_path != nullptr ? old_path : "");
-    SetEnvironmentVariableA("PATH", new_path.c_str());
-  }
-#endif
-
   // glog (when built without gflags integration) defines FLAGS_logtostderr and
   // FLAGS_log_dir as variables but does not register them with the gflags
   // command-line parser. Pre-scan argv to handle these two flags manually,

@@ -174,9 +174,24 @@ app.Init(argc, argv, 800, 600, "My App");
 
 ```bash
 cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
-cmake --build build
+cmake --build build -j 16
 cd build && ctest --output-on-failure
 ```
+
+## 构建产物结构
+
+```
+build/bin/
+├── *.exe              (9 个示例，每个约 1.8MB)
+├── libglog.dll        (自动拷贝，与 exe 同目录)
+├── libmpv-2.dll       (自动拷贝，与 exe 同目录)
+└── fonts/
+    └── NotoSansSC-Regular.ttf  (从 thirdparty/fonts/ 自动拷贝)
+```
+
+- **Windows**: DLL 放在可执行文件同目录（标准 Windows 部署方式）。无需启动脚本或 PATH 设置，双击 exe 即可运行。
+- **Linux/macOS**: 示例设置 `RPATH=$ORIGIN/lib`，共享库相对于可执行文件查找。
+- **字体**: 构建前运行 `examples/download_fonts.ps1`（Windows）或 `examples/download_fonts.sh`（Linux/macOS）下载 Noto Sans SC。字体文件不提交到 git。
 
 ## 最小示例
 

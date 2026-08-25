@@ -168,14 +168,14 @@ if(TARGET glfw)
 endif()
 
 # ---------------------------------------------------------------------------
-# Copy all third-party runtime DLLs to <output>/lib/ for clean deployment.
-# Launcher .bat scripts prepend this directory to PATH at runtime.
+# Copy third-party runtime DLLs to the exe output directory on Windows.
+# Placing DLLs next to the executable is the standard Windows deployment
+# model (loader searches the exe directory first) and requires no launcher
+# scripts, PATH manipulation, or delay-load hacks. Works across MSVC,
+# MinGW, and Clang. Fonts go to bin/fonts/, media assets to bin/assets/.
 # ---------------------------------------------------------------------------
 if(WIN32)
-  set(NEOFLUX_DLL_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib")
-  add_custom_command(TARGET neoflux POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${NEOFLUX_DLL_DIR}"
-    COMMENT "Creating DLL output directory: ${NEOFLUX_DLL_DIR}")
+  set(NEOFLUX_DLL_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
   # Copy glog runtime (DLL on shared builds, .a on static).
   # $<TARGET_FILE:...> resolves to the actual output path regardless of
   # build type (Debug/Release) or generator.
@@ -183,7 +183,7 @@ if(WIN32)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "$<TARGET_FILE:glog::glog>"
     "${NEOFLUX_DLL_DIR}/"
-    COMMENT "Copying glog runtime to lib/"
+    COMMENT "Copying glog runtime to bin/"
     ERROR_QUIET)
 endif()
 
@@ -225,13 +225,13 @@ if(NEOFLUX_USE_MPV AND NOT ANDROID AND NOT IOS)
         target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/mpv.lib")
         message(STATUS "NeoFlux: libmpv media backend enabled (bundled, MSVC)")
       endif()
-      # Copy runtime DLL to the unified lib/ directory.
+      # Copy runtime DLL to the exe output directory (same dir as examples).
       if(EXISTS "${NEOFLUX_MPV_DIR}/libmpv-2.dll")
         add_custom_command(TARGET neoflux POST_BUILD
           COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "${NEOFLUX_MPV_DIR}/libmpv-2.dll"
-          "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib/libmpv-2.dll"
-          COMMENT "Copying libmpv-2.dll to lib/")
+          "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libmpv-2.dll"
+          COMMENT "Copying libmpv-2.dll to bin/")
       endif()
     else()
       # Linux/macOS: link against system libmpv if bundled .so/.dylib exists.

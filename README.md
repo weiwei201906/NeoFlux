@@ -164,9 +164,24 @@ Tests and examples are disabled by default. Enable them with the `NEOFLUX_BUILD_
 
 ```bash
 cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
-cmake --build build
+cmake --build build -j 16
 cd build && ctest --output-on-failure
 ```
+
+## Build Output Structure
+
+```
+build/bin/
+├── *.exe              (9 examples, ~1.8MB each)
+├── libglog.dll        (auto-copied, same dir as exe)
+├── libmpv-2.dll       (auto-copied, same dir as exe)
+└── fonts/
+    └── NotoSansSC-Regular.ttf  (auto-copied from thirdparty/fonts/)
+```
+
+- **Windows**: DLLs are placed next to the executable (standard Windows deployment). No launcher scripts or PATH setup needed — double-click the exe to run.
+- **Linux/macOS**: Examples get `RPATH=$ORIGIN/lib`; shared libraries are found relative to the executable.
+- **Fonts**: Run `examples/download_fonts.ps1` (Windows) or `examples/download_fonts.sh` (Linux/macOS) before building to fetch Noto Sans SC. Fonts are gitignored.
 
 ## Minimal Example
 
