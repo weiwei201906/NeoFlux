@@ -333,26 +333,16 @@ void Widget::SyncTaitankChildren() {
 }
 
 void Widget::ReadLayoutRecursive() {
-  // Iterative tree traversal with an explicit stack to avoid stack overflow
-  // on deeply nested widget trees (e.g. 2000+ levels). Order does not matter
-  // for layout reading since each node reads only its own bounds.
-  std::vector<Widget*> stack;
-  stack.push_back(this);
-  while (!stack.empty()) {
-    Widget* current = stack.back();
-    stack.pop_back();
-    if (current->taitank_node_ != nullptr) {
-      current->bounds_.x = taitank::GetLeft(current->taitank_node_.get());
-      current->bounds_.y = taitank::GetTop(current->taitank_node_.get());
-      current->bounds_.width = taitank::GetWidth(current->taitank_node_.get());
-      current->bounds_.height = taitank::GetHeight(current->taitank_node_.get());
-      current->desired_size_ = {.width = current->bounds_.width,
-                                .height = current->bounds_.height,};
-    }
-    for (auto& child : current->children_) {
-      if (child != nullptr) {
-        stack.push_back(child.get());
-      }
+  if (taitank_node_ != nullptr) {
+    bounds_.x = taitank::GetLeft(taitank_node_.get());
+    bounds_.y = taitank::GetTop(taitank_node_.get());
+    bounds_.width = taitank::GetWidth(taitank_node_.get());
+    bounds_.height = taitank::GetHeight(taitank_node_.get());
+    desired_size_ = {.width = bounds_.width, .height = bounds_.height,};
+  }
+  for (auto& child : children_) {
+    if (child != nullptr) {
+      child->ReadLayoutRecursive();
     }
   }
 }
