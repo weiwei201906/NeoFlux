@@ -255,6 +255,9 @@ class GlRendererImpl : public NonCopyable {
     if (!InitializeGL()) {
       return;
     }
+    // Preload common glyphs once after GL is ready. This runs on the render
+    // thread where the GL context is current, so texture upload works.
+    PreloadCommonGlyphs();
     // Query the actual framebuffer size (may differ from window size due to
     // DPI scaling). glViewport scales NDC to framebuffer pixels; u_resolution
     // stays at layout (window) size so shader math uses layout coordinates.
@@ -1020,6 +1023,32 @@ class GlRendererImpl : public NonCopyable {
 
   std::vector<Transform> transform_stack_{};
   std::vector<Rect> clip_stack_{};
+
+  // Set to true after the first successful preload of common glyphs.
+  // Preloading avoids first-paint jank when text is first rendered.
+  bool glyphs_preloaded_ = false;
+
+  // Pre-renders common glyphs (ASCII printable range) into the glyph cache.
+  // Called once after GL initialization on the render thread.
+  void PreloadCommonGlyphs() {
+    if (glyphs_preloaded_) {
+      return;
+    }
+    FT_Face face = GetFontFace("");
+    if (face == nullptr) {
+      return;
+    }
+    // Preload ASCII printable characters (0x20..0x7E) at 16px.
+    // This covers all common Latin text; CJK and other scripts remain
+    // lazy-loaded on first use.
+    constexpr float kPreloadSize = 16.0F;
+    for (std::uint32_t cp = 0x20; cp <= 0x7E; ++cp) {
+      (void)GetGlyph(face, cp, kPreloadSize);
+    }
+    glyphs_preloaded_ = true;
+    VLOG(1) << "Preloaded " << (0x7E - 0x20 + 1)
+            << " ASCII glyphs at 16px";
+  }
 };
 
 }  // namespace
