@@ -62,7 +62,7 @@ Select with `--render_backend=vulkan|gl|cpu`.
 
 Common causes:
 1. **No font loaded** — Text widgets need a `.ttf`/`.otf` file in the font
-   directory. Call `app.SetFontDir("fonts")` before `Init()`.
+   directory. Call `app.SetFontDir("./fonts/")` before `Init()`.
 2. **No route pushed** — All examples require `RouteRegistry::RegisterRoute()`
    followed by `app.PushRoute("/")`.
 3. **Window not exposed** — The first frame may need a resize or focus event

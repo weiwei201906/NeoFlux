@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildCounterPage);
 
   Application app;
-  app.SetFontDir("thirdparty/fonts");
+  app.SetFontDir("./fonts/");
   if (!app.Init(argc, argv, 400, 300, "NeoFlux Counter")) {
     return 1;
   }

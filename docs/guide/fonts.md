@@ -130,7 +130,7 @@ Then configure the directory in code:
 
 ```cpp
 Application app;
-app.SetFontDir("fonts");  // matches the copied fonts/ folder
+app.SetFontDir("./fonts/");  // matches the copied fonts/ folder
 app.Init(argc, argv, 800, 600, "My App");
 ```
 

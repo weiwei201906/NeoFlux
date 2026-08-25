@@ -100,7 +100,7 @@ The default directory is `fonts/`.
 
 ```cpp
 Application app;
-app.SetFontDir("assets/fonts");  // optional: override default "fonts"
+app.SetFontDir("./fonts/");  // optional: override default "fonts"
 app.Init(argc, argv, 800, 600, "NeoFlux");
 ```
 
@@ -144,7 +144,7 @@ Then configure in code:
 
 ```cpp
 Application app;
-app.SetFontDir("fonts");  // matches the copied fonts/ folder
+app.SetFontDir("./fonts/");  // matches the copied fonts/ folder
 app.Init(argc, argv, 800, 600, "My App");
 ```
 

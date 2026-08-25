@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - Media player example
 //
 // Demonstrates the integrated MediaWidget backed by libmpv:
@@ -157,7 +157,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildMediaPage);
 
   Application app;
-  app.SetFontDir("thirdparty/fonts");
+  app.SetFontDir("./fonts/");
   if (!app.Init(argc, argv, 540, 520, "NeoFlux Media Demo")) {
     return 1;
   }

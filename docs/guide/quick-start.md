@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
   Application app;
   // Configure the font directory before Init(). Place .ttf/.otf files in
   // fonts/ (or your custom directory). See Font System docs.
-  app.SetFontDir("fonts");
+  app.SetFontDir("./fonts/");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
@@ -122,9 +122,11 @@ add_custom_command(TARGET my_app POST_BUILD
 > **Note:** NeoFlux examples and tests are **off by default**. To build them,
 > pass `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON` at configure time.
 >
-> **Fonts:** Examples require font files in `thirdparty/fonts/` (examples
-> explicitly call SetFontDir("thirdparty/fonts")). Without fonts,
-> text renders as garbled or blank.
+> **Fonts:** Examples require font files. Run `examples/download_fonts.ps1`
+> (Windows) or `examples/download_fonts.sh` (Linux/macOS) to fetch Noto Sans
+> SC into `thirdparty/fonts/`. CMake copies them to `bin/fonts/` at build
+> time; examples call `SetFontDir("./fonts/")`. Without fonts, text renders
+> as garbled or blank.
 
 ### With FetchContent
 

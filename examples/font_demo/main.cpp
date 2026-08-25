@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildFontPage);
 
   Application app;
-  app.SetFontDir("thirdparty/fonts");
+  app.SetFontDir("./fonts/");
   if (!app.Init(argc, argv, 500, 400, "NeoFlux Font Demo")) {
     return 1;
   }

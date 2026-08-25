@@ -117,7 +117,7 @@ NeoFlux 使用字体管理器，在启动时扫描可配置的字体目录，支
 
 ```cpp
 Application app;
-app.SetFontDir("assets/fonts");  // 可选：覆盖默认的 "fonts"
+app.SetFontDir("./fonts/");  // 可选：覆盖默认的 "fonts"
 app.Init(argc, argv, 800, 600, "NeoFlux");
 ```
 
@@ -154,7 +154,7 @@ add_custom_command(TARGET my_app POST_BUILD
 
 ```cpp
 Application app;
-app.SetFontDir("fonts");  // 对应拷贝到输出目录的 fonts/ 文件夹
+app.SetFontDir("./fonts/");  // 对应拷贝到输出目录的 fonts/ 文件夹
 app.Init(argc, argv, 800, 600, "My App");
 ```
 

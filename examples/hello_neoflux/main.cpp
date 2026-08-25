@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
 
   // Create and run the application.
   Application app;
-  app.SetFontDir("thirdparty/fonts");
+  app.SetFontDir("./fonts/");
   if (!app.Init(argc, argv, 800, 600, "NeoFlux - Hello World")) {
     LOG(ERROR) << "Failed to initialize application";
     return 1;

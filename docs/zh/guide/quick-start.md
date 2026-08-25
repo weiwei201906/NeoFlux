@@ -1,31 +1,31 @@
-# 快速开始
+﻿# 蹇€熷紑濮?
 
-本指南从零开始创建你的第一个 NeoFlux 应用。
+鏈寚鍗椾粠闆跺紑濮嬪垱寤轰綘鐨勭涓€涓?NeoFlux 搴旂敤銆?
 
-## 1. 项目结构
+## 1. 椤圭洰缁撴瀯
 
-为项目创建新目录。NeoFlux 应放在 `thirdparty/` 下，将依赖与源码隔离：
+涓洪」鐩垱寤烘柊鐩綍銆侼eoFlux 搴旀斁鍦?`thirdparty/` 涓嬶紝灏嗕緷璧栦笌婧愮爜闅旂锛?
 
 ```
 my_app/
-├── CMakeLists.txt
-├── main.cpp
-└── thirdparty/
-    └── neoflux/      # NeoFlux 源码（git submodule 或拷贝）
+鈹溾攢鈹€ CMakeLists.txt
+鈹溾攢鈹€ main.cpp
+鈹斺攢鈹€ thirdparty/
+    鈹斺攢鈹€ neoflux/      # NeoFlux 婧愮爜锛坓it submodule 鎴栨嫹璐濓級
 ```
 
-## 2. 获取 NeoFlux
+## 2. 鑾峰彇 NeoFlux
 
-### 方式 A：Git Submodule（推荐）
+### 鏂瑰紡 A锛欸it Submodule锛堟帹鑽愶級
 
 ```bash
 git init
 git submodule add https://github.com/weiwei201906/NeoFlux.git thirdparty/neoflux
 ```
 
-### 方式 B：FetchContent（无需 submodule）
+### 鏂瑰紡 B锛欶etchContent锛堟棤闇€ submodule锛?
 
-在 `CMakeLists.txt` 中添加（见下文）——NeoFlux 在配置时自动下载到 `thirdparty/`。
+鍦?`CMakeLists.txt` 涓坊鍔狅紙瑙佷笅鏂囷級鈥斺€擭eoFlux 鍦ㄩ厤缃椂鑷姩涓嬭浇鍒?`thirdparty/`銆?
 
 ## 3. main.cpp
 
@@ -38,7 +38,7 @@ git submodule add https://github.com/weiwei201906/NeoFlux.git thirdparty/neoflux
 
 using namespace neoflux;
 
-// 路由构建函数：返回 "/" 路由的根 widget 树
+// 璺敱鏋勫缓鍑芥暟锛氳繑鍥?"/" 璺敱鐨勬牴 widget 鏍?
 std::shared_ptr<Widget> BuildHomePage(BuildContext& /*ctx*/) {
   auto root = std::make_shared<Container>();
   root->SetFlexDirection(FlexDirection::kColumn)
@@ -62,18 +62,18 @@ std::shared_ptr<Widget> BuildHomePage(BuildContext& /*ctx*/) {
 }
 
 int main(int argc, char** argv) {
-  // 在初始化应用前注册路由。
+  // 鍦ㄥ垵濮嬪寲搴旂敤鍓嶆敞鍐岃矾鐢便€?
   RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 
   Application app;
-  // 在 Init() 之前配置字体目录。将 .ttf/.otf 文件放入 fonts/
-  // （或你自定义的目录）。详见字体系统文档。
-  app.SetFontDir("fonts");
+  // 鍦?Init() 涔嬪墠閰嶇疆瀛椾綋鐩綍銆傚皢 .ttf/.otf 鏂囦欢鏀惧叆 fonts/
+  // 锛堟垨浣犺嚜瀹氫箟鐨勭洰褰曪級銆傝瑙佸瓧浣撶郴缁熸枃妗ｃ€?
+  app.SetFontDir("./fonts/");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
 
-  // 压入初始路由并运行事件循环（阻塞直到窗口关闭）。
+  // 鍘嬪叆鍒濆璺敱骞惰繍琛屼簨浠跺惊鐜紙闃诲鐩村埌绐楀彛鍏抽棴锛夈€?
   app.PushRoute("/");
   app.Run();
   return 0;
@@ -81,16 +81,16 @@ int main(int argc, char** argv) {
 ```
 
 :::tip
-哪怕只有一个路由，也必须先 `RegisterRoute` 再 `PushRoute`。`Init` 只创建窗口——在推送路由之前不会显示任何 Widget。
+鍝€曞彧鏈変竴涓矾鐢憋紝涔熷繀椤诲厛 `RegisterRoute` 鍐?`PushRoute`銆俙Init` 鍙垱寤虹獥鍙ｂ€斺€斿湪鎺ㄩ€佽矾鐢变箣鍓嶄笉浼氭樉绀轰换浣?Widget銆?
 :::
 
 :::warning
-文本 Widget 需要字体文件。运行前请在配置的字体目录（默认 `fonts/`）中至少放入一个 `.ttf`/`.otf` 字体。没有字体时，所有文本会显示为乱码或空白。
+鏂囨湰 Widget 闇€瑕佸瓧浣撴枃浠躲€傝繍琛屽墠璇峰湪閰嶇疆鐨勫瓧浣撶洰褰曪紙榛樿 `fonts/`锛変腑鑷冲皯鏀惧叆涓€涓?`.ttf`/`.otf` 瀛椾綋銆傛病鏈夊瓧浣撴椂锛屾墍鏈夋枃鏈細鏄剧ず涓轰贡鐮佹垨绌虹櫧銆?
 :::
 
 ## 4. CMakeLists.txt
 
-### 使用 submodule
+### 浣跨敤 submodule
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
@@ -99,26 +99,26 @@ project(my_app LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# NeoFlux 放在 thirdparty/ 下，隔离依赖。
+# NeoFlux 鏀惧湪 thirdparty/ 涓嬶紝闅旂渚濊禆銆?
 add_subdirectory(thirdparty/neoflux)
 
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 
-# 每次构建时将 fonts/ 目录拷贝到可执行文件同级目录。
-# 将你的 .ttf/.otf 文件放入 ${CMAKE_SOURCE_DIR}/fonts/
+# 姣忔鏋勫缓鏃跺皢 fonts/ 鐩綍鎷疯礉鍒板彲鎵ц鏂囦欢鍚岀骇鐩綍銆?
+# 灏嗕綘鐨?.ttf/.otf 鏂囦欢鏀惧叆 ${CMAKE_SOURCE_DIR}/fonts/
 add_custom_command(TARGET my_app POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
   ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
 )
 ```
 
-> **注意：** NeoFlux 的示例和测试**默认关闭**。如需构建，在配置时传入
-> `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON`。
+> **娉ㄦ剰锛?* NeoFlux 鐨勭ず渚嬪拰娴嬭瘯**榛樿鍏抽棴**銆傚闇€鏋勫缓锛屽湪閰嶇疆鏃朵紶鍏?
+> `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON`銆?
 >
-> **字体：** 运行示例需要 `thirdparty/fonts/` 目录下有字体文件（示例显式调用 SetFontDir("thirdparty/fonts")）。没有字体时，文本会显示为乱码或空白。
+> **瀛椾綋锛?* 杩愯绀轰緥闇€瑕?`thirdparty/fonts/` 鐩綍涓嬫湁瀛椾綋鏂囦欢锛堢ず渚嬫樉寮忚皟鐢?SetFontDir("./fonts/")锛夈€傛病鏈夊瓧浣撴椂锛屾枃鏈細鏄剧ず涓轰贡鐮佹垨绌虹櫧銆?
 
-### 使用 FetchContent
+### 浣跨敤 FetchContent
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
@@ -140,7 +140,7 @@ add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 ```
 
-## 5. 构建并运行
+## 5. 鏋勫缓骞惰繍琛?
 
 ```bash
 mkdir build && cd build
@@ -149,23 +149,23 @@ cmake --build . -j
 ./my_app
 ```
 
-你应该看到一个窗口，显示 "Hello NeoFlux" 文本和一个可点击的按钮。
+浣犲簲璇ョ湅鍒颁竴涓獥鍙ｏ紝鏄剧ず "Hello NeoFlux" 鏂囨湰鍜屼竴涓彲鐐瑰嚮鐨勬寜閽€?
 
-## 核心概念
+## 鏍稿績姒傚康
 
-| 概念 | 说明 |
+| 姒傚康 | 璇存槑 |
 |------|------|
-| **路由构建函数** | 返回 widget 树的函数，路由被压入时调用。 |
-| **Container** | 基础布局组件。Flex 方向、对齐、内边距、背景色。 |
-| **Text** | 渲染 UTF-8 文本的叶子组件。 |
-| **Button** | 可点击组件，通过 `SetOnPressed()` 设置回调。 |
-| **RouteRegistry** | 将路由名称映射到构建函数。 |
-| **Application** | 拥有窗口、事件循环、渲染层和导航栈。 |
+| **璺敱鏋勫缓鍑芥暟** | 杩斿洖 widget 鏍戠殑鍑芥暟锛岃矾鐢辫鍘嬪叆鏃惰皟鐢ㄣ€?|
+| **Container** | 鍩虹甯冨眬缁勪欢銆侳lex 鏂瑰悜銆佸榻愩€佸唴杈硅窛銆佽儗鏅壊銆?|
+| **Text** | 娓叉煋 UTF-8 鏂囨湰鐨勫彾瀛愮粍浠躲€?|
+| **Button** | 鍙偣鍑荤粍浠讹紝閫氳繃 `SetOnPressed()` 璁剧疆鍥炶皟銆?|
+| **RouteRegistry** | 灏嗚矾鐢卞悕绉版槧灏勫埌鏋勫缓鍑芥暟銆?|
+| **Application** | 鎷ユ湁绐楀彛銆佷簨浠跺惊鐜€佹覆鏌撳眰鍜屽鑸爤銆?|
 
-## 下一步
+## 涓嬩竴姝?
 
-- 学习 [Widget 系统](./widgets)
-- 探索 [Flex 布局](./layout)
-- 处理 [用户输入](./input)
-- 添加页面间 [路由导航](./routing)
-- 使用 [协程](./coroutines) 实现动画和定时工作
+- 瀛︿範 [Widget 绯荤粺](./widgets)
+- 鎺㈢储 [Flex 甯冨眬](./layout)
+- 澶勭悊 [鐢ㄦ埛杈撳叆](./input)
+- 娣诲姞椤甸潰闂?[璺敱瀵艰埅](./routing)
+- 浣跨敤 [鍗忕▼](./coroutines) 瀹炵幇鍔ㄧ敾鍜屽畾鏃跺伐浣?

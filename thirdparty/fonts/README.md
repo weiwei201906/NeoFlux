@@ -26,7 +26,8 @@ This downloads **Noto Sans SC Regular** (SIL OFL 1.1 license, ~18MB) to
 
 CMake automatically copies all fonts from this directory to
 `<build>/bin/fonts/` in a POST_BUILD step. Examples reference fonts via
-`SetFontDir("fonts")` so they work from the build output directory.
+`SetFontDir("./fonts/")` (relative to the exe working directory) so they
+work from the build output directory.
 
 ## Usage
 

@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NeoFlux - TextField example
 //
 // Demonstrates the TextField widget:
@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildFormPage);
 
   Application app;
-  app.SetFontDir("thirdparty/fonts");
+  app.SetFontDir("./fonts/");
   if (!app.Init(argc, argv, 420, 480, "NeoFlux TextField Demo")) {
     return 1;
   }
