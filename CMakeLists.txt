@@ -174,12 +174,14 @@ if(WIN32)
   add_custom_command(TARGET neoflux POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${NEOFLUX_DLL_DIR}"
     COMMENT "Creating DLL output directory: ${NEOFLUX_DLL_DIR}")
-  # Copy glog DLL (MinGW names it libglog.dll, MSVC names it glog.dll).
+  # Copy glog runtime (DLL on shared builds, .a on static).
+  # $<TARGET_FILE:...> resolves to the actual output path regardless of
+  # build type (Debug/Release) or generator.
   add_custom_command(TARGET neoflux POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libglog.dll"
-    "${NEOFLUX_DLL_DIR}/libglog.dll"
-    COMMENT "Copying libglog.dll to lib/"
+    "$<TARGET_FILE:glog::glog>"
+    "${NEOFLUX_DLL_DIR}/"
+    COMMENT "Copying glog runtime to lib/"
     ERROR_QUIET)
 endif()
 

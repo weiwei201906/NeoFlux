@@ -87,7 +87,7 @@ TEST(SpscRingQueueTest, MoveOnlyType) {
   struct MoveOnly {
     int value = 0;
     MoveOnly() = default;
-    explicit MoveOnly(int value) : value(value) {}
+    explicit MoveOnly(int v) : value(v) {}
     MoveOnly(const MoveOnly&) = delete;
     MoveOnly& operator=(const MoveOnly&) = delete;
     MoveOnly(MoveOnly&&) = default;

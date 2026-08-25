@@ -52,8 +52,10 @@ using GlUint = unsigned int;
 using GlSizei = int;
 using GlFloat = float;
 using GlVoid = void;
-using GlSizeiptr = long long;  // NOLINT
-using GlIntptr = long long;    // NOLINT
+// GL type aliases. long long matches GLsizeiptr/GLintptr on 64-bit platforms;
+// google-runtime-int suggests int64 but GL headers use long long.
+using GlSizeiptr = long long;  // NOLINT(google-runtime-int)
+using GlIntptr = long long;    // NOLINT(google-runtime-int)
 
 // ---------------------------------------------------------------------------
 // OpenGL function loader. Loads all required entry points via
@@ -800,7 +802,8 @@ class GlRendererImpl : public NonCopyable {
     if (w == 0 || h == 0) {
       GlyphInfo info;
       info.advance = static_cast<float>(
-          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);  // NOLINT(bugprone-signed-bitwise)
+          // NOLINTNEXTLINE(bugprone-signed-bitwise) - cast to uint32_t before shift
+          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);
       glyph_cache_[key] = info;
       last_glyph_key_ = key;
       last_glyph_ptr_ = &glyph_cache_[key];

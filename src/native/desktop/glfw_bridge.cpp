@@ -479,7 +479,7 @@ void GlfwBridge::KeyCallback(GLFWwindow* window, int key,
   // GLFW modifier bits match KeyModifiers exactly: shift=0x1, control=0x2,
   // alt=0x4, super=0x8. Mask the lower 4 bits and cast to uint8_t.
   const auto mods_u = static_cast<std::uint32_t>(mods);
-  // NOLINTNEXTLINE(bugprone-signed-bitwise) - mods_u is uint32_t, mask is unsigned literal
+  // NOLINTNEXTLINE(bugprone-signed-bitwise) - both operands are unsigned after cast
   event.modifiers = static_cast<std::uint8_t>(mods_u & 0x000FU);
   event.pressed = (action != 0);  // GLFW_RELEASE=0, PRESS=1, REPEAT=2
   bridge->key_callback_(event);
