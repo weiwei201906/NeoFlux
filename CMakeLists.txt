@@ -187,6 +187,24 @@ if(WIN32)
     ERROR_QUIET)
 endif()
 
+# ---------------------------------------------------------------------------
+# Copy fonts from thirdparty/fonts/ to <output>/fonts/ at build time.
+# Fonts are NOT committed to git (see .gitignore); run
+# examples/download_fonts.ps1 (Windows) or examples/download_fonts.sh
+# (Linux/macOS) to fetch NotoSansSC before building examples.
+# ---------------------------------------------------------------------------
+set(NEOFLUX_FONT_SRC_DIR "${CMAKE_SOURCE_DIR}/thirdparty/fonts")
+set(NEOFLUX_FONT_DST_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fonts")
+if(EXISTS "${NEOFLUX_FONT_SRC_DIR}")
+  add_custom_command(TARGET neoflux POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${NEOFLUX_FONT_DST_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${NEOFLUX_FONT_SRC_DIR}"
+      "${NEOFLUX_FONT_DST_DIR}"
+    COMMENT "Copying fonts to bin/fonts/"
+    ERROR_QUIET)
+endif()
+
 # libmpv: integrated media player backend (desktop only).
 # Provides video decoding + OpenGL texture output via the mpv render API.
 # Bundled in thirdparty/mpv/ for out-of-the-box use on Windows.
