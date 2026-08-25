@@ -15,7 +15,12 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
+
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+#include <GLFW/glfw3.h>
+#endif
 
 #ifdef NEOFLUX_PLATFORM_WINDOWS
 #include <windows.h>
@@ -25,13 +30,69 @@ namespace neoflux {
 
 namespace {
 
+// Minimal GL function loader for FBO/texture operations (same pattern as
+// tgfx_renderer.cpp). Loaded via glfwGetProcAddress on the render thread.
+struct MpvGlLoader {
+  using GlEnum = unsigned int;
+  using GlUint = unsigned int;
+  using GlInt = int;
+  using GlSizei = int;
+  using GlBitfield = unsigned int;
+
+  void(APIENTRY* GenFramebuffers)(GlSizei, GlUint*) = nullptr;
+  void(APIENTRY* DeleteFramebuffers)(GlSizei, const GlUint*) = nullptr;
+  void(APIENTRY* BindFramebuffer)(GlEnum, GlUint) = nullptr;
+  void(APIENTRY* FramebufferTexture2D)(GlEnum, GlEnum, GlEnum, GlUint, GlInt) = nullptr;
+  void(APIENTRY* GenTextures)(GlSizei, GlUint*) = nullptr;
+  void(APIENTRY* DeleteTextures)(GlSizei, const GlUint*) = nullptr;
+  void(APIENTRY* BindTexture)(GlEnum, GlUint) = nullptr;
+  void(APIENTRY* TexImage2D)(GlEnum, GlInt, GlInt, GlSizei, GlSizei, GlInt, GlEnum,
+                             GlEnum, const void*) = nullptr;
+  void(APIENTRY* TexParameteri)(GlEnum, GlEnum, GlInt) = nullptr;
+
+  void Load() {
+    GenFramebuffers = reinterpret_cast<decltype(GenFramebuffers)>(
+        glfwGetProcAddress("glGenFramebuffers"));
+    DeleteFramebuffers = reinterpret_cast<decltype(DeleteFramebuffers)>(
+        glfwGetProcAddress("glDeleteFramebuffers"));
+    BindFramebuffer = reinterpret_cast<decltype(BindFramebuffer)>(
+        glfwGetProcAddress("glBindFramebuffer"));
+    FramebufferTexture2D = reinterpret_cast<decltype(FramebufferTexture2D)>(
+        glfwGetProcAddress("glFramebufferTexture2D"));
+    GenTextures = reinterpret_cast<decltype(GenTextures)>(
+        glfwGetProcAddress("glGenTextures"));
+    DeleteTextures = reinterpret_cast<decltype(DeleteTextures)>(
+        glfwGetProcAddress("glDeleteTextures"));
+    BindTexture = reinterpret_cast<decltype(BindTexture)>(
+        glfwGetProcAddress("glBindTexture"));
+    TexImage2D = reinterpret_cast<decltype(TexImage2D)>(
+        glfwGetProcAddress("glTexImage2D"));
+    TexParameteri = reinterpret_cast<decltype(TexParameteri)>(
+        glfwGetProcAddress("glTexParameteri"));
+  }
+};
+
+MpvGlLoader& GetGlLoader() {
+  static MpvGlLoader loader;
+  return loader;
+}
+
+// GL constants (avoid including GL.h which conflicts with our custom loader).
+constexpr unsigned int kGlTexture2d = 0x0DE1;
+constexpr unsigned int kGlTextureMinFilter = 0x2801;
+constexpr unsigned int kGlTextureMagFilter = 0x2800;
+constexpr unsigned int kGlTextureWrapS = 0x2802;
+constexpr unsigned int kGlTextureWrapT = 0x2803;
+constexpr int kGlLinear = 0x2601;
+constexpr int kGlClampToEdge = 0x812F;
+constexpr unsigned int kGlFramebuffer = 0x8D40;
+constexpr int kGlRgba = 0x1908;
+constexpr unsigned int kGlUnsignedByte = 0x1401;
+constexpr unsigned int kGlColorAttachment0 = 0x8CE0;
+
 // OpenGL get_proc_address callback for mpv render context.
 void* GetProcAddress(void* /*ctx*/, const char* name) {
-#ifdef NEOFLUX_PLATFORM_WINDOWS
-  return reinterpret_cast<void*>(wglGetProcAddress(name));
-#else
-  return nullptr;
-#endif
+  return reinterpret_cast<void*>(glfwGetProcAddress(name));
 }
 
 // mpv render update callback: invoked when a new frame is available.
@@ -62,7 +123,10 @@ MpvMediaPlayer::~MpvMediaPlayer() {
     // context. We leak it here intentionally; the render layer owns GL
     // resource lifetime. In practice this is called during app shutdown when
     // the GL context is still current.
-    glDeleteTextures(1, &texture_id_);
+    auto& gl = GetGlLoader();
+    if (gl.DeleteTextures != nullptr) {
+      gl.DeleteTextures(1, &texture_id_);
+    }
     texture_id_ = 0;
   }
 }
@@ -115,7 +179,9 @@ void MpvMediaPlayer::Play() {
 }
 
 void MpvMediaPlayer::Pause() {
-  if (mpv_ == nullptr) return;
+  if (mpv_ == nullptr) {
+    return;
+  }
   SetPropertyDouble("pause", 1.0);
   state_ = MediaState::kPaused;
   if (state_callback_ != nullptr) {
@@ -124,7 +190,9 @@ void MpvMediaPlayer::Pause() {
 }
 
 void MpvMediaPlayer::Stop() {
-  if (mpv_ == nullptr) return;
+  if (mpv_ == nullptr) {
+    return;
+  }
   const char* cmd[] = {"stop", nullptr};
   mpv_command_async(mpv_, 0, cmd);
   state_ = MediaState::kIdle;
@@ -134,7 +202,9 @@ void MpvMediaPlayer::Stop() {
 }
 
 void MpvMediaPlayer::Seek(double position_seconds) {
-  if (mpv_ == nullptr) return;
+  if (mpv_ == nullptr) {
+    return;
+  }
   char target[32];
   std::snprintf(target, sizeof(target), "%f", position_seconds);
   const char* cmd[] = {"seek", target, "absolute", nullptr};
@@ -185,12 +255,16 @@ void MpvMediaPlayer::InitRender() {
     return;
   }
 
+  // Load GL entry points required for FBO/texture management.
+  GetGlLoader().Load();
+
   mpv_opengl_init_params gl_init_params{};
   gl_init_params.get_proc_address = GetProcAddress;
   gl_init_params.get_proc_address_ctx = nullptr;
 
+  // NOLINTNEXTLINE(modernize-use-designated-initializers,cppcoreguidelines-pro-type-const-cast)
   mpv_render_param params[] = {
-      {MPV_RENDER_PARAM_API_TYPE, const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},
+      {MPV_RENDER_PARAM_API_TYPE, const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},  // NOLINT
       {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl_init_params},
       {MPV_RENDER_PARAM_INVALID, nullptr},
   };
@@ -212,6 +286,11 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
     return 0;
   }
 
+  auto& gl = GetGlLoader();
+  if (gl.GenFramebuffers == nullptr) {
+    return 0;
+  }
+
   // Poll mpv events (state changes, property updates).
   PollEvents();
 
@@ -223,18 +302,18 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
 
   // Create the texture on first use.
   if (texture_id_ == 0) {
-    glGenTextures(1, &texture_id_);
-    glBindTexture(GL_TEXTURE_2D, texture_id_);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl.GenTextures(1, &texture_id_);
+    gl.BindTexture(kGlTexture2d, texture_id_);
+    gl.TexParameteri(kGlTexture2d, kGlTextureMinFilter, kGlLinear);
+    gl.TexParameteri(kGlTexture2d, kGlTextureMagFilter, kGlLinear);
+    gl.TexParameteri(kGlTexture2d, kGlTextureWrapS, kGlClampToEdge);
+    gl.TexParameteri(kGlTexture2d, kGlTextureWrapT, kGlClampToEdge);
   }
 
   // Render the current mpv frame into an FBO backed by our texture.
-  GLuint fbo = 0;
-  glGenFramebuffers(1, &fbo);
-  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+  std::uint32_t fbo = 0;
+  gl.GenFramebuffers(1, &fbo);
+  gl.BindFramebuffer(kGlFramebuffer, fbo);
 
   // Query video dimensions.
   int width = 0;
@@ -249,11 +328,11 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
   video_height_ = height;
 
   // Allocate texture storage.
-  glBindTexture(GL_TEXTURE_2D, texture_id_);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
-               GL_UNSIGNED_BYTE, nullptr);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                         texture_id_, 0);
+  gl.BindTexture(kGlTexture2d, texture_id_);
+  gl.TexImage2D(kGlTexture2d, 0, kGlRgba, width, height, 0, kGlRgba,
+                kGlUnsignedByte, nullptr);
+  gl.FramebufferTexture2D(kGlFramebuffer, kGlColorAttachment0, kGlTexture2d,
+                          texture_id_, 0);
 
   mpv_opengl_fbo fbo_params{};
   fbo_params.fbo = static_cast<int>(fbo);
@@ -261,6 +340,7 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
   fbo_params.h = height;
   fbo_params.internal_format = 0;
 
+  // NOLINTNEXTLINE(modernize-use-designated-initializers)
   mpv_render_param render_params[] = {
       {MPV_RENDER_PARAM_OPENGL_FBO, &fbo_params},
       {MPV_RENDER_PARAM_INVALID, nullptr},
@@ -268,8 +348,8 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
 
   mpv_render_context_render(render_ctx_, render_params);
 
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glDeleteFramebuffers(1, &fbo);
+  gl.BindFramebuffer(kGlFramebuffer, 0);
+  gl.DeleteFramebuffers(1, &fbo);
 
   if (frame_callback_ != nullptr) {
     frame_callback_(texture_id_, width, height);
@@ -279,7 +359,9 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
 }
 
 void MpvMediaPlayer::PollEvents() {
-  if (mpv_ == nullptr) return;
+  if (mpv_ == nullptr) {
+    return;
+  }
   while (true) {
     mpv_event* event = mpv_wait_event(mpv_, 0);
     if (event == nullptr || event->event_id == MPV_EVENT_NONE) {
@@ -305,7 +387,9 @@ void MpvMediaPlayer::PollEvents() {
 }
 
 void MpvMediaPlayer::SetPropertyDouble(const char* name, double value) {
-  if (mpv_ == nullptr) return;
+  if (mpv_ == nullptr) {
+    return;
+  }
   mpv_set_property(mpv_, name, MPV_FORMAT_DOUBLE, &value);
 }
 
@@ -317,7 +401,9 @@ double MpvMediaPlayer::GetPropertyDouble(const char* name) const {
 }
 
 void MpvMediaPlayer::Command(const char* args[]) {
-  if (mpv_ == nullptr) return;
+  if (mpv_ == nullptr) {
+    return;
+  }
   mpv_command_async(mpv_, 0, args);
 }
 

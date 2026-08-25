@@ -92,7 +92,7 @@ bool MediaWidget::OnPointerDown(const Point& /*local_pos*/) {
   if (player_ == nullptr) {
     return false;
   }
-  if (player_->GetState() == MediaState::kPlaying) {
+  if (player_->GetState() == MediaState::kPlaying) {  // NOLINT(bugprone-branch-clone)
     player_->Pause();
   } else {
     player_->Play();

@@ -151,31 +151,85 @@ if(TARGET glfw)
   target_link_libraries(neoflux PRIVATE glfw)
 endif()
 
+# ---------------------------------------------------------------------------
+# Copy all third-party runtime DLLs to <output>/lib/ for clean deployment.
+# Launcher .bat scripts prepend this directory to PATH at runtime.
+# ---------------------------------------------------------------------------
+if(WIN32)
+  set(NEOFLUX_DLL_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib")
+  add_custom_command(TARGET neoflux POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${NEOFLUX_DLL_DIR}"
+    COMMENT "Creating DLL output directory: ${NEOFLUX_DLL_DIR}")
+  # Copy glog DLL (MinGW names it libglog.dll, MSVC names it glog.dll).
+  add_custom_command(TARGET neoflux POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libglog.dll"
+    "${NEOFLUX_DLL_DIR}/libglog.dll"
+    COMMENT "Copying libglog.dll to lib/"
+    ERROR_QUIET)
+endif()
+
 # libmpv: integrated media player backend (desktop only).
 # Provides video decoding + OpenGL texture output via the mpv render API.
-# On Windows, set mpv_DIR to the directory containing mpv.lib and mpv/client.h.
+# Bundled in thirdparty/mpv/ for out-of-the-box use on Windows.
+# On Linux/macOS, falls back to system libmpv (apt install libmpv-dev / brew install mpv).
 option(NEOFLUX_USE_MPV "Enable libmpv media player backend" ON)
 if(NEOFLUX_USE_MPV AND NOT ANDROID AND NOT IOS)
-  find_package(mpv QUIET)
-  if(mpv_FOUND)
-    target_link_libraries(neoflux PRIVATE mpv::mpv)
+  set(NEOFLUX_MPV_DIR "${CMAKE_SOURCE_DIR}/thirdparty/mpv")
+  if(EXISTS "${NEOFLUX_MPV_DIR}/include/mpv/client.h")
+    # Use bundled libmpv from thirdparty/mpv.
+    target_include_directories(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/include")
     target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
-    message(STATUS "NeoFlux: libmpv media backend enabled")
+    if(WIN32)
+      # MinGW: link against libmpv.dll.a; copy libmpv-2.dll to output.
+      if(EXISTS "${NEOFLUX_MPV_DIR}/libmpv.dll.a")
+        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/libmpv.dll.a")
+        message(STATUS "NeoFlux: libmpv media backend enabled (bundled, MinGW)")
+      elseif(EXISTS "${NEOFLUX_MPV_DIR}/mpv.lib")
+        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/mpv.lib")
+        message(STATUS "NeoFlux: libmpv media backend enabled (bundled, MSVC)")
+      endif()
+      # Copy runtime DLL to the unified lib/ directory.
+      if(EXISTS "${NEOFLUX_MPV_DIR}/libmpv-2.dll")
+        add_custom_command(TARGET neoflux POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${NEOFLUX_MPV_DIR}/libmpv-2.dll"
+          "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib/libmpv-2.dll"
+          COMMENT "Copying libmpv-2.dll to lib/")
+      endif()
+    else()
+      # Linux/macOS: link against system libmpv if bundled .so/.dylib exists.
+      if(EXISTS "${NEOFLUX_MPV_DIR}/libmpv.so")
+        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/libmpv.so")
+      elseif(EXISTS "${NEOFLUX_MPV_DIR}/libmpv.dylib")
+        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/libmpv.dylib")
+      else()
+        target_link_libraries(neoflux PRIVATE mpv)
+      endif()
+      message(STATUS "NeoFlux: libmpv media backend enabled (bundled)")
+    endif()
   else()
-    # Fallback: try pkg-config
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-      pkg_check_modules(MPV QUIET mpv)
-      if(MPV_FOUND)
-        target_link_libraries(neoflux PRIVATE ${MPV_LIBRARIES})
-        target_include_directories(neoflux PRIVATE ${MPV_INCLUDE_DIRS})
-        target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
-        message(STATUS "NeoFlux: libmpv media backend enabled (pkg-config)")
+    # Fallback: find system libmpv via find_package or pkg-config.
+    find_package(mpv QUIET)
+    if(mpv_FOUND)
+      target_link_libraries(neoflux PRIVATE mpv::mpv)
+      target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
+      message(STATUS "NeoFlux: libmpv media backend enabled (system)")
+    else()
+      find_package(PkgConfig QUIET)
+      if(PkgConfig_FOUND)
+        pkg_check_modules(MPV QUIET mpv)
+        if(MPV_FOUND)
+          target_link_libraries(neoflux PRIVATE ${MPV_LIBRARIES})
+          target_include_directories(neoflux PRIVATE ${MPV_INCLUDE_DIRS})
+          target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
+          message(STATUS "NeoFlux: libmpv media backend enabled (pkg-config)")
+        else()
+          message(STATUS "NeoFlux: libmpv not found, media widget will be non-functional")
+        endif()
       else()
         message(STATUS "NeoFlux: libmpv not found, media widget will be non-functional")
       endif()
-    else()
-      message(STATUS "NeoFlux: libmpv not found, media widget will be non-functional")
     endif()
   endif()
 endif()
