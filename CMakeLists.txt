@@ -86,6 +86,7 @@ add_library(neoflux STATIC
   src/core/font_manager.cpp
   src/core/types.cpp
   src/widget/widget.cpp
+  src/widget/widget_arena.cpp
   src/widget/container.cpp
   src/widget/text.cpp
   src/widget/button.cpp
