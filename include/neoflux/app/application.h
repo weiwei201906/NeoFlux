@@ -17,7 +17,7 @@
 #include "neoflux/app/event_loop.h"
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
-#include "neoflux/render/glfw_bridge.h"
+#include "neoflux/native/desktop/glfw_bridge.h"
 #include "neoflux/render/render_context.h"
 #include "neoflux/render/render_layer.h"
 #include "neoflux/widget/widget.h"

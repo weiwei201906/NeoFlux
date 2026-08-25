@@ -4,7 +4,7 @@
 // Implementation of GlfwBridge (desktop PlatformBridge via GLFW).
 // =============================================================================
 
-#include "neoflux/render/glfw_bridge.h"
+#include "neoflux/native/desktop/glfw_bridge.h"
 
 #ifdef NEOFLUX_PLATFORM_DESKTOP
 

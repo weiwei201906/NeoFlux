@@ -102,16 +102,30 @@ add_library(neoflux STATIC
   src/render/render_command.cpp
   src/render/render_context.cpp
   src/render/tgfx_renderer.cpp
-  src/media/mpv_media_player.cpp
+  src/native/desktop/mpv_media_player.cpp
   src/media/media_player_factory.cpp
 )
 
 # Platform-specific bridge implementations.
 if(ANDROID OR (APPLE AND IOS))
-  target_sources(neoflux PRIVATE src/render/mobile_bridge.cpp)
+  target_sources(neoflux PRIVATE src/native/mobile/mobile_bridge.cpp)
 else()
-  target_sources(neoflux PRIVATE src/render/glfw_bridge.cpp)
+  target_sources(neoflux PRIVATE src/native/desktop/glfw_bridge.cpp)
 endif()
+
+# Platform-specific media player implementations.
+if(ANDROID)
+  target_sources(neoflux PRIVATE src/native/android/android_media_player.cpp)
+elseif(APPLE AND IOS)
+  target_sources(neoflux PRIVATE src/native/ios/ios_media_player.mm)
+  # Enable Objective-C++ for the iOS media player implementation.
+  set_source_files_properties(src/native/ios/ios_media_player.mm
+    PROPERTIES COMPILE_FLAGS "-x objective-c++")
+endif()
+
+# Include platform-specific build configuration (Android NDK / iOS frameworks).
+include(${CMAKE_SOURCE_DIR}/cmake/android.cmake OPTIONAL)
+include(${CMAKE_SOURCE_DIR}/cmake/ios.cmake OPTIONAL)
 
 target_include_directories(neoflux
   PUBLIC
