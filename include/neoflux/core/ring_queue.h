@@ -16,7 +16,9 @@
 
 #include <atomic>
 #include <cstddef>
-#include <vector>
+#include <optional>
+
+#include "neoflux/native/mapped_memory.h"
 
 namespace neoflux {
 
@@ -85,8 +87,10 @@ class SpscRingQueue {
   // Returns pointer to the raw storage slot at the given index.
   T* Slot(std::size_t index) noexcept;
 
-  // Raw storage for elements (allocated to capacity * sizeof(T)).
-  std::vector<std::byte> storage_{};
+  // Page-aligned raw storage for elements, allocated via mmap/VirtualAlloc.
+  // A guard page follows the usable region to catch out-of-bounds writes.
+  // Wrapped in optional so Init() can re-allocate after default construction.
+  std::optional<MappedMemory> storage_{};
 
   // Actual capacity (rounded up to power of two, including reserved slot).
   std::size_t capacity_ = 0;

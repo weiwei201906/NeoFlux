@@ -31,6 +31,7 @@
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/font_manager.h"
 #include "neoflux/core/types.h"
+#include "neoflux/native/mapped_memory.h"
 #include "neoflux/render/render_command.h"
 
 namespace neoflux {
@@ -109,6 +110,8 @@ struct GlLoader {
   void(APIENTRY* glDeleteBuffers)(GlSizei, const GlUint*) = nullptr;
   void(APIENTRY* glDeleteVertexArrays)(GlSizei, const GlUint*) = nullptr;
   void(APIENTRY* glDeleteProgram)(GlUint) = nullptr;
+  void*(APIENTRY* glMapBufferRange)(GlEnum, GlIntptr, GlSizeiptr, GlBitfield) = nullptr;
+  unsigned char(APIENTRY* glUnmapBuffer)(GlEnum) = nullptr;
   GlEnum(APIENTRY* glGetError)() = nullptr;
 
   bool Load() {
@@ -174,6 +177,8 @@ struct GlLoader {
     NEOFLUX_LOAD_GL(glDeleteBuffers)
     NEOFLUX_LOAD_GL(glDeleteVertexArrays)
     NEOFLUX_LOAD_GL(glDeleteProgram)
+    NEOFLUX_LOAD_GL(glMapBufferRange)
+    NEOFLUX_LOAD_GL(glUnmapBuffer)
     NEOFLUX_LOAD_GL(glGetError)
   // NOLINTEND(bugprone-macro-parentheses)
 #undef NEOFLUX_LOAD_GL
@@ -214,6 +219,13 @@ struct GlyphInfo {
 struct Transform {
   float x = 0.0F;
   float y = 0.0F;
+};
+
+// Font face with its backing memory-mapped file. FT_New_Memory_Face stores
+// a pointer to the data, so the mapping must outlive the FT_Face.
+struct FontEntry {
+  MappedMemory mapping;  // mmap'd font file (owns the bytes)
+  FT_Face face = nullptr;
 };
 
 // ---------------------------------------------------------------------------
@@ -687,6 +699,10 @@ class GlRendererImpl : public NonCopyable {
                          0x1401, zeros.data());
     }
 
+    // Create PBO for asynchronous texture upload. Size matches the atlas
+    // (1024x1024 = 1 MiB). GL_STREAM_DRAW: updated frequently, used once.
+    gl.glGenBuffers(1, &upload_pbo_);
+
     gl.glEnable(0x0BE2);
     gl.glBlendFunc(0x0302, 0x0303);
 
@@ -745,7 +761,7 @@ class GlRendererImpl : public NonCopyable {
 
     const auto it = font_faces_.find(name);
     if (it != font_faces_.end()) {
-      return it->second;
+      return it->second.face;
     }
 
     const std::string path = font_manager_.GetPath(name);
@@ -754,13 +770,30 @@ class GlRendererImpl : public NonCopyable {
       return nullptr;
     }
 
-    FT_Face face = nullptr;
-    if (FT_New_Face(ft_library_, path.c_str(), 0, &face) != 0) {
-      LOG(ERROR) << "Failed to load font: " << path;
+    // Memory-map the font file and load via FT_New_Memory_Face. This avoids
+    // FreeType's internal fopen/fread path (one read() syscall + user-space
+    // buffer copy) and lets the OS page-cache manage the font bytes.
+    auto mapping = MappedMemory::FromFile(path);
+    if (!mapping.has_value()) {
+      LOG(ERROR) << "Failed to mmap font: " << path;
       return nullptr;
     }
-    font_faces_[name] = face;
-    LOG(INFO) << "Loaded font: " << name << " (" << path << ")";
+
+    FT_Face face = nullptr;
+    const FT_Error err = FT_New_Memory_Face(
+        ft_library_, static_cast<const FT_Byte*>(mapping->Data()),
+        static_cast<FT_Long>(mapping->Size()), 0, &face);
+    if (err != 0) {
+      LOG(ERROR) << "Failed to load font: " << path << " (FT error " << err
+                 << ")";
+      return nullptr;
+    }
+
+    FontEntry entry;
+    entry.mapping = std::move(mapping.value());
+    entry.face = face;
+    font_faces_[name] = std::move(entry);
+    LOG(INFO) << "Loaded font (mmap): " << name << " (" << path << ")";
     return face;
   }
 
@@ -840,11 +873,30 @@ class GlRendererImpl : public NonCopyable {
       }
     }
 
+    // Upload glyph bitmap to the atlas via PBO for asynchronous DMA.
+    // Path: CPU -> mapped PBO -> (DMA) -> texture. glTexSubImage2D with
+    // nullptr reads from the bound PIXEL_UNPACK_BUFFER and returns
+    // immediately (no CPU stall waiting for GPU).
+    const GlSizeiptr upload_size = static_cast<GlSizeiptr>(w) * h;
+    gl.glBindBuffer(0x88EC, upload_pbo_);  // GL_PIXEL_UNPACK_BUFFER
+    // Orphan the PBO: reallocate without waiting for in-flight GPU reads.
+    gl.glBufferData(0x88EC, upload_size, nullptr, 0x88E0);  // GL_STREAM_DRAW
+    // Map with WRITE + INVALIDATE: driver can return a fresh allocation
+    // instead of synchronizing with previous contents.
+    void* mapped = gl.glMapBufferRange(
+        0x88EC, 0, upload_size, 0x0001 | 0x0008);  // WRITE | INVALIDATE
+    if (mapped != nullptr) {
+      std::memcpy(mapped, packed.data(),
+                  static_cast<std::size_t>(upload_size));
+      gl.glUnmapBuffer(0x88EC);
+    }
     BindTexture(atlas_texture_);
     gl.glPixelStorei(0x0CF5, 1);  // GL_UNPACK_ALIGNMENT = 1
+    // nullptr data pointer: source is the bound PBO (DMA transfer).
     gl.glTexSubImage2D(0x0DE1, 0, atlas_x_, atlas_y_, w, h, 0x1903, 0x1401,
-                       packed.data());
+                       nullptr);
     gl.glPixelStorei(0x0CF5, 4);  // reset to default
+    gl.glBindBuffer(0x88EC, 0);  // unbind PBO
 
     GlyphInfo info;
     info.u0 = static_cast<float>(atlas_x_) / kAtlasSize;
@@ -871,13 +923,18 @@ class GlRendererImpl : public NonCopyable {
     if (gl_ready_) {
       gl.glDeleteTextures(1, &atlas_texture_);
       gl.glDeleteBuffers(1, &vbo_);
+      gl.glDeleteBuffers(1, &upload_pbo_);
       gl.glDeleteVertexArrays(1, &vao_);
       gl.glDeleteProgram(program_);
     }
-    for (auto& [name, face] : font_faces_) {
-      if (face != nullptr) {
-        FT_Done_Face(face);
+    // FT_Done_Face must be called before the backing memory is unmapped,
+    // because FT_Face holds pointers into the mapped font data.
+    for (auto& [name, entry] : font_faces_) {
+      if (entry.face != nullptr) {
+        FT_Done_Face(entry.face);
+        entry.face = nullptr;
       }
+      // entry.mapping destructor (via font_faces_.clear()) unmaps the file.
     }
     font_faces_.clear();
     if (ft_library_ != nullptr) {
@@ -935,6 +992,10 @@ class GlRendererImpl : public NonCopyable {
   GlUint vao_ = 0;
   GlUint vbo_ = 0;
   GlUint atlas_texture_ = 0;
+  // Pixel Buffer Object for asynchronous texture upload. glMapBufferRange
+  // maps the PBO into client memory; glTexSubImage2D then DMA's from the
+  // PBO to the texture without stalling the CPU.
+  GlUint upload_pbo_ = 0;
 
   GlInt u_resolution_ = -1;
   GlInt u_translate_ = -1;
@@ -944,7 +1005,7 @@ class GlRendererImpl : public NonCopyable {
 
   FT_Library ft_library_ = nullptr;
   FontManager font_manager_{};
-  std::unordered_map<std::string, FT_Face> font_faces_{};
+  std::unordered_map<std::string, FontEntry> font_faces_{};
 
   std::unordered_map<std::uint64_t, GlyphInfo> glyph_cache_{};
   // Single-entry fast cache for the most recently looked-up glyph. Text

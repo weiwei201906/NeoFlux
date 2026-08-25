@@ -43,7 +43,10 @@ void SpscRingQueue<T>::Init(const std::size_t capacity) {
   // Integer division is ~20-40 cycles; bitwise AND is 1 cycle.
   capacity_ = std::bit_ceil(capacity);
   mask_ = capacity_ - 1;
-  storage_.resize(capacity_ * sizeof(T));
+  // Allocate page-aligned storage via mmap/VirtualAlloc with a trailing
+  // guard page. Out-of-bounds writes trigger SIGSEGV/access violation
+  // instead of silently corrupting adjacent memory.
+  storage_.emplace(capacity_ * sizeof(T), true);
 }
 
 template <typename T>
@@ -108,8 +111,8 @@ std::size_t SpscRingQueue<T>::CapacityValue() const noexcept {
 
 template <typename T>
 T* SpscRingQueue<T>::Slot(std::size_t index) noexcept {
-  return std::launder(
-      reinterpret_cast<T*>(storage_.data() + (index * sizeof(T))));
+  return std::launder(reinterpret_cast<T*>(
+      static_cast<std::byte*>(storage_->Data()) + (index * sizeof(T))));
 }
 
 }  // namespace neoflux
