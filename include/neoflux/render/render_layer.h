@@ -70,6 +70,16 @@ class RenderLayer : public NonCopyable {
   // the requested size due to DPI scaling).
   void GetWindowSize(int& width, int& height) const noexcept;
 
+  // Notifies the render layer that the platform surface has been destroyed
+  // (e.g. Android app backgrounded). Forwards to the platform bridge. The
+  // render thread will skip frames until OnSurfaceCreated is called.
+  void OnSurfaceDestroyed();
+
+  // Notifies the render layer that the platform surface has been recreated
+  // (e.g. Android app foregrounded). `new_surface` is the new native surface
+  // handle. Returns true on success. Forwards to the platform bridge.
+  bool OnSurfaceCreated(void* new_surface);
+
  private:
   // Main render loop. Runs on the render thread.
   void RenderLoop();
@@ -98,6 +108,11 @@ class RenderLayer : public NonCopyable {
 
   std::uint16_t window_width_ = 800;
   std::uint16_t window_height_ = 600;
+
+  // True when the platform surface is valid and rendering is possible.
+  // Set to false by OnSurfaceDestroyed (app backgrounded), set to true by
+  // OnSurfaceCreated (app foregrounded). Render loop skips frames when false.
+  std::atomic<bool> surface_valid_{true};
 };
 
 }  // namespace neoflux
