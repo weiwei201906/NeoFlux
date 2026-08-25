@@ -884,7 +884,7 @@ class GlRendererImpl : public NonCopyable {
     // Map with WRITE + INVALIDATE: driver can return a fresh allocation
     // instead of synchronizing with previous contents.
     void* mapped = gl.glMapBufferRange(
-        0x88EC, 0, upload_size, 0x0001 | 0x0008);  // WRITE | INVALIDATE
+        0x88EC, 0, upload_size, 0x0001U | 0x0008U);  // WRITE | INVALIDATE
     if (mapped != nullptr) {
       std::memcpy(mapped, packed.data(),
                   static_cast<std::size_t>(upload_size));

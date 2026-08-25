@@ -9,7 +9,8 @@
 //
 // The public declaration is in include/neoflux/core/ring_queue.h.
 // =============================================================================
-#pragma once
+#ifndef NEOFLUX_CORE_RING_QUEUE_IMPL_INC_
+#define NEOFLUX_CORE_RING_QUEUE_IMPL_INC_
 
 #include <bit>
 #include <cassert>
@@ -125,3 +126,5 @@ T* SpscRingQueue<T>::Slot(std::size_t index) noexcept {
 }
 
 }  // namespace neoflux
+
+#endif  // NEOFLUX_CORE_RING_QUEUE_IMPL_INC_

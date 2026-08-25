@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cstddef>
 
-#if defined(_WIN32)
+#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -37,7 +37,7 @@ std::size_t AlignUp(std::size_t value, std::size_t alignment) noexcept {
 }  // namespace
 
 std::size_t MappedMemory::PageSize() noexcept {
-#if defined(_WIN32)
+#ifdef _WIN32
   SYSTEM_INFO si;
   GetSystemInfo(&si);
   return static_cast<std::size_t>(si.dwPageSize);
@@ -60,7 +60,7 @@ MappedMemory::MappedMemory(std::size_t size, bool guard_page)
     return;
   }
 
-#if defined(_WIN32)
+#ifdef _WIN32
   // VirtualAlloc returns page-aligned memory. MEM_COMMIT | MEM_RESERVE
   // allocates and commits in one call.
   mapping_ = VirtualAlloc(nullptr, total_size_, MEM_COMMIT | MEM_RESERVE,
@@ -105,7 +105,7 @@ MappedMemory& MappedMemory::operator=(MappedMemory&& other) noexcept {
   if (this != &other) {
     // Release current mapping first.
     if (mapping_ != nullptr) {
-#if defined(_WIN32)
+#ifdef _WIN32
       if (is_file_mapping_) {
         UnmapViewOfFile(mapping_);
       } else {
@@ -131,7 +131,7 @@ MappedMemory::~MappedMemory() {
   if (mapping_ == nullptr) {
     return;
   }
-#if defined(_WIN32)
+#ifdef _WIN32
   if (is_file_mapping_) {
     UnmapViewOfFile(mapping_);
   } else {
@@ -160,7 +160,7 @@ std::optional<MappedMemory> MappedMemory::FromFile(std::string_view path) {
     return std::nullopt;
   }
 
-#if defined(_WIN32)
+#ifdef _WIN32
   // Open file for reading.
   const HANDLE file_handle = CreateFileA(
       path.data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
