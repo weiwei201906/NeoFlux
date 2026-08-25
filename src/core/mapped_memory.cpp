@@ -7,7 +7,7 @@
 // Windows: VirtualAlloc(MEM_COMMIT | MEM_RESERVE) + VirtualProtect(PAGE_NOACCESS).
 // =============================================================================
 
-#include "neoflux/native/mapped_memory.h"
+#include "neoflux/core/mapped_memory.h"
 
 #include <algorithm>
 #include <cstddef>

@@ -18,7 +18,7 @@
 #include <cstddef>
 #include <optional>
 
-#include "neoflux/native/mapped_memory.h"
+#include "neoflux/core/mapped_memory.h"
 
 namespace neoflux {
 

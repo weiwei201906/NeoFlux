@@ -31,7 +31,7 @@
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/font_manager.h"
 #include "neoflux/core/types.h"
-#include "neoflux/native/mapped_memory.h"
+#include "neoflux/core/mapped_memory.h"
 #include "neoflux/render/render_command.h"
 
 namespace neoflux {
