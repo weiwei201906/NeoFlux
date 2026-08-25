@@ -92,6 +92,7 @@ bool MediaWidget::OnPointerDown(const Point& /*local_pos*/) {
   if (player_ == nullptr) {
     return false;
   }
+  // Play/pause toggle: two distinct actions on opposite states.
   if (player_->GetState() == MediaState::kPlaying) {  // NOLINT(bugprone-branch-clone)
     player_->Pause();
   } else {
