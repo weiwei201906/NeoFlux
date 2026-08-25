@@ -5,7 +5,7 @@
 // frames into an OpenGL texture for compositing.
 // =============================================================================
 
-#include "neoflux/media/desktop/mpv_media_player.h"
+#include "neoflux/native/desktop/mpv_media_player.h"
 
 #ifdef NEOFLUX_HAS_MPV
 

@@ -9,7 +9,7 @@
 // CoreVideo frameworks.
 // =============================================================================
 
-#include "neoflux/media/ios/ios_media_player.h"
+#include "neoflux/native/ios/ios_media_player.h"
 
 #if defined(__APPLE__) && defined(TARGET_OS_IPHONE)
 

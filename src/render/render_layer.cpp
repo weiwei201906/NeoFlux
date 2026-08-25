@@ -17,8 +17,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "neoflux/render/glfw_bridge.h"
-#include "neoflux/render/mobile_bridge.h"
+#include "neoflux/native/desktop/glfw_bridge.h"
+#include "neoflux/native/mobile/mobile_bridge.h"
 #include "neoflux/render/render_command.h"
 #include "neoflux/render/tgfx_renderer.h"
 

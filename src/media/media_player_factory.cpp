@@ -9,14 +9,14 @@
 // =============================================================================
 
 #include "neoflux/media/media_player.h"
-#include "neoflux/media/desktop/mpv_media_player.h"
+#include "neoflux/native/desktop/mpv_media_player.h"
 
 #ifdef ANDROID
-#include "neoflux/media/android/android_media_player.h"
+#include "neoflux/native/android/android_media_player.h"
 #endif
 
 #if defined(__APPLE__) && defined(TARGET_OS_IPHONE)
-#include "neoflux/media/ios/ios_media_player.h"
+#include "neoflux/native/ios/ios_media_player.h"
 #endif
 
 namespace neoflux {

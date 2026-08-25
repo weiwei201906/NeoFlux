@@ -8,7 +8,7 @@
 // Compiled only on Android (ANDROID macro). Requires NDK with JNI and GLES.
 // =============================================================================
 
-#include "neoflux/media/android/android_media_player.h"
+#include "neoflux/native/android/android_media_player.h"
 
 #ifdef ANDROID
 
