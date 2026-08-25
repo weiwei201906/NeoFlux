@@ -43,6 +43,22 @@ void Draggable::OnPointerMove(const Point& p) {
 
 `Application` 为指针移动事件缓存上一次命中测试结果。布局变化时缓存失效。对于大型 Widget 树（>1000 个 widget），这避免了每次鼠标移动都遍历整棵树。
 
+### 指针移动节流（渲染线程惊群修复）
+
+`DispatchPointerMove` 仅在存在实际工作时才标记帧为脏：
+
+| 条件 | 原因 |
+|------|------|
+| `is_dragging` | Widget 被按下；拖拽偏移/滚动需要持续重绘 |
+| `hover_changed` | 光标进入/离开 Widget；光标形状 + 悬停状态变化 |
+| `consumed` | 命中 Widget 的 `OnPointerMove` 返回 true（自定义拖拽逻辑） |
+
+纯鼠标在静态区域移动**不会**唤醒渲染线程。在 1000Hz 鼠标回报率下，这将空闲 CPU 从 ~15% 降至 ~0%。
+
+:::warning
+需要在指针移动期间持续重绘的自定义 Widget（例如跟随光标的滑块）**必须**从 `OnPointerMove` 返回 `true`。返回 `false` 意味着框架认为没有发生视觉变化，将跳过该帧。
+:::
+
 ## 位运算优化
 
 NeoFlux 在热路径中全程使用位运算：
@@ -104,6 +120,21 @@ void SetFontDir(std::string_view dir) noexcept;  // 无拷贝
 ```
 
 仅在需要所有权时（例如存储为成员）才转换为 `std::string`。
+
+### 字形预渲染（消除首次绘制卡顿）
+
+`GlRendererImpl::PreloadCommonGlyphs()` 在 GL 初始化后运行一次，将全部 95 个 ASCII 可打印字符（U+0020..U+007E）以 16px 栅格化到字形缓存中。这消除了文本首次出现时的掉帧（jank）。
+
+| 文字系统 | 策略 | 理由 |
+|----------|------|------|
+| ASCII（拉丁文） | 16px 预渲染 | 95 个字形，~15KB 纹理，覆盖所有常见 UI 文本 |
+| CJK / 阿拉伯文 / 天城文 | 首次使用时懒加载 | 预渲染 3500+ CJK 字形将消耗 ~2MB 纹理内存，且取决于应用 |
+
+`glyphs_preloaded_` 标志确保预渲染恰好执行一次。预渲染的字形与懒加载的字形共享同一缓存，因此后续查找完全相同（unordered_map + 单条目快速缓存）。
+
+:::tip
+对于 CJK 密集型应用，在加载界面期间对应用使用的特定字符集调用 `GetGlyph()`。这可以在不预渲染全部 3500 个常用字符的情况下预热缓存。
+:::
 
 ## 渲染优化
 

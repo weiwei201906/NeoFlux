@@ -92,6 +92,24 @@ ctest --output-on-failure
 - Begin/EndFrame 命令
 - 变换和裁剪命令
 
+### Backpressure 压力测试
+
+测试渲染命令队列溢出机制。当 UI 线程产生命令的速度快于渲染线程消费速度时，SPSC 队列被填满，`RenderLayer::Submit` 截断该批次（静默丢帧）以防止内存无限增长。
+
+| 测试 | 场景 | 验证 |
+|------|------|------|
+| `SingleFrameOverflow` | 10000 命令灌入 256 容量队列 | 恰好 255 个提交，无崩溃 |
+| `RepeatedOverflowCycles` | 100 轮溢出 + 排空 | 无损坏，计数保留 |
+| `PartialFillThenOverflow` | 50 预填充 + 1000 溢出 | 50 + 205 = 255 总计 |
+| `LargeQueueNoOverflow` | 4096 队列，500 命令 | 全部 500 接受，零丢弃 |
+| `ConcurrentProducerConsumerOverflow` | 16 容量队列，200ms 并发 | 竞争下零丢失 |
+
+`SimulateSubmit()` 辅助函数精确复制 `RenderLayer::Submit` 的 `TryPush` + `break` 逻辑，在不运行渲染线程的情况下隔离测试 backpressure 机制。
+
+:::tip
+Backpressure 是安全机制，不是性能目标。如果你的应用经常触发队列溢出，应减少每帧命令数（例如批量文本绘制、剔除屏幕外 Widget），而不是增大队列容量。
+:::
+
 ## 编写测试
 
 在 `tests/` 中创建新测试文件：

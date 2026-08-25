@@ -52,6 +52,27 @@ while (running_) {
 
 队列容量通过 `--render_queue_capacity` 配置（默认 2048），自动向上取整为 2 的幂。
 
+### Backpressure（静默丢帧）
+
+当 UI 线程产生命令的速度快于渲染线程消费速度时，SPSC 队列被填满。`RenderLayer::Submit` 实现了 backpressure 机制：
+
+```cpp
+for (size_t i = 0; i < count; ++i) {
+  if (!command_queue_.TryPush(commands[i])) {
+    LOG_FIRST_N(WARNING, 10) << "Render command queue full, dropping "
+                             << (count - i) << " commands";
+    break;  // 截断批次，丢弃剩余命令
+  }
+  ++submitted;
+}
+```
+
+这是防止内存无限增长的安全机制。前 10 次溢出记录警告；后续溢出静默（避免日志刷屏）。渲染线程继续消费已进入队列的命令。
+
+:::warning
+如果 backpressure 经常触发，说明你的应用每帧产生了过多渲染命令。应通过批量绘制、剔除屏幕外 Widget 或降低 Widget 树复杂度来减少命令数。增大 `--render_queue_capacity` 只会延迟问题。
+:::
+
 ## 桌面端渲染（OpenGL）
 
 桌面端通过 GLFW 创建窗口与 OpenGL 3.3 上下文。

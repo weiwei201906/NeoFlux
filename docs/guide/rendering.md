@@ -50,6 +50,34 @@ while (running_) {
 
 The queue capacity is configurable via `--render_queue_capacity` (default 2048).
 
+### Backpressure (Silent Frame Drop)
+
+When the UI thread produces commands faster than the render thread consumes
+them, the SPSC queue fills up. `RenderLayer::Submit` implements a
+backpressure mechanism:
+
+```cpp
+for (size_t i = 0; i < count; ++i) {
+  if (!command_queue_.TryPush(commands[i])) {
+    LOG_FIRST_N(WARNING, 10) << "Render command queue full, dropping "
+                             << (count - i) << " commands";
+    break;  // Truncate the batch, discard remaining commands
+  }
+  ++submitted;
+}
+```
+
+This is a safety mechanism that prevents unbounded memory growth. The first
+10 overflows log a warning; subsequent overflows are silent (avoiding log
+spam). The render thread continues consuming whatever made it into the queue.
+
+:::warning
+If backpressure triggers regularly, your app is producing too many render
+commands per frame. Reduce command count by batching draws, culling
+off-screen widgets, or reducing widget tree complexity. Increasing
+`--render_queue_capacity` only delays the problem.
+:::
+
 ## Desktop Rendering (OpenGL)
 
 On desktop, the render layer uses OpenGL 3.3 via GLFW. Key components:

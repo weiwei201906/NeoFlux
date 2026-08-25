@@ -93,6 +93,31 @@ Tests render command creation:
 - Begin/end frame commands
 - Transform and clip commands
 
+### Backpressure Stress Tests
+
+Tests the render command queue overflow mechanism. When the UI thread
+produces commands faster than the render thread consumes them, the SPSC
+queue fills up and `RenderLayer::Submit` truncates the batch (silent frame
+drop) to prevent unbounded memory growth.
+
+| Test | Scenario | Verification |
+|------|----------|-------------|
+| `SingleFrameOverflow` | 10000 commands into 256-cap queue | Exactly 255 submitted, no crash |
+| `RepeatedOverflowCycles` | 100 cycles of overflow + drain | No corruption, counts preserved |
+| `PartialFillThenOverflow` | 50 pre-filled + 1000 overflow | 50 + 205 = 255 total |
+| `LargeQueueNoOverflow` | 4096 queue, 500 commands | All 500 accepted, zero drops |
+| `ConcurrentProducerConsumerOverflow` | 16-cap queue, 200ms concurrent | Zero lost items under contention |
+
+The `SimulateSubmit()` helper replicates `RenderLayer::Submit`'s exact
+`TryPush` + `break` logic to test the backpressure mechanism in isolation
+without a running render thread.
+
+:::tip
+Backpressure is a safety mechanism, not a performance target. If your app
+triggers queue overflow regularly, reduce per-frame command count (e.g. batch
+text draws, cull off-screen widgets) rather than increasing queue capacity.
+:::
+
 ## Writing Tests
 
 Create a new test file in `tests/`:

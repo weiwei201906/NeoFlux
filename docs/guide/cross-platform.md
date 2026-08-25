@@ -73,6 +73,50 @@ application implements.
 - Input events come from the Android touch system
 - Fonts are bundled in the APK assets
 
+#### Surface Lifecycle (EGL Context Loss Recovery)
+
+Android may destroy the `ANativeWindow` when the app is backgrounded or the
+screen turns off. When the app returns to foreground, a new `ANativeWindow`
+is provided. NeoFlux handles this gracefully:
+
+```
+App backgrounded          App foregrounded
+     |                          |
+     v                          v
+OnSurfaceDestroyed()    OnSurfaceCreated(new_window)
+     |                          |
+     v                          v
+eglDestroySurface()     eglCreateWindowSurface()
+surface_valid_ = false  surface_valid_ = true
+Render loop skips GL    Render thread woken,
+calls (drains queue)    resumes rendering
+```
+
+**Key design: EGL context is preserved, only the surface is recreated.**
+This means all GL resources (textures, shaders, programs, FBOs) survive the
+background/foreground cycle. Only the window surface (the thing that connects
+GL to the display) is torn down and rebuilt.
+
+The render loop checks `surface_valid_` each frame. When `false`, it drains
+the command queue but skips all `renderer_->` calls, preventing
+`EGL_BAD_SURFACE` crashes.
+
+**Host app integration:**
+
+```cpp
+// In your Android Activity's onPause():
+app->GetRenderLayer()->OnSurfaceDestroyed();
+
+// In onSurfaceCreated() (new ANativeWindow*):
+app->GetRenderLayer()->OnSurfaceCreated(new_native_window);
+```
+
+:::warning
+Do not destroy the `Application` or `RenderLayer` on background. The EGL
+context and all GL resources are intentionally preserved. Only call
+`OnSurfaceDestroyed()` / `OnSurfaceCreated()`.
+:::
+
 ### iOS
 
 - tgfx renders to a `CAMetalLayer` or `CAEAGLLayer`

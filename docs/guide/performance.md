@@ -49,6 +49,26 @@ Pointer events automatically call `MarkFrameDirty()`. Do not call
 cache is invalidated on layout changes. For large widget trees (>1000
 widgets), this avoids a full tree traversal per mouse move.
 
+### Pointer-Move Throttling (Render Thread Thundering Herd)
+
+`DispatchPointerMove` only marks the frame dirty when there is actual work:
+
+| Condition | Reason |
+|-----------|--------|
+| `is_dragging` | A widget is pressed; drag offset/scroll needs continuous repaint |
+| `hover_changed` | Cursor entered/left a widget; cursor shape + hover state changed |
+| `consumed` | The hit widget's `OnPointerMove` returned true (custom drag logic) |
+
+Pure cursor movement over static widgets does **not** wake the render thread.
+At 1000Hz mouse report rates this reduces idle CPU from ~15% to ~0%.
+
+:::warning
+Custom widgets that need continuous repaint during pointer move (e.g. a
+slider that follows the cursor) **must** return `true` from `OnPointerMove`.
+Returning `false` means the framework assumes no visual change occurred and
+will skip the frame.
+:::
+
 ## Bitwise Optimizations
 
 NeoFlux uses bitwise operations throughout the hot paths:
@@ -148,6 +168,27 @@ CPU writes → mapped PBO → (DMA) → texture
   immediately instead of stalling for GPU consumption.
 - Orphan pattern (`glBufferData` with `nullptr`) avoids waiting for in-flight
   GPU reads.
+
+### Glyph Pre-Rendering (First-Paint Jank Elimination)
+
+`GlRendererImpl::PreloadCommonGlyphs()` runs once after GL initialization,
+rasterizing all 95 ASCII printable characters (U+0020..U+007E) at 16px into
+the glyph cache. This eliminates first-paint jank when text first appears.
+
+| Script | Strategy | Rationale |
+|--------|----------|-----------|
+| ASCII (Latin) | Pre-rendered at 16px | 95 glyphs, ~15KB texture, covers all common UI text |
+| CJK / Arabic / Devanagari | Lazy-loaded on first use | Pre-rendering 3500+ CJK glyphs would consume ~2MB of texture memory and is application-dependent |
+
+The `glyphs_preloaded_` flag ensures preload runs exactly once. Pre-rendered
+glyphs share the same cache as lazy-loaded ones, so subsequent lookups are
+identical (unordered_map + single-entry fast cache).
+
+:::tip
+For CJK-heavy applications, call `GetGlyph()` during a loading screen for
+the specific character set your app uses. This warms the cache without the
+runtime cost of pre-rendering all 3500 common characters.
+:::
 
 ## Rendering Optimizations
 
