@@ -76,7 +76,7 @@ cmake --build .
 ### 运行快速开始应用
 
 ```bash
-./bin/neoflux_quickstart
+./bin/neoflux_app
 ```
 
 应出现一个显示 "NeoFlux Quick Start" 文本的窗口。快速开始源码位于 `src/main.cpp`——替换它为你自己的 UI。
@@ -174,7 +174,7 @@ cd build && ctest --output-on-failure
 
 ```
 build/bin/
-├── neoflux_quickstart.exe   (快速开始应用，约 1.2MB)
+├── neoflux_app.exe   (快速开始应用，约 1.2MB)
 ├── glog.dll                 (自动拷贝，与 exe 同目录)
 ├── libmpv-2.dll             (自动拷贝，与 exe 同目录，若检测到 libmpv)
 └── assets/
@@ -271,10 +271,14 @@ col->SetFlexDirection(FlexDirection::kColumn)   // 子控件垂直排列
 Widget 通过 `RouteRegistry` 注册，压入/弹出导航栈：
 
 ```cpp
-RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
+// 路由 builder 直接用 lambda 注册（见 src/router/index.cpp）
+RouteRegistry::Instance().RegisterRoute(
+    "/settings", [](BuildContext& ctx) { return BuildSettingsPage(ctx); });
 app.PushRoute("/settings");  // 构建并显示设置页面
 app.PopRoute();              // 返回上一路由
 ```
+
+> **提示：** 被 PushRoute 压入的页面应提供返回入口——快速开始中的 `BackButton`（src/widgets/）封装了 `PopRoute()`，任何被导航进入的 View 都可直接复用。
 
 > **提示：** 哪怕只有一个路由，也必须先注册再调用 `PushRoute`——`Init` 不会自动显示任何内容。
 
@@ -364,8 +368,9 @@ NeoFlux/
 │   └── cmake/               # CMake 模块（CompilerFlags、android、ios）
 ├── src/                     # 快速开始宿主工程（你的应用）
 │   ├── main.cpp             # 入口：注册路由 → Init → PushRoute("/") → Run
-│   ├── router/              # 路由注册（index.h/.cpp，集中注册所有路由）
-│   └── views/               # 每个路由一个 View（home/counter/about）
+│   ├── router/              # 路由注册（index.h/.cpp，集中注册所有路由，builder 用 lambda）
+│   ├── widgets/             # 可复用共享组件（如 back_button，页面组件不放这里）
+│   └── views/               # 每个路由一个 View（home/counter/about，含 Back 返回）
 ├── thirdparty/              # Git 子模块（glog、gflags、glfw、taitank、tgfx、mpv 等）
 ├── docs/                    # VitePress 双语文档
 ├── README.md

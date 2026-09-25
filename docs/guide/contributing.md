@@ -158,7 +158,7 @@ Before opening a PR, you **must** verify locally:
    ```bash
    cd build && ctest --output-on-failure
    ```
-5. **App runs**: At minimum, run `neoflux_quickstart` (or your own app under
+5. **App runs**: At minimum, run `neoflux_app` (or your own app under
    `src/`) to confirm the change works at runtime, not just compiles.
 
 PRs that fail any of these checks will be requested changes before review.

@@ -71,7 +71,7 @@ All dependencies are Git submodules under `thirdparty/`:
 ## Verify
 
 ```bash
-./bin/neoflux_quickstart
+./bin/neoflux_app
 ```
 
 You should see a window with "NeoFlux Quick Start" text.

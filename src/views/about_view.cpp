@@ -11,13 +11,15 @@
 #include <neoflux/widget/sized_box.h>
 #include <neoflux/widget/text.h>
 
+#include "widgets/back_button.h"
+
 #include <memory>
 
 namespace neoflux {
 
 AboutView::AboutView(BuildContext& /*context*/) {}
 
-std::shared_ptr<Widget> AboutView::Build(BuildContext& /*context*/) {
+std::shared_ptr<Widget> AboutView::Build(BuildContext& context) {
   auto root = std::make_shared<Container>();
   root->SetBackgroundColor({.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF})
       .SetPadding({.left = 24.0F, .top = 24.0F, .right = 24.0F,
@@ -37,6 +39,8 @@ std::shared_ptr<Widget> AboutView::Build(BuildContext& /*context*/) {
   root->AddChild(title);
   root->AddChild(std::make_shared<SizedBox>(0.0F, 16.0F));
   root->AddChild(body);
+  root->AddChild(std::make_shared<SizedBox>(0.0F, 24.0F));
+  root->AddChild(std::make_shared<BackButton>(context));
   return root;
 }
 

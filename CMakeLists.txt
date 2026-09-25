@@ -62,16 +62,22 @@ add_subdirectory(neoflux)
 # Your application
 # ---------------------------------------------------------------------------
 # Keep application sources grouped so new files are easy to add. Views live
-# under src/views/ (one view per route); routes are registered centrally in
-# src/router/index.cpp.
+# under src/views/ (one view per route); shared reusable widgets live under
+# src/widgets/; routes are registered centrally in src/router/index.cpp.
 set(QUICKSTART_SOURCES
   src/main.cpp
   src/router/index.cpp
+  src/widgets/back_button.cpp
   src/views/home_view.cpp
   src/views/counter_view.cpp
   src/views/about_view.cpp
 )
 
-add_executable(main ${QUICKSTART_SOURCES})
-target_link_libraries(main PRIVATE neoflux)
-target_include_directories(main PRIVATE src)
+# Name of the quick-start executable. Override it for your own project with
+#   cmake -DNEOFLUX_APP_NAME=my_app
+set(NEOFLUX_APP_NAME "neoflux_app" CACHE STRING
+    "Name of the quick-start application executable")
+
+add_executable(${NEOFLUX_APP_NAME} ${QUICKSTART_SOURCES})
+target_link_libraries(${NEOFLUX_APP_NAME} PRIVATE neoflux)
+target_include_directories(${NEOFLUX_APP_NAME} PRIVATE src)

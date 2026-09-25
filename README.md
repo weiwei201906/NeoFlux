@@ -77,7 +77,7 @@ cmake --build .
 ### Run the Quick-Start App
 
 ```bash
-./bin/neoflux_quickstart
+./bin/neoflux_app
 ```
 
 A window with "NeoFlux Quick Start" text should appear. The quick-start source
@@ -189,7 +189,7 @@ cd build && ctest --output-on-failure
 
 ```
 build/bin/
-├── neoflux_quickstart.exe   (quick-start app, ~1.2MB)
+├── neoflux_app.exe   (quick-start app, ~1.2MB)
 ├── glog.dll                 (auto-copied, same dir as exe)
 ├── libmpv-2.dll             (auto-copied, same dir as exe, if enabled)
 └── assets/
@@ -228,7 +228,8 @@ std::shared_ptr<Widget> BuildHome(BuildContext& ctx) {
 }
 
 int main(int argc, char** argv) {
-  RouteRegistry::Instance().RegisterRoute("/", BuildHome);
+  RouteRegistry::Instance().RegisterRoute(
+      "/", [](BuildContext& ctx) { return BuildHome(ctx); });
 
   Application app;
   app.SetFontDir("./assets/fonts/");
@@ -292,13 +293,18 @@ Mouse/touch events flow from the platform bridge through the widget tree:
 ### Route Navigation
 
 Widgets are registered with the `RouteRegistry` and pushed/popped onto a
-navigation stack:
+navigation stack. Route builders are plain lambdas (see `src/router/index.cpp`):
 
 ```cpp
-RouteRegistry::Instance().RegisterRoute("/settings", BuildSettingsPage);
+RouteRegistry::Instance().RegisterRoute(
+    "/settings", [](BuildContext& ctx) { return BuildSettingsPage(ctx); });
 app.PushRoute("/settings");  // builds and displays the settings page
 app.PopRoute();              // returns to the previous route
 ```
+
+> **Tip:** Pages entered via `PushRoute` should provide a way back. The
+> quick-start `BackButton` (src/widgets/) wraps `PopRoute()` and can be reused
+> by any pushed view.
 
 > **Tip:** Even with a single route, you must register it and call
 > `PushRoute` — `Init` does not display anything automatically.
@@ -411,8 +417,9 @@ NeoFlux/
 │   └── cmake/               # CMake modules (CompilerFlags, android, ios)
 ├── src/                     # Quick-start host project (your application)
 │   ├── main.cpp             # Entry: RegisterRoutes -> Init -> PushRoute("/") -> Run
-│   ├── router/              # Route registry (index.h/.cpp; register every route here)
-│   └── views/               # One view per route (home/counter/about)
+│   ├── router/              # Route registry (index.h/.cpp; builders are lambdas)
+│   ├── widgets/             # Reusable shared widgets (e.g. back_button)
+│   └── views/               # One view per route (home/counter/about, with Back)
 ├── thirdparty/              # Git submodules (glog, gflags, glfw, taitank, tgfx, mpv, ...)
 ├── docs/                    # VitePress documentation (bilingual)
 ├── README.md

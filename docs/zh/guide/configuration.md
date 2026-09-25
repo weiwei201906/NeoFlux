@@ -20,7 +20,7 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 调试时使用：
 
 ```bash
-./bin/neoflux_quickstart --logtostderr --verbose_logging
+./bin/neoflux_app --logtostderr --verbose_logging
 ```
 
 ## 渲染后端

@@ -16,7 +16,7 @@
 // Build & run:
 //   cmake -B build
 //   cmake --build build
-//   ./build/bin/neoflux_quickstart
+//   ./build/bin/neoflux_app
 //
 // Notes:
 //   - Register ALL routes (even a single "/" route) before Init().
