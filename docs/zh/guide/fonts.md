@@ -8,7 +8,7 @@ NeoFlux 使用 FreeType 进行字体光栅化，并使用字形纹理图集实�
 必须在调用 `Application::Init()` 之前配置字体目录。如果找不到字体，所有文本 Widget 都会渲染为乱码或空白。
 :::
 
-默认情况下，NeoFlux 扫描 `fonts/` 目录查找字体文件。如需使用其他目录，在 `Init()` **之前**调用 `Application::SetFontDir()`：
+默认情况下，NeoFlux 扫描 `assets/fonts/` 目录查找字体文件。如需使用其他目录，在 `Init()` **之前**调用 `Application::SetFontDir()`：
 
 ```cpp
 Application app;
@@ -25,7 +25,7 @@ app.Run();
 将字体文件（`.ttf`、`.otf`、`.ttc`）放入配置的字体目录：
 
 ```
-fonts/                    （默认，或你自定义的路径）
+assets/fonts/             （默认，或你自定义的路径）
   NotoSansSC-Regular.ttf
   Roboto-Bold.ttf
 ```
@@ -40,7 +40,7 @@ fonts/                    （默认，或你自定义的路径）
 
 ### 默认字体
 
-如果未指定字体，NeoFlux 使用 `fonts/` 中找到的第一个字体。
+如果未指定字体，NeoFlux 使用 `assets/fonts/` 中找到的第一个字体。
 
 ```cpp
 auto text = std::make_shared<Text>("Hello");  // 使用默认字体
@@ -86,7 +86,7 @@ text->SetFont("NotoSansSC-Regular");
 
 ## 字体搜索路径
 
-`FontManager` 相对于工作目录搜索配置的目录（默认：`fonts/`），然后向上回退：
+`FontManager` 相对于工作目录搜索配置的目录（默认：`assets/fonts/`），然后向上回退：
 
 - `<font_dir>/`
 - `../<font_dir>/`
@@ -96,7 +96,7 @@ text->SetFont("NotoSansSC-Regular");
 
 ## CMake：构建时自动拷贝字体
 
-在你自己的项目中，将字体放入 `fonts/` 目录，用 CMake 在每次构建时将其拷贝到可执行文件旁：
+NeoFlux 自身的 CMake 在 POST_BUILD 步骤将仓库 `assets/fonts/` 目录的字体拷贝到 `<输出目录>/assets/fonts/`。在你自己的项目中，将字体放入 `assets/fonts/` 目录，用 CMake 在每次构建时将其拷贝到可执行文件旁：
 
 ```cmake
 add_executable(my_app main.cpp)
@@ -104,7 +104,7 @@ target_link_libraries(my_app PRIVATE neoflux)
 
 add_custom_command(TARGET my_app POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+  ${CMAKE_SOURCE_DIR}/assets/fonts $<TARGET_FILE_DIR:my_app>/assets/fonts
 )
 ```
 
@@ -112,7 +112,7 @@ add_custom_command(TARGET my_app POST_BUILD
 
 ```cpp
 Application app;
-app.SetFontDir("./fonts/");  // 对应拷贝后的 fonts/ 文件夹
+app.SetFontDir("./assets/fonts/");  // 对应拷贝后的 assets/fonts/ 文件夹
 app.Init(argc, argv, 800, 600, "My App");
 ```
 

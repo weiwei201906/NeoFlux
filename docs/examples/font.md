@@ -19,10 +19,10 @@ sizes/colors, and CJK text rendering.
 
 ## Setup
 
-Place font files in `thirdparty/fonts/`:
+Place font files in `assets/fonts/`:
 
 ```
-thirdparty/fonts/
+assets/fonts/
   NotoSansSC-Regular.ttf
   Roboto-Bold.ttf
 ```
@@ -47,6 +47,6 @@ cjk_text->SetFont("NotoSansSC-Regular")
 
 ## Notes
 
-- If no font is specified, the first font found in `thirdparty/fonts/` is used.
+- If no font is specified, the first font found in `assets/fonts/` is used.
 - For CJK text, ensure the font includes CJK glyphs.
 - Font files are excluded from git; distribute them with your application.

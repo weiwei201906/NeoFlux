@@ -41,7 +41,7 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 - clang-tidy static analysis
 - GLog logging + GFlags command-line parsing
 - GTest unit testing
-- CMake build system with FetchContent dependency management
+- CMake build system with Git Submodule dependency management
 
 ## Quick Start
 
@@ -50,29 +50,45 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 - CMake 3.20+
 - C++20 compatible compiler (GCC 11+, Clang 14+, MSVC 2022+)
 - Ninja or Make / Visual Studio
+- Git (for submodule initialization)
+
+### Clone
+
+```bash
+git clone https://github.com/weiwei201906/NeoFlux.git
+cd NeoFlux
+git submodule update --init --recursive
+```
+
+The `git submodule` command fetches all third-party dependencies (glog,
+gflags, glfw, taitank, freetype, gtest, tgfx, mpv) under `thirdparty/`.
+`thirdparty/mpv` is the libmpv media backend source; the prebuilt bundle
+(`thirdparty/mpv-bundle/`, gitignored) is auto-detected by CMake for
+out-of-the-box Windows media playback.
 
 ### Build
 
 ```bash
 mkdir build && cd build
-cmake .. -G Ninja
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
+
+### Run the Quick-Start App
+
+```bash
+./bin/neoflux_quickstart
+```
+
+A window with "NeoFlux Quick Start" text should appear. The quick-start source
+lives in `src/main.cpp` — replace it with your own UI.
 
 ### Run Tests
 
 ```bash
+cmake -S .. -B . -DNEOFLUX_BUILD_TESTS=ON
+cmake --build .
 ctest --output-on-failure
-```
-
-### Run Example
-
-Examples are **off by default**. Enable them at configure time:
-
-```bash
-cmake -S . -B build -DNEOFLUX_BUILD_EXAMPLES=ON
-cmake --build build
-./build/bin/hello_neoflux
 ```
 
 ## Configuration (gflags)
@@ -83,24 +99,28 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 |------|------|---------|-------------|
 | `--target_fps` | int | `60` | Target frame rate for the application event loop and render pacing. |
 | `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Rounded up to the next power of two automatically. |
+| `--render_backend` | string | `vulkan` | Render backend selection: `vulkan`, `gl`, or `cpu`. Vulkan/CPU fall back to OpenGL with a warning when not yet implemented. |
 | `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
 | `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
 | `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |
-| `--render_backend` | string | `vulkan` | Render backend selection: `vulkan`, `gl`, or `cpu`. Vulkan/CPU fall back to OpenGL with a warning when not yet implemented. |
 
-By default, logs are written to files in `./logs/` and no console window appears on Windows (`CMAKE_WIN32_EXECUTABLE`). To debug, pass `--logtostderr --verbose_logging`.
+By default, logs are written to files in `./logs/` and no console window
+appears on Windows (`CMAKE_WIN32_EXECUTABLE`). To debug, pass
+`--logtostderr --verbose_logging`.
 
 ## Font System
 
-NeoFlux uses a font manager that scans a configurable directory for TrueType
-(`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup.
-The default directory is `fonts/`.
+NeoFlux scans a configurable directory for TrueType (`.ttf`), OpenType
+(`.otf`), and TrueType Collection (`.ttc`) files at startup. The default
+directory is `assets/fonts/`. Font files are **not committed to git** — place
+your own fonts there (or download Noto Sans SC; see
+[assets/fonts/README.md](assets/fonts/README.md)).
 
 **Configure the font directory before `Init()`:**
 
 ```cpp
 Application app;
-app.SetFontDir("./fonts/");  // optional: override default "fonts"
+app.SetFontDir("./assets/fonts/");  // optional: override default "assets/fonts"
 app.Init(argc, argv, 800, 600, "NeoFlux");
 ```
 
@@ -119,24 +139,21 @@ fallback (`../`, `../../`) for build subdirectories.
 > fail or show garbled output. Always include at least one font file (e.g. a
 > CJK font for Chinese text). Call `SetFontDir()` before `Init()` to specify a
 > custom directory.
->
-> **Note:** Before running examples, ensure `thirdparty/fonts/` contains font
-> files, otherwise text will render as garbled or blank.
 
 ### CMake: Auto-Copy Fonts at Build Time
 
-In your own project, place fonts in a `fonts/` directory and copy them to the
-output directory at build time:
+NeoFlux's CMake copies fonts from the repository `assets/fonts/` directory to
+`<output>/assets/fonts/` in a POST_BUILD step. In your own project:
 
 ```cmake
 # CMakeLists.txt
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 
-# Copy fonts/ next to the executable on every build
+# Copy assets/fonts/ next to the executable on every build
 add_custom_command(TARGET my_app POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+  ${CMAKE_SOURCE_DIR}/assets/fonts $<TARGET_FILE_DIR:my_app>/assets/fonts
 )
 ```
 
@@ -144,7 +161,7 @@ Then configure in code:
 
 ```cpp
 Application app;
-app.SetFontDir("./fonts/");  // matches the copied fonts/ folder
+app.SetFontDir("./assets/fonts/");  // matches the copied assets/fonts/ folder
 app.Init(argc, argv, 800, 600, "My App");
 ```
 
@@ -153,17 +170,17 @@ app.Init(argc, argv, 800, 600, "My App");
 | Option | Default | Description |
 |--------|---------|-------------|
 | `NEOFLUX_BUILD_TESTS` | `OFF` | Build unit tests (gtest). |
-| `NEOFLUX_BUILD_EXAMPLES` | `OFF` | Build example applications. |
 | `NEOFLUX_ENABLE_CLANG_TIDY` | `OFF` | Run clang-tidy as a build step. |
 | `NEOFLUX_USE_TGFX` | `OFF` | Use tgfx rendering backend (requires MSVC on Windows). |
-| `NEOFLUX_FFPLAY_PATH` | `""` | Path to ffplay executable for MediaWidget. Empty = resolve from `PATH` at runtime. |
+| `NEOFLUX_USE_MPV` | `ON` | Enable the libmpv media backend (desktop). At configure time the build probes `thirdparty/mpv-bundle/` then `thirdparty/mpv/` then the system libmpv; when none is found the media widget compiles as disabled with a warning. |
 
 ## Building Tests
 
-Tests and examples are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS` and `NEOFLUX_BUILD_EXAMPLES` CMake options:
+Tests are disabled by default. Enable them with the `NEOFLUX_BUILD_TESTS`
+CMake option:
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
 cmake --build build -j 16
 cd build && ctest --output-on-failure
 ```
@@ -172,16 +189,21 @@ cd build && ctest --output-on-failure
 
 ```
 build/bin/
-├── *.exe              (9 examples, ~1.8MB each)
-├── libglog.dll        (auto-copied, same dir as exe)
-├── libmpv-2.dll       (auto-copied, same dir as exe)
-└── fonts/
-    └── NotoSansSC-Regular.ttf  (auto-copied from thirdparty/fonts/)
+├── neoflux_quickstart.exe   (quick-start app, ~1.2MB)
+├── glog.dll                 (auto-copied, same dir as exe)
+├── libmpv-2.dll             (auto-copied, same dir as exe, if enabled)
+└── assets/
+    └── fonts/
+        └── NotoSansCJKsc-Regular.otf  (auto-copied from assets/fonts/)
 ```
 
-- **Windows**: DLLs are placed next to the executable (standard Windows deployment). No launcher scripts or PATH setup needed — double-click the exe to run.
-- **Linux/macOS**: Examples get `RPATH=$ORIGIN/lib`; shared libraries are found relative to the executable.
-- **Fonts**: Run `examples/download_fonts.ps1` (Windows) or `examples/download_fonts.sh` (Linux/macOS) before building to fetch Noto Sans SC. Fonts are gitignored.
+- **Windows**: DLLs are placed next to the executable (standard Windows
+  deployment). No launcher scripts or PATH setup needed — double-click the exe
+  to run.
+- **Linux/macOS**: Shared libraries are found relative to the executable via
+  RPATH.
+- **Fonts**: Place your own `.ttf`/`.otf`/`.ttc` files in `assets/fonts/`
+  before building. Fonts are gitignored.
 
 ## Minimal Example
 
@@ -209,6 +231,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildHome);
 
   Application app;
+  app.SetFontDir("./assets/fonts/");
   app.Init(argc, argv, 800, 600, "NeoFlux");
   app.PushRoute("/");
   app.Run();
@@ -232,7 +255,7 @@ can contain children. Layout is computed by the Taitank flexbox engine.
 | `ScrollView` | Scrollable viewport that clips and pans its content via mouse wheel / drag. |
 | `Draggable` | Container that can be dragged with pointer input; paint-time translate so layout is unaffected. |
 | `TextField` | Single-line editable text input with cursor navigation, placeholder, UTF-8 support, and focus management. |
-| `MediaWidget` | Media playback backed by the ffplay subprocess; cross-platform, no FFmpeg linking required. |
+| `MediaWidget` | Embedded media playback backed by libmpv (desktop); video frames are decoded into an OpenGL texture and composited. |
 | `Expanded` | Container with `flex_grow` set; fills remaining space in a flex parent. |
 | `SizedBox` | Container with explicit width/height; useful for fixed-size spacing. |
 | `StatelessWidget` | Base for widgets that don't hold mutable state. |
@@ -279,78 +302,6 @@ app.PopRoute();              // returns to the previous route
 
 > **Tip:** Even with a single route, you must register it and call
 > `PushRoute` — `Init` does not display anything automatically.
-
-## Examples
-
-### hello_neoflux
-
-A complete demo showing stateful widgets, button callbacks, route navigation,
-and flex layout. Run with:
-
-```bash
-./bin/hello_neoflux
-```
-
-### counter
-
-A minimal counter app demonstrating `StatefulWidget` and `Button` callbacks.
-
-```bash
-./bin/counter
-```
-
-### flex_demo
-
-A layout showcase demonstrating Taitank flex layout: row/column directions,
-center justification, flex grow, and row reverse with colored boxes.
-
-```bash
-./bin/flex_demo
-```
-
-### font_demo
-
-Demonstrates the font system: default font, explicit `SetFont()` selection,
-multiple font sizes/colors, and CJK text rendering. Place fonts in
-`thirdparty/fonts/` and reference them by name.
-
-```bash
-./bin/font_demo
-```
-
-### scroll_demo
-
-Demonstrates `ScrollView`: a header bar plus a scrollable list of colored
-items. Scroll with the mouse wheel or drag the content; content is clipped
-to the viewport.
-
-```bash
-./bin/scroll_demo
-```
-
-### loading_demo
-
-Demonstrates the widget state machine integrated with C++20 coroutines. A
-"Start Loading" button transitions the widget to a loading state; a coroutine
-animates a progress bar from 0% to 100% over ~2 seconds, yielding one frame
-per step. On completion, the widget transitions to a success state.
-
-```bash
-./bin/loading_demo
-```
-
-### drag_demo
-
-Demonstrates the `Draggable` widget with pointer events and the "state
-machine as condition lock" pattern. A colored box can be dragged around; a
-status label shows the current state (Idle/Hovering/Dragging) and offset.
-A long-press coroutine is launched on pointer-down; if the pointer is
-released before 500ms, the coroutine observes the state change and returns
-silently. If held for 500ms+, a "[Long Press!]" indicator appears.
-
-```bash
-./bin/drag_demo
-```
 
 ## Coroutines
 
@@ -400,6 +351,28 @@ No explicit cancellation is needed — the state machine gates execution.
 > destroyed while a coroutine is suspended on `Sleep` or `Yield`; accessing
 > a raw pointer after resumption causes use-after-free.
 
+## Media Playback (libmpv)
+
+The desktop media widget is backed by [libmpv](https://mpv.io/) (GPL-3.0, matching
+NeoFlux's license). Video frames are decoded via the mpv render API into an
+OpenGL texture and composited by the render layer.
+
+- `thirdparty/mpv/` is the mpv **source submodule** (fetch with
+  `git submodule update --init thirdparty/mpv`) for building libmpv yourself.
+- Out of the box on Windows: drop a prebuilt bundle into
+  `thirdparty/mpv-bundle/` (`include/mpv/`, `libmpv.dll.a`, `libmpv-2.dll`);
+  CMake detects it automatically, links it, and copies `libmpv-2.dll` next to
+  your executable.
+- Linux/macOS: install system libmpv (`apt install libmpv-dev` /
+  `brew install mpv`); CMake discovers it via `find_package(mpv)` /
+  `pkg-config`.
+- When no libmpv is available, `MediaWidget` compiles as disabled with a
+  warning; the rest of the framework is unaffected.
+
+The media player unit test `neoflux/tests/mpv_media_player_test.cpp` (enabled
+with `NEOFLUX_BUILD_TESTS=ON`) exercises the full pipeline against the bundled
+2-second 320x240 H.264 clip `tests/data/sample.mp4` (~120 KB, committed):
+load -> play -> first frame -> pause -> stop -> seek -> state callback.
 ## Mobile Rendering
 
 On mobile, NeoFlux does not use GLFW. Instead, tgfx renders directly into a
@@ -419,19 +392,46 @@ GLFW window automatically.
 ## Project Structure
 
 ```
-neoflux/
-├── CMakeLists.txt          # Root build configuration
-├── .clang-tidy             # clang-tidy rules
-├── .clang-format           # Code style
-├── cmake/                  # CMake modules
-├── thirdparty/             # Third-party dependencies (FetchContent)
-├── include/neoflux/        # Public headers
-│   ├── core/               # Ring queue, types, utilities
-│   ├── widget/             # Widget system (Widget, Container, Text, Button)
-│   ├── app/                # Application, EventLoop
-│   └── render/             # Render layer, commands, tgfx, GLFW
-├── src/                    # Implementation
-├── tests/                  # GTest unit tests
-├── examples/               # Example applications
-└── docs/                   # Documentation
+NeoFlux/
+├── CMakeLists.txt           # Host quick-start build (adds thirdparty + neoflux)
+├── .clang-tidy              # clang-tidy rules
+├── .clang-format            # Code style
+├── assets/
+│   └── fonts/               # Font files (gitignored; place your own fonts here)
+├── neoflux/                 # Self-contained framework (also usable as submodule)
+│   ├── CMakeLists.txt       # Framework library build
+│   ├── include/neoflux/     # Public headers
+│   │   ├── core/            # Ring queue, task, types, utilities
+│   │   ├── widget/          # Widget system (Widget, Container, Text, Button)
+│   │   ├── app/             # Application, EventLoop
+│   │   ├── render/          # Render layer, commands, tgfx facade
+│   │   └── native/          # Platform bridges (GLFW, mobile, GL renderer)
+│   ├── src/                 # Implementation
+│   ├── tests/               # GTest unit tests
+│   └── cmake/               # CMake modules (CompilerFlags, android, ios)
+├── src/                     # Quick-start host project (your application)
+│   ├── main.cpp             # Entry: RegisterRoutes -> Init -> PushRoute("/") -> Run
+│   ├── router/              # Route registry (index.h/.cpp; register every route here)
+│   └── views/               # One view per route (home/counter/about)
+├── thirdparty/              # Git submodules (glog, gflags, glfw, taitank, tgfx, mpv, ...)
+├── docs/                    # VitePress documentation (bilingual)
+├── README.md
+└── README-zh.md
 ```
+
+## Documentation
+
+Full bilingual documentation (VitePress) is under `docs/`:
+
+- [Guide (English)](docs/guide/introduction.md)
+- [Guide (中文)](docs/zh/guide/introduction.md)
+
+## Contributing
+
+See [docs/guide/contributing.md](docs/guide/contributing.md). Requirements:
+
+- C++20, Google C++ style guide, pure ASCII source
+- clang-tidy zero-warning pass before every PR
+- RAII + smart pointers; no raw owning pointers
+- Unit tests (gtest) for new functionality
+- Local reproduction of every change before submission

@@ -9,9 +9,12 @@
 ```
 my_app/
 ├── CMakeLists.txt
-├── main.cpp
+├── src/
+│   └── main.cpp
+├── assets/
+│   └── fonts/          # 你的 .ttf/.otf 字体（构建时拷贝到输出目录）
 └── thirdparty/
-    └── neoflux/      # NeoFlux 源码（git submodule 或拷贝）
+    └── neoflux/        # NeoFlux 源码（git submodule 或拷贝）
 ```
 
 ## 2. 获取 NeoFlux
@@ -21,7 +24,10 @@ my_app/
 ```bash
 git init
 git submodule add https://github.com/weiwei201906/NeoFlux.git thirdparty/neoflux
+git submodule update --init --recursive   # 拉取 NeoFlux 自身的第三方依赖
 ```
+
+NeoFlux 自身把三方库（glog、gflags、glfw、taitank、freetype、gtest、tgfx）作为 `thirdparty/` 下的子模块管理。克隆后先执行一次 `git submodule update --init --recursive`。
 
 ### 方式 B：FetchContent（无需 submodule）
 
@@ -66,9 +72,9 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 
   Application app;
-  // 在 Init() 之前配置字体目录。将 .ttf/.otf 文件放入 fonts/
+  // 在 Init() 之前配置字体目录。将 .ttf/.otf 文件放入 assets/fonts/
   // （或你自定义的目录）。详见字体系统文档。
-  app.SetFontDir("./fonts/");
+  app.SetFontDir("./assets/fonts/");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
@@ -85,7 +91,7 @@ int main(int argc, char** argv) {
 :::
 
 :::warning
-文本 Widget 需要字体文件。运行前在配置的字体目录（默认 `fonts/`）中放入至少一个 `.ttf`/`.otf` 字体。没有字体时，所有文本渲染为乱码或空白。
+文本 Widget 需要字体文件。运行前在配置的字体目录（默认 `assets/fonts/`）中放入至少一个 `.ttf`/`.otf` 字体。没有字体时，所有文本渲染为乱码或空白。
 :::
 
 ## 4. CMakeLists.txt
@@ -100,22 +106,23 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # NeoFlux 放在 thirdparty/ 下以隔离依赖。
+# 它会带上自己的第三方子模块（glog、glfw、taitank 等）。
 add_subdirectory(thirdparty/neoflux)
 
-add_executable(my_app main.cpp)
+add_executable(my_app src/main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 
-# 每次构建时将 fonts/ 拷贝到可执行文件旁。
-# 将你的 .ttf/.otf 文件放入 ${CMAKE_SOURCE_DIR}/fonts/
+# 每次构建时将 assets/fonts 拷贝到可执行文件旁。
+# 将你的 .ttf/.otf 文件放入 ${CMAKE_SOURCE_DIR}/assets/fonts/
 add_custom_command(TARGET my_app POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+  ${CMAKE_SOURCE_DIR}/assets/fonts $<TARGET_FILE_DIR:my_app>/assets/fonts
 )
 ```
 
-> **注意：** NeoFlux 示例和测试**默认关闭**。如需构建，在配置时传入 `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON`。
+> **注意：** NeoFlux 单元测试**默认关闭**。如需构建，在配置时传入 `-DNEOFLUX_BUILD_TESTS=ON` 并运行 `ctest`。
 >
-> **字体：** 运行示例需要字体文件。运行 `examples/download_fonts.ps1`（Windows）或 `examples/download_fonts.sh`（Linux/macOS）下载 Noto Sans SC 到 `thirdparty/fonts/`。CMake 在构建时将其拷贝到 `bin/fonts/`；示例调用 `SetFontDir("./fonts/")`。没有字体时文本渲染为乱码或空白。
+> **字体：** 将字体文件放入 `assets/fonts/`。CMake 在构建时将其拷贝到 `bin/assets/fonts/`；代码调用 `SetFontDir("./assets/fonts/")`。没有字体时文本渲染为乱码或空白。
 
 ### 使用 FetchContent
 
@@ -135,7 +142,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(neoflux)
 
-add_executable(my_app main.cpp)
+add_executable(my_app src/main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 ```
 

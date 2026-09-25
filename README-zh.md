@@ -43,8 +43,8 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 - 遵循 Google C++ 编码规范，clang-tidy 静态分析，-Werror 零警告
 - GLog 日志 + GFlags 命令行参数解析
 - GTest 单元测试
-- CMake 构建系统，FetchContent 自动管理第三方依赖
-- 头文件仅含声明，模板类通过 `.inc` + 显式实例化将实现放在 `.cpp`
+- CMake 构建系统，Git Submodule 管理第三方依赖
+- 头文件仅含声明，模板类实现直接位于 `.cpp` 并通过显式实例化导出
 
 ## 快速开始
 
@@ -52,46 +52,41 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 
 - CMake 3.20+
 - 支持 C++20 的编译器（GCC 11+ / Clang 14+ / MSVC 2022）
-- Git（用于 FetchContent 下载依赖）
+- Git（用于初始化子模块）
+
+### 克隆
+
+```bash
+git clone https://github.com/weiwei201906/NeoFlux.git
+cd NeoFlux
+git submodule update --init --recursive
+```
+
+`git submodule` 命令会拉取 `thirdparty/` 下的全部三方依赖（glog、gflags、glfw、taitank、freetype、gtest、tgfx、mpv）。`thirdparty/mpv` 是 libmpv 媒体后端源码；预编译 bundle（`thirdparty/mpv-bundle/`，gitignored）由构建脚本自动检测，用于"开箱即用"的 Windows 媒体播放。
 
 ### 构建
 
 ```bash
 mkdir build
 cd build
-cmake .. -G Ninja
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
 
+### 运行快速开始应用
+
+```bash
+./bin/neoflux_quickstart
+```
+
+应出现一个显示 "NeoFlux Quick Start" 文本的窗口。快速开始源码位于 `src/main.cpp`——替换它为你自己的 UI。
+
 ### 运行测试
 
-测试和示例默认禁用，需通过 CMake 选项启用：
-
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON 
-cmake --build build
+cmake -S .. -B . -DNEOFLUX_BUILD_TESTS=ON
+cmake --build .
 cd build && ctest --output-on-failure
-```
-
-### 运行示例
-
-示例**默认关闭**，需在配置时启用：
-
-```bash
-cmake -S . -B build -DNEOFLUX_BUILD_EXAMPLES=ON
-cmake --build build
-./build/bin/hello_neoflux
-```
-
-其他示例：
-
-```bash
-./build/bin/counter         # 计数器
-./build/bin/flex_demo       # flex 布局
-./build/bin/font_demo       # 字体系统
-./build/bin/scroll_demo     # 滚动视图
-./build/bin/loading_demo    # 状态机 + 协程动画
-./build/bin/drag_demo       # 可拖拽 Widget
 ```
 
 ## 配置（gflags）
@@ -102,22 +97,22 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 |---------------------------|--------|-----------|----------------------------------------------------------------------|
 | `--target_fps`            | int    | `60`      | 应用事件循环与渲染的目标帧率。                                       |
 | `--render_queue_capacity` | int    | `2048`    | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。 |
+| `--render_backend`        | string | `vulkan`  | 渲染后端选择：`vulkan`、`gl`、`cpu`。Vulkan/CPU 尚未实现时回退到 OpenGL 并输出警告。 |
 | `--verbose_logging`       | bool   | `false`   | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。               |
 | `--logtostderr`           | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
 | `--log_dir`               | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |
-| `--render_backend`        | string | `vulkan`  | 渲染后端选择：`vulkan`、`gl`、`cpu`。Vulkan/CPU 尚未实现时回退到 OpenGL 并输出警告。 |
 
 默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（`CMAKE_WIN32_EXECUTABLE`）。调试时使用 `--logtostderr --verbose_logging`。
 
 ## 字体系统
 
-NeoFlux 使用字体管理器，在启动时扫描可配置的字体目录，支持 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。默认目录为 `fonts/`。
+NeoFlux 使用字体管理器，在启动时扫描可配置的字体目录，支持 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。默认目录为 `assets/fonts/`。字体文件**不提交到 git**——请自行放置字体（或下载 Noto Sans SC，参见 [assets/fonts/README.md](assets/fonts/README.md)）。
 
 **在 `Init()` 之前配置字体目录：**
 
 ```cpp
 Application app;
-app.SetFontDir("./fonts/");  // 可选：覆盖默认的 "fonts"
+app.SetFontDir("./assets/fonts/");  // 可选：覆盖默认的 "assets/fonts"
 app.Init(argc, argv, 800, 600, "NeoFlux");
 ```
 
@@ -131,22 +126,20 @@ text->SetFont("NotoSansSC-Regular");  // 加载 <font_dir>/NotoSansSC-Regular.tt
 若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。相对路径从工作目录解析，并自动向上回退（`../`、`../../`）以适配构建子目录。
 
 > **警告：** 如果配置的字体目录为空，文本渲染会失败或显示乱码。发布前务必至少放入一个字体文件（如渲染中文需 CJK 字体）。在 `Init()` 之前调用 `SetFontDir()` 指定自定义目录。
->
-> **注意：** 运行示例（example）前，确保 `thirdparty/fonts/` 目录下有字体文件，否则文本会显示为乱码或空白。
 
 ### CMake 自动拷贝字体
 
-在你自己的工程中，将字体放在 `fonts/` 目录下，通过 CMake 在构建时自动拷贝到输出目录：
+NeoFlux 的 CMake 在 POST_BUILD 步骤将仓库 `assets/fonts/` 目录的字体拷贝到 `<输出目录>/assets/fonts/`。在你自己的工程中：
 
 ```cmake
 # CMakeLists.txt
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 
-# 构建时将 fonts/ 目录拷贝到可执行文件同级目录
+# 构建时将 assets/fonts/ 目录拷贝到可执行文件同级目录
 add_custom_command(TARGET my_app POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+  ${CMAKE_SOURCE_DIR}/assets/fonts $<TARGET_FILE_DIR:my_app>/assets/fonts
 )
 ```
 
@@ -154,7 +147,7 @@ add_custom_command(TARGET my_app POST_BUILD
 
 ```cpp
 Application app;
-app.SetFontDir("./fonts/");  // 对应拷贝到输出目录的 fonts/ 文件夹
+app.SetFontDir("./assets/fonts/");  // 对应拷贝到输出目录的 assets/fonts/ 文件夹
 app.Init(argc, argv, 800, 600, "My App");
 ```
 
@@ -163,17 +156,16 @@ app.Init(argc, argv, 800, 600, "My App");
 | 选项 | 默认值 | 说明 |
 |------|--------|------|
 | `NEOFLUX_BUILD_TESTS` | `OFF` | 构建单元测试（gtest）。 |
-| `NEOFLUX_BUILD_EXAMPLES` | `OFF` | 构建示例应用。 |
 | `NEOFLUX_ENABLE_CLANG_TIDY` | `OFF` | 将 clang-tidy 作为构建步骤运行。 |
 | `NEOFLUX_USE_TGFX` | `OFF` | 使用 tgfx 渲染后端（Windows 上需要 MSVC）。 |
-| `NEOFLUX_FFPLAY_PATH` | `""` | MediaWidget 使用的 ffplay 可执行文件路径。为空则运行时从 `PATH` 解析。 |
+| `NEOFLUX_USE_MPV` | `ON` | 启用 libmpv 媒体后端（桌面端）。配置时自动检测 `thirdparty/mpv-bundle/` → `thirdparty/mpv/` → 系统 libmpv；均未找到时媒体组件以警告编译为不可用状态。 |
 
 ## 构建测试
 
-测试和示例默认禁用，通过 `NEOFLUX_BUILD_TESTS` 和 `NEOFLUX_BUILD_EXAMPLES` CMake 选项启用：
+测试默认禁用，通过 `NEOFLUX_BUILD_TESTS` CMake 选项启用：
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
 cmake --build build -j 16
 cd build && ctest --output-on-failure
 ```
@@ -182,16 +174,17 @@ cd build && ctest --output-on-failure
 
 ```
 build/bin/
-├── *.exe              (9 个示例，每个约 1.8MB)
-├── libglog.dll        (自动拷贝，与 exe 同目录)
-├── libmpv-2.dll       (自动拷贝，与 exe 同目录)
-└── fonts/
-    └── NotoSansSC-Regular.ttf  (从 thirdparty/fonts/ 自动拷贝)
+├── neoflux_quickstart.exe   (快速开始应用，约 1.2MB)
+├── glog.dll                 (自动拷贝，与 exe 同目录)
+├── libmpv-2.dll             (自动拷贝，与 exe 同目录，若检测到 libmpv)
+└── assets/
+    └── fonts/
+        └── NotoSansCJKsc-Regular.otf  (从 assets/fonts/ 自动拷贝)
 ```
 
 - **Windows**: DLL 放在可执行文件同目录（标准 Windows 部署方式）。无需启动脚本或 PATH 设置，双击 exe 即可运行。
-- **Linux/macOS**: 示例设置 `RPATH=$ORIGIN/lib`，共享库相对于可执行文件查找。
-- **字体**: 构建前运行 `examples/download_fonts.ps1`（Windows）或 `examples/download_fonts.sh`（Linux/macOS）下载 Noto Sans SC。字体文件不提交到 git。
+- **Linux/macOS**: 共享库通过 RPATH 相对于可执行文件查找。
+- **字体**: 构建前将你自己的 `.ttf`/`.otf`/`.ttc` 文件放入 `assets/fonts/`。字体文件不提交到 git。
 
 ## 最小示例
 
@@ -219,6 +212,7 @@ int main(int argc, char** argv) {
   RouteRegistry::Instance().RegisterRoute("/", BuildHome);
 
   Application app;
+  app.SetFontDir("./assets/fonts/");
   app.Init(argc, argv, 800, 600, "NeoFlux");
   app.PushRoute("/");
   app.Run();
@@ -239,7 +233,7 @@ int main(int argc, char** argv) {
 | `ScrollView`      | 可滚动视口，支持滚轮与拖拽滚动，内容裁剪。                    |
 | `Draggable`       | 可拖拽容器，绘制时平移不影响 Taitank 布局。                   |
 | `TextField`       | 单行可编辑文本输入，支持光标导航、占位符、UTF-8 和焦点管理。   |
-| `MediaWidget`     | 基于 ffplay 子进程的媒体播放，跨平台，无需链接 FFmpeg。        |
+| `MediaWidget`     | 基于 libmpv 的嵌入式媒体播放（桌面端），视频帧渲染到 GL 纹理参与合成。 |
 | `Expanded`        | 设置了 flex_grow 的容器，填充父容器剩余空间。                 |
 | `SizedBox`        | 固定宽高的容器，用于固定间距。                                |
 | `StatelessWidget` | 无状态 Widget 基类。                                          |
@@ -284,36 +278,6 @@ app.PopRoute();              // 返回上一路由
 
 > **提示：** 哪怕只有一个路由，也必须先注册再调用 `PushRoute`——`Init` 不会自动显示任何内容。
 
-## 示例
-
-### hello_neoflux
-
-完整演示，包含有状态 Widget、按钮回调、路由导航、flex 布局。
-
-### counter
-
-极简计数器，演示 `StatefulWidget`、`Button` 回调、flex row/column 布局。
-
-### flex_demo
-
-布局展示示例，演示 Taitank flex 布局：row/column 方向、居中对齐、flex grow、row reverse，使用彩色方块可视化布局效果。
-
-### font_demo
-
-字体系统演示：默认字体、显式 `SetFont()` 选择字体、多种字号/颜色、CJK 文本渲染。将字体放入 `thirdparty/fonts/` 后按名称引用即可。
-
-### scroll_demo
-
-`ScrollView` 演示：标题栏 + 可滚动的彩色列表。支持滚轮滚动与拖拽滚动，内容自动裁剪到视口。
-
-### loading_demo
-
-演示 Widget 状态机与 C++20 协程的集成。"Start Loading" 按钮将 Widget 切换到加载状态；协程在约 2 秒内将进度条从 0% 动画到 100%，每帧 yield 一次。完成后 Widget 切换到成功状态。
-
-### drag_demo
-
-演示 `Draggable` Widget 与指针事件，以及"状态机作为条件锁"模式。彩色方块可拖拽；状态标签显示当前状态（Idle/Hovering/Dragging）和偏移量。指针按下时启动长按检测协程；如果 500ms 内释放，协程观察到状态变化后静默返回；如果按住超过 500ms，显示 "[Long Press!]" 指示器。
-
 ## 协程
 
 NeoFlux 支持 C++20 协程用于异步工作。在事件循环上调度一个 `Task<void>`，它在就绪时的下一帧恢复：
@@ -354,6 +318,16 @@ Widget 携带轻量 `WidgetState`（Idle、Hovering、Dragging 等）。状态�
 
 > **警告：** 捕获 Widget 指针的协程必须使用 `std::weak_ptr`，并在每次 `co_await` 后重新 lock。Widget 可能在协程挂起于 `Sleep` 或 `Yield` 时被销毁；恢复后访问裸指针会导致 use-after-free。
 
+## 媒体播放（libmpv）
+
+桌面端媒体组件基于 [libmpv](https://mpv.io/)（GPL-3.0，与 NeoFlux 协议一致），通过 mpv 渲染 API 将视频帧解码到 OpenGL 纹理参与合成。
+
+- `thirdparty/mpv/` 为 mpv **源码子模块**（`git submodule update --init` 获取），用于自行构建 libmpv。
+- Windows 开箱即用：将预编译 bundle 放入 `thirdparty/mpv-bundle/`（`include/mpv/`、`libmpv.dll.a`、`libmpv-2.dll`），CMake 自动检测并链接，并把 `libmpv-2.dll` 拷贝到 `bin/`。
+- Linux/macOS：安装系统 libmpv（`apt install libmpv-dev` / `brew install mpv`）即可，CMake 通过 `find_package(mpv)` / `pkg-config` 自动发现。
+- 无可用 libmpv 时，`MediaWidget` 编译为不可用状态并输出警告，不影响其余框架功能。
+
+媒体播放器单元测试 `neoflux/tests/mpv_media_player_test.cpp`（构建测试时自动启用）使用 `tests/data/sample.mp4`（2 秒 320x240 H.264 测试片段）验证完整播放链路：加载 → 播放 → 首帧 → 暂停 → 停止 → 跳转 → 状态回调。该片段由 ffmpeg 生成、体积约 120KB，已随仓库提交。
 ## 移动端渲染
 
 移动端不使用 GLFW，tgfx 直接渲染到平台提供的 Surface：
@@ -371,23 +345,46 @@ app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
 ## 项目结构
 
 ```
-neoflux/
-├── CMakeLists.txt          # 根构建配置
-├── LICENSE                 # GPL-3.0 开源协议
-├── README.md               # 英文文档
-├── README-zh.md            # 中文文档（本文件）
-├── .clang-tidy             # clang-tidy 规则
-├── .clang-format           # 代码风格
-├── thirdparty/             # 第三方依赖（FetchContent）
-│   ├── fonts/              # 字体目录（开发者自行放入）
-│   └── CMakeLists.txt      # FetchContent 配置
-├── include/neoflux/        # 公共头文件（仅声明）
-│   ├── core/               # 环形队列、类型定义、协程、工具
-│   ├── widget/             # Widget 系统
-│   ├── app/                # Application、EventLoop
-│   └── render/             # 渲染层、命令、tgfx、PlatformBridge
-├── src/                    # 实现（.cpp）
-├── tests/                  # GTest 单元测试
-├── examples/               # 示例应用
-└── docs/                   # VitePress 文档
+NeoFlux/
+├── CMakeLists.txt           # 宿主快速开始构建（引入 thirdparty + neoflux）
+├── .clang-tidy              # clang-tidy 规则
+├── .clang-format            # 代码风格
+├── assets/
+│   └── fonts/               # 字体目录（gitignored，自行放置字体）
+├── neoflux/                 # 自包含框架（也可作为子模块使用）
+│   ├── CMakeLists.txt       # 框架库构建
+│   ├── include/neoflux/     # 公共头文件（仅声明）
+│   │   ├── core/            # 环形队列、任务、类型定义、工具
+│   │   ├── widget/          # Widget 系统
+│   │   ├── app/             # Application、EventLoop
+│   │   ├── render/          # 渲染层、命令、tgfx 门面
+│   │   └── native/          # 平台桥接（GLFW、移动端、GL 渲染器）
+│   ├── src/                 # 实现（.cpp）
+│   ├── tests/               # GTest 单元测试
+│   └── cmake/               # CMake 模块（CompilerFlags、android、ios）
+├── src/                     # 快速开始宿主工程（你的应用）
+│   ├── main.cpp             # 入口：注册路由 → Init → PushRoute("/") → Run
+│   ├── router/              # 路由注册（index.h/.cpp，集中注册所有路由）
+│   └── views/               # 每个路由一个 View（home/counter/about）
+├── thirdparty/              # Git 子模块（glog、gflags、glfw、taitank、tgfx、mpv 等）
+├── docs/                    # VitePress 双语文档
+├── README.md
+└── README-zh.md
 ```
+
+## 文档
+
+完整双语文档（VitePress）位于 `docs/`：
+
+- [指南（英文）](docs/guide/introduction.md)
+- [指南（中文）](docs/zh/guide/introduction.md)
+
+## 贡献
+
+参见 [docs/guide/contributing.md](docs/guide/contributing.md)。要求：
+
+- C++20、Google C++ 编码规范、源码纯 ASCII
+- 每次 PR 前通过 clang-tidy 零警告检查
+- RAII + 智能指针，禁止裸所有权指针
+- 新功能配套单元测试（gtest）
+- 提交前在本地完整复现验证

@@ -1,18 +1,29 @@
 # =============================================================================
-# NeoFlux - A cross-platform C++20 UI framework
+# NeoFlux - host project skeleton (user applications)
 #
-# Two-layer architecture:
-#   - Application layer: business logic + Taitank layout engine
-#   - Render layer: tgfx (mobile) / GLFW bridge (desktop)
+# This top-level CMakeLists is the "quick-start" project for building your own
+# NeoFlux application directly on top of a clone of this repository:
 #
-# Communication: SPSC lock-free ring queue (FIFO)
+#   1. thirdparty/  - third-party dependencies (git submodules)
+#   2. neoflux/     - the framework library (also a git submodule)
+#   3. src/         - YOUR application code (see src/main.cpp)
+#
+# To build:  cmake -B build && cmake --build build
+# To test:   cmake -B build -DNEOFLUX_BUILD_TESTS=ON && ctest --test-dir build
+#
+# The framework is consumed via add_subdirectory(neoflux), so you can also
+# vendor only the neoflux/ directory into your own project and link the
+# `neoflux` target directly.
+#
+# Adding a new source file to your app: list it under add_executable below
+# (e.g. src/views/home_view.cpp, src/router/index.cpp).
 # =============================================================================
 
 cmake_minimum_required(VERSION 3.20)
 
-project(neoflux
+project(neoflux_app
   VERSION 0.1.0
-  DESCRIPTION "Cross-platform C++20 UI framework with Flutter-like widget model"
+  DESCRIPTION "NeoFlux application quick-start project"
   LANGUAGES CXX
 )
 
@@ -25,7 +36,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Default build type
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
@@ -35,296 +45,33 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-# Position-independent code for shared lib linkage
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# ---------------------------------------------------------------------------
-# Options
-# ---------------------------------------------------------------------------
-option(NEOFLUX_BUILD_TESTS    "Build unit tests"         OFF)
-option(NEOFLUX_BUILD_EXAMPLES "Build example applications" OFF)
-option(NEOFLUX_ENABLE_CLANG_TIDY "Enable clang-tidy as a build step (requires correct sysroot config)" OFF)
-option(NEOFLUX_USE_TGFX      "Use tgfx rendering backend (requires MSVC on Windows)" OFF)
-# Path to the ffplay executable used by MediaWidget. If empty, "ffplay" is
-# resolved from PATH at runtime. Set this to bundle a specific ffplay build.
-set(NEOFLUX_FFPLAY_PATH "" CACHE STRING "Path to ffplay executable (empty = use PATH)")
-
-# ---------------------------------------------------------------------------
-# Third-party dependencies
-# ---------------------------------------------------------------------------
 # Allow old third-party CMakeLists (e.g. gflags 2.2.2 requires CMake < 3.5
 # compatibility which was removed in CMake 4.x).
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
+# ---------------------------------------------------------------------------
+# Third-party dependencies (git submodules under thirdparty/)
+# ---------------------------------------------------------------------------
 add_subdirectory(thirdparty)
 
-# ---------------------------------------------------------------------------
-# Compiler flags
-# ---------------------------------------------------------------------------
-include(cmake/CompilerFlags.cmake)
+add_subdirectory(neoflux)
 
 # ---------------------------------------------------------------------------
-# clang-tidy integration
+# Your application
 # ---------------------------------------------------------------------------
-if(NEOFLUX_ENABLE_CLANG_TIDY)
-  find_program(CLANG_TIDY_EXE NAMES clang-tidy clang-tidy-18 clang-tidy-17 clang-tidy-16)
-  if(CLANG_TIDY_EXE)
-    message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
-    set(CMAKE_CXX_CLANG_TIDY
-      "${CLANG_TIDY_EXE}"
-      "-config-file=${CMAKE_SOURCE_DIR}/.clang-tidy"
-    )
-  else()
-    message(STATUS "clang-tidy not found - skipping static analysis")
-  endif()
-endif()
-
-# ---------------------------------------------------------------------------
-# Core library
-# ---------------------------------------------------------------------------
-add_library(neoflux STATIC
-  src/core/ring_queue.cpp
-  src/core/font_manager.cpp
-  src/core/types.cpp
-  src/widget/widget.cpp
-  src/widget/widget_arena.cpp
-  src/widget/container.cpp
-  src/widget/text.cpp
-  src/widget/button.cpp
-  src/widget/scroll_view.cpp
-  src/widget/sized_box.cpp
-  src/widget/expanded.cpp
-  src/widget/draggable.cpp
-  src/widget/text_field.cpp
-  src/widget/media_widget.cpp
-  src/widget/route_registry.cpp
-  src/app/application.cpp
-  src/app/event_loop.cpp
-  src/render/render_layer.cpp
-  src/render/render_command.cpp
-  src/render/render_context.cpp
-  src/render/tgfx_renderer.cpp
-  src/core/mapped_memory.cpp
-  src/native/desktop/mpv_media_player.cpp
-  src/media/media_player_factory.cpp
+# Keep application sources grouped so new files are easy to add. Views live
+# under src/views/ (one view per route); routes are registered centrally in
+# src/router/index.cpp.
+set(QUICKSTART_SOURCES
+  src/main.cpp
+  src/router/index.cpp
+  src/views/home_view.cpp
+  src/views/counter_view.cpp
+  src/views/about_view.cpp
 )
 
-# Platform-specific bridge implementations.
-if(ANDROID OR (APPLE AND IOS))
-  target_sources(neoflux PRIVATE src/native/mobile/mobile_bridge.cpp)
-else()
-  target_sources(neoflux PRIVATE src/native/desktop/glfw_bridge.cpp)
-endif()
-
-# Platform-specific media player implementations.
-if(ANDROID)
-  target_sources(neoflux PRIVATE src/native/android/android_media_player.cpp)
-elseif(APPLE AND IOS)
-  target_sources(neoflux PRIVATE src/native/ios/ios_media_player.mm)
-  # Enable Objective-C++ for the iOS media player implementation.
-  set_source_files_properties(src/native/ios/ios_media_player.mm
-    PROPERTIES COMPILE_FLAGS "-x objective-c++")
-endif()
-
-# Include platform-specific build configuration (Android NDK / iOS frameworks).
-include(${CMAKE_SOURCE_DIR}/cmake/android.cmake OPTIONAL)
-include(${CMAKE_SOURCE_DIR}/cmake/ios.cmake OPTIONAL)
-
-target_include_directories(neoflux
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-  PRIVATE
-    ${CMAKE_SOURCE_DIR}/thirdparty
-)
-
-# OpenGL is required for both the GLFW bridge and the OpenGL fallback renderer.
-find_package(OpenGL REQUIRED)
-
-target_link_libraries(neoflux
-  PUBLIC
-    taitank
-    glog::glog
-    gflags
-    freetype
-    OpenGL::GL
-)
-
-# tgfx is an optional rendering backend. When enabled, tgfx performs all
-# rendering; when disabled, a built-in OpenGL renderer (shader + VBO +
-# FreeType for UTF-8 text) is used. GLFW remains only a window/context
-# bridge in both cases.
-if(NEOFLUX_USE_TGFX AND TARGET tgfx)
-  target_link_libraries(neoflux PRIVATE tgfx)
-  target_compile_definitions(neoflux PRIVATE NEOFLUX_HAVE_TGFX=1)
-  target_include_directories(neoflux PRIVATE
-    ${tgfx_SOURCE_DIR}/src
-    ${tgfx_SOURCE_DIR}/include
-  )
-endif()
-
-# GLFW is only available on desktop platforms.
-if(TARGET glfw)
-  target_link_libraries(neoflux PRIVATE glfw)
-endif()
-
-# ---------------------------------------------------------------------------
-# Copy third-party runtime DLLs to the exe output directory on Windows.
-# Placing DLLs next to the executable is the standard Windows deployment
-# model (loader searches the exe directory first) and requires no launcher
-# scripts, PATH manipulation, or delay-load hacks. Works across MSVC,
-# MinGW, and Clang. Fonts go to bin/fonts/, media assets to bin/assets/.
-# ---------------------------------------------------------------------------
-if(WIN32)
-  set(NEOFLUX_DLL_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-  # Copy glog runtime (DLL on shared builds, .a on static).
-  # $<TARGET_FILE:...> resolves to the actual output path regardless of
-  # build type (Debug/Release) or generator.
-  add_custom_command(TARGET neoflux POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:glog::glog>"
-    "${NEOFLUX_DLL_DIR}/"
-    COMMENT "Copying glog runtime to bin/"
-    ERROR_QUIET)
-endif()
-
-# ---------------------------------------------------------------------------
-# Copy fonts from thirdparty/fonts/ to <output>/fonts/ at build time.
-# Fonts are NOT committed to git (see .gitignore); run
-# examples/download_fonts.ps1 (Windows) or examples/download_fonts.sh
-# (Linux/macOS) to fetch NotoSansSC before building examples.
-# ---------------------------------------------------------------------------
-set(NEOFLUX_FONT_SRC_DIR "${CMAKE_SOURCE_DIR}/thirdparty/fonts")
-set(NEOFLUX_FONT_DST_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fonts")
-if(EXISTS "${NEOFLUX_FONT_SRC_DIR}")
-  add_custom_command(TARGET neoflux POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${NEOFLUX_FONT_DST_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-      "${NEOFLUX_FONT_SRC_DIR}"
-      "${NEOFLUX_FONT_DST_DIR}"
-    COMMENT "Copying fonts to bin/fonts/"
-    ERROR_QUIET)
-endif()
-
-# libmpv: integrated media player backend (desktop only).
-# Provides video decoding + OpenGL texture output via the mpv render API.
-# Bundled in thirdparty/mpv/ for out-of-the-box use on Windows.
-# On Linux/macOS, falls back to system libmpv (apt install libmpv-dev / brew install mpv).
-option(NEOFLUX_USE_MPV "Enable libmpv media player backend" ON)
-if(NEOFLUX_USE_MPV AND NOT ANDROID AND NOT IOS)
-  set(NEOFLUX_MPV_DIR "${CMAKE_SOURCE_DIR}/thirdparty/mpv")
-  if(EXISTS "${NEOFLUX_MPV_DIR}/include/mpv/client.h")
-    # Use bundled libmpv from thirdparty/mpv.
-    target_include_directories(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/include")
-    target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
-    if(WIN32)
-      # MinGW: link against libmpv.dll.a; copy libmpv-2.dll to output.
-      if(EXISTS "${NEOFLUX_MPV_DIR}/libmpv.dll.a")
-        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/libmpv.dll.a")
-        message(STATUS "NeoFlux: libmpv media backend enabled (bundled, MinGW)")
-      elseif(EXISTS "${NEOFLUX_MPV_DIR}/mpv.lib")
-        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/mpv.lib")
-        message(STATUS "NeoFlux: libmpv media backend enabled (bundled, MSVC)")
-      endif()
-      # Copy runtime DLL to the exe output directory (same dir as examples).
-      if(EXISTS "${NEOFLUX_MPV_DIR}/libmpv-2.dll")
-        add_custom_command(TARGET neoflux POST_BUILD
-          COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          "${NEOFLUX_MPV_DIR}/libmpv-2.dll"
-          "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libmpv-2.dll"
-          COMMENT "Copying libmpv-2.dll to bin/")
-      endif()
-    else()
-      # Linux/macOS: link against system libmpv if bundled .so/.dylib exists.
-      if(EXISTS "${NEOFLUX_MPV_DIR}/libmpv.so")
-        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/libmpv.so")
-      elseif(EXISTS "${NEOFLUX_MPV_DIR}/libmpv.dylib")
-        target_link_libraries(neoflux PRIVATE "${NEOFLUX_MPV_DIR}/libmpv.dylib")
-      else()
-        target_link_libraries(neoflux PRIVATE mpv)
-      endif()
-      message(STATUS "NeoFlux: libmpv media backend enabled (bundled)")
-    endif()
-  else()
-    # Fallback: find system libmpv via find_package or pkg-config.
-    find_package(mpv QUIET)
-    if(mpv_FOUND)
-      target_link_libraries(neoflux PRIVATE mpv::mpv)
-      target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
-      message(STATUS "NeoFlux: libmpv media backend enabled (system)")
-    else()
-      find_package(PkgConfig QUIET)
-      if(PkgConfig_FOUND)
-        pkg_check_modules(MPV QUIET mpv)
-        if(MPV_FOUND)
-          target_link_libraries(neoflux PRIVATE ${MPV_LIBRARIES})
-          target_include_directories(neoflux PRIVATE ${MPV_INCLUDE_DIRS})
-          target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
-          message(STATUS "NeoFlux: libmpv media backend enabled (pkg-config)")
-        else()
-          message(STATUS "NeoFlux: libmpv not found, media widget will be non-functional")
-        endif()
-      else()
-        message(STATUS "NeoFlux: libmpv not found, media widget will be non-functional")
-      endif()
-    endif()
-  endif()
-endif()
-
-target_compile_features(neoflux PUBLIC cxx_std_20)
-
-# Strict warnings for neoflux code only (not third-party deps).
-# -Wno-conversion/-Wno-sign-conversion: render code mixes int coords with
-# size_t indices; unavoidable without excessive casts.
-# -Wno-error=attributes: glog headers emit dllimport attribute warnings on
-# Windows; warning is still shown, just not fatal.
-target_compile_options(neoflux PRIVATE
-  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror -Wno-conversion -Wno-sign-conversion -Wno-error=attributes>
-)
-
-# Platform-specific definitions
-if(WIN32)
-  target_compile_definitions(neoflux PUBLIC NEOFLUX_PLATFORM_WINDOWS=1)
-elseif(APPLE)
-  target_compile_definitions(neoflux PUBLIC NEOFLUX_PLATFORM_MACOS=1)
-elseif(UNIX AND NOT APPLE)
-  target_compile_definitions(neoflux PUBLIC NEOFLUX_PLATFORM_LINUX=1)
-endif()
-
-if(ANDROID OR IOS)
-  target_compile_definitions(neoflux PUBLIC NEOFLUX_PLATFORM_MOBILE=1)
-else()
-  target_compile_definitions(neoflux PUBLIC NEOFLUX_PLATFORM_DESKTOP=1)
-endif()
-
-# FFplay path for MediaWidget. If set, compiles in the path as a string
-# literal; otherwise MediaWidget resolves "ffplay" from PATH at runtime.
-if(NOT "${NEOFLUX_FFPLAY_PATH}" STREQUAL "")
-  target_compile_definitions(neoflux PRIVATE
-    NEOFLUX_FFPLAY_PATH="${NEOFLUX_FFPLAY_PATH}")
-endif()
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-if(NEOFLUX_BUILD_TESTS)
-  enable_testing()
-  add_subdirectory(tests)
-endif()
-
-# ---------------------------------------------------------------------------
-# Examples
-# ---------------------------------------------------------------------------
-if(NEOFLUX_BUILD_EXAMPLES)
-  add_subdirectory(examples)
-endif()
-
-# ---------------------------------------------------------------------------
-# Install rules
-# ---------------------------------------------------------------------------
-install(TARGETS neoflux
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-)
-
-install(DIRECTORY include/neoflux DESTINATION include)
+add_executable(main ${QUICKSTART_SOURCES})
+target_link_libraries(main PRIVATE neoflux)
+target_include_directories(main PRIVATE src)

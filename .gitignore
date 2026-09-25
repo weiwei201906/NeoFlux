@@ -6,13 +6,17 @@ build-test/
 cmake-build-*/
 out/
 
-# Third-party fetched dependencies
+# Third-party fetched dependencies (legacy FetchContent cache)
 thirdparty/_deps/
 
-# Downloaded font files (use download_fonts scripts to fetch)
-thirdparty/fonts/*.ttf
-thirdparty/fonts/*.otf
-thirdparty/fonts/*.ttc
+# Downloaded font files (download scripts are removed; fetch your own fonts)
+assets/fonts/*.ttf
+assets/fonts/*.otf
+assets/fonts/*.ttc
+
+# Prebuilt libmpv bundle (download via scripts/download_libmpv.*; the mpv
+# source tree itself is a git submodule under thirdparty/mpv)
+thirdparty/mpv-bundle/
 
 # IDE files
 .idea/
