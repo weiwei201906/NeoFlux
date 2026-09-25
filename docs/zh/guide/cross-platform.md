@@ -71,7 +71,7 @@ app->GetRenderLayer()->OnSurfaceCreated(new_native_window);
 
 ## 构建系统
 
-CMake 构建，FetchContent 管理依赖，所有第三方库放在 `thirdparty/` 下。
+CMake 构建，Git Submodule 管理依赖（`git submodule update --init --recursive`），所有第三方库放在 `thirdparty/` 下。
 
 ## 下一步
 

@@ -4,12 +4,12 @@
 
 - **C++20 compiler**: GCC 10+, Clang 12+, or MSVC 2022+
 - **CMake**: 3.20 or later
-- **Git**: for fetching dependencies
-- **Python**: 3.8+ (for some third-party builds)
+- **Git**: for cloning the repository and initializing submodules
+- **Python**: 3.8+ (used by some third-party build scripts)
 
 ### Platform-specific
 
-**Windows**: MinGW-w64 or MSVC. The framework is tested with MinGW-w64 (GCC 15).
+**Windows**: MinGW-w64 or MSVC. The framework is tested with MSVC 2022+.
 
 **Linux**: `build-essential`, `cmake`, `libgl1-mesa-dev`, `libx11-dev`,
 `libxrandr-dev`, `libxinerama-dev`, `libxcursor-dev`, `libxi-dev`.
@@ -21,7 +21,12 @@
 ```bash
 git clone https://github.com/weiwei201906/NeoFlux.git
 cd NeoFlux
+git submodule update --init --recursive   # fetch third-party dependencies
 ```
+
+Third-party libraries (glog, gflags, glfw, taitank, freetype, gtest, tgfx)
+are managed as **Git submodules** under `thirdparty/`. Run the submodule
+command above once after cloning.
 
 ## Build
 
@@ -37,7 +42,11 @@ cmake --build . -j
 |--------|---------|-------------|
 | `CMAKE_BUILD_TYPE` | `Release` | Build configuration |
 | `NEOFLUX_BUILD_TESTS` | `OFF` | Build unit tests |
-| `NEOFLUX_BUILD_EXAMPLES` | `ON` | Build example applications |
+| `NEOFLUX_ENABLE_CLANG_TIDY` | `OFF` | Run clang-tidy as a build step |
+| `NEOFLUX_USE_TGFX` | `OFF` | Use the tgfx rendering backend (MSVC) |
+
+Examples are not bundled; create your own application under `src/` (see the
+Quick Start guide) and place fonts in `assets/fonts/`.
 
 ### Building with Tests
 
@@ -49,11 +58,10 @@ ctest --output-on-failure
 
 ## Third-Party Dependencies
 
-All dependencies are fetched via CMake `FetchContent` and placed under
-`thirdparty/_deps/` (excluded from git):
+All dependencies are Git submodules under `thirdparty/`:
 
 - **Taitank** — flexbox layout engine
-- **tgfx** — 2D graphics rendering (mobile)
+- **tgfx** — 2D graphics rendering (mobile, optional)
 - **GLFW** — desktop window/input
 - **FreeType** — font rasterization
 - **glog** — logging
@@ -63,7 +71,7 @@ All dependencies are fetched via CMake `FetchContent` and placed under
 ## Verify
 
 ```bash
-./bin/hello_neoflux
+./bin/neoflux_app
 ```
 
-You should see a window with "Hello NeoFlux" and interactive buttons.
+You should see a window with "NeoFlux Quick Start" text.

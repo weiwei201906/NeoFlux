@@ -30,17 +30,21 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-Examples and tests are off by default. Enable them with:
+Examples and tests are off by default. Enable tests with:
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
 ```
+
+Examples are not bundled: create your own application under `src/` (see the
+Quick Start guide) and place fonts in `assets/fonts/`.
 
 ### Why is the build slow the first time?
 
-NeoFlux uses FetchContent to download and build third-party dependencies
-(glog, gflags, glfw, taitank, freetype, gtest). Subsequent builds are fast
-because dependencies are cached in `thirdparty/_deps/`.
+NeoFlux builds third-party dependencies (glog, gflags, glfw, taitank,
+freetype, gtest) from Git submodules under `thirdparty/`. The first build
+compiles them from source; subsequent builds are incremental and fast.
+Initialize submodules once with `git submodule update --init --recursive`.
 
 ### How do I cross-compile?
 
@@ -62,7 +66,7 @@ Select with `--render_backend=vulkan|gl|cpu`.
 
 Common causes:
 1. **No font loaded** — Text widgets need a `.ttf`/`.otf` file in the font
-   directory. Call `app.SetFontDir("./fonts/")` before `Init()`.
+   directory. Call `app.SetFontDir("./assets/fonts/")` before `Init()`.
 2. **No route pushed** — All examples require `RouteRegistry::RegisterRoute()`
    followed by `app.PushRoute("/")`.
 3. **Window not exposed** — The first frame may need a resize or focus event

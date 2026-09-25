@@ -10,9 +10,12 @@ Create a new directory for your project. NeoFlux should live under
 ```
 my_app/
 ├── CMakeLists.txt
-├── main.cpp
+├── src/
+│   └── main.cpp
+├── assets/
+│   └── fonts/          # your .ttf/.otf files (copied to output at build time)
 └── thirdparty/
-    └── neoflux/      # NeoFlux source (git submodule or copy)
+    └── neoflux/        # NeoFlux source (git submodule or copy)
 ```
 
 ## 2. Get NeoFlux
@@ -22,9 +25,14 @@ my_app/
 ```bash
 git init
 git submodule add https://github.com/weiwei201906/NeoFlux.git thirdparty/neoflux
+git submodule update --init --recursive   # fetch NeoFlux's own third-party deps
 ```
 
-### Option B: FetchContent (no submodule)
+NeoFlux itself keeps its third-party libraries (glog, gflags, glfw, taitank,
+freetype, gtest, tgfx) as submodules under `thirdparty/`. After cloning, run
+`git submodule update --init --recursive` once to fetch them.
+
+### Option B: FetchContent
 
 Add this to your `CMakeLists.txt` (see below) — NeoFlux is downloaded
 automatically at configure time into `thirdparty/`.
@@ -69,8 +77,8 @@ int main(int argc, char** argv) {
 
   Application app;
   // Configure the font directory before Init(). Place .ttf/.otf files in
-  // fonts/ (or your custom directory). See Font System docs.
-  app.SetFontDir("./fonts/");
+  // assets/fonts/ (or your custom directory). See Font System docs.
+  app.SetFontDir("./assets/fonts/");
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
@@ -90,7 +98,7 @@ is pushed.
 
 :::warning
 Text widgets require font files. Place at least one `.ttf`/`.otf` font in your
-configured font directory (`fonts/` by default) before running.
+configured font directory (`assets/fonts/` by default) before running.
 Without fonts, all text renders as garbled or blank.
 :::
 
@@ -106,27 +114,26 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # NeoFlux lives under thirdparty/ to keep dependencies isolated.
+# It brings its own third-party submodules (glog, glfw, taitank, ...).
 add_subdirectory(thirdparty/neoflux)
 
-add_executable(my_app main.cpp)
+add_executable(my_app src/main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 
-# Copy fonts/ next to the executable on every build.
-# Place your .ttf/.otf files in ${CMAKE_SOURCE_DIR}/fonts/
+# Copy assets/fonts next to the executable on every build.
+# Place your .ttf/.otf files in ${CMAKE_SOURCE_DIR}/assets/fonts/
 add_custom_command(TARGET my_app POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+  ${CMAKE_SOURCE_DIR}/assets/fonts $<TARGET_FILE_DIR:my_app>/assets/fonts
 )
 ```
 
-> **Note:** NeoFlux examples and tests are **off by default**. To build them,
-> pass `-DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON` at configure time.
+> **Note:** NeoFlux unit tests are **off by default**. To build them,
+> pass `-DNEOFLUX_BUILD_TESTS=ON` at configure time and run `ctest`.
 >
-> **Fonts:** Examples require font files. Run `examples/download_fonts.ps1`
-> (Windows) or `examples/download_fonts.sh` (Linux/macOS) to fetch Noto Sans
-> SC into `thirdparty/fonts/`. CMake copies them to `bin/fonts/` at build
-> time; examples call `SetFontDir("./fonts/")`. Without fonts, text renders
-> as garbled or blank.
+> **Fonts:** Place font files in `assets/fonts/`. CMake copies them to
+> `bin/assets/fonts/` at build time; call `SetFontDir("./assets/fonts/")`.
+> Without fonts, text renders as garbled or blank.
 
 ### With FetchContent
 
@@ -146,7 +153,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(neoflux)
 
-add_executable(my_app main.cpp)
+add_executable(my_app src/main.cpp)
 target_link_libraries(my_app PRIVATE neoflux)
 ```
 

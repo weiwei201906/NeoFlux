@@ -10,7 +10,7 @@ You must configure the font directory before calling `Application::Init()`.
 If no fonts are found, all text widgets will render as garbled or blank.
 :::
 
-By default, NeoFlux scans `fonts/` for font files. To use a
+By default, NeoFlux scans `assets/fonts/` for font files. To use a
 different directory, call `Application::SetFontDir()` **before** `Init()`:
 
 ```cpp
@@ -30,7 +30,7 @@ handle build subdirectories.
 Place font files (`.ttf`, `.otf`, `.ttc`) in your configured font directory:
 
 ```
-fonts/                    (default, or your custom path)
+assets/fonts/               (default, or your custom path)
   NotoSansSC-Regular.ttf
   Roboto-Bold.ttf
 ```
@@ -49,7 +49,7 @@ application. For CJK text, include a CJK-capable font such as NotoSansSC.
 ### Default Font
 
 If no font is specified, NeoFlux uses the first font found in
-`fonts/`.
+`assets/fonts/`.
 
 ```cpp
 auto text = std::make_shared<Text>("Hello");  // uses default font
@@ -100,7 +100,7 @@ text->SetFont("NotoSansSC-Regular");
 
 ## Font Search Paths
 
-`FontManager` searches the configured directory (default: `fonts/`)
+`FontManager` searches the configured directory (default: `assets/fonts/`)
 relative to the working directory, then falls back upward:
 
 - `<font_dir>/`
@@ -113,7 +113,9 @@ or the build output directory. Configure the directory via
 
 ## CMake: Auto-Copy Fonts at Build Time
 
-In your own project, place fonts in a `fonts/` directory and use CMake to copy
+NeoFlux's own CMake copies fonts from the repository's `assets/fonts/`
+directory to `<output>/assets/fonts/` in a POST_BUILD step. In your own
+project, place fonts in an `assets/fonts/` directory and use CMake to copy
 them next to the executable on every build:
 
 ```cmake
@@ -122,7 +124,7 @@ target_link_libraries(my_app PRIVATE neoflux)
 
 add_custom_command(TARGET my_app POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  ${CMAKE_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:my_app>/fonts
+  ${CMAKE_SOURCE_DIR}/assets/fonts $<TARGET_FILE_DIR:my_app>/assets/fonts
 )
 ```
 
@@ -130,7 +132,7 @@ Then configure the directory in code:
 
 ```cpp
 Application app;
-app.SetFontDir("./fonts/");  // matches the copied fonts/ folder
+app.SetFontDir("./assets/fonts/");  // matches the copied assets/fonts/ folder
 app.Init(argc, argv, 800, 600, "My App");
 ```
 

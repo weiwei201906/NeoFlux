@@ -21,7 +21,7 @@ features:
   - title: C++20 协程
     details: 内置 Task\<void\> 协程支持，Yield() 帧同步与 Sleep() 定时器，状态机作为协程条件锁。
   - title: 跨平台
-    details: Windows / Linux / macOS 桌面端，Android / iOS 移动端，CMake 构建，FetchContent 管理依赖。
+    details: Windows / Linux / macOS 桌面端，Android / iOS 移动端，CMake 构建，Git Submodule 管理依赖。
   - title: 现代 C++
     details: C++20 标准，std::string_view、designated initializers、RAII 智能指针，Google 编码规范，clang-tidy 零警告。
   - title: 工程化

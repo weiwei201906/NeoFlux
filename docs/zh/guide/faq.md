@@ -23,15 +23,17 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-示例和测试默认关闭。启用它们：
+示例和测试默认关闭。启用测试：
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_EXAMPLES=ON -DNEOFLUX_BUILD_TESTS=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
 ```
+
+示例不随仓库发布：在 `src/` 下创建你自己的应用（见快速开始指南），并把字体放入 `assets/fonts/`。
 
 ### 为什么第一次构建很慢？
 
-NeoFlux 使用 FetchContent 下载并构建第三方依赖（glog、gflags、glfw、taitank、freetype、gtest）。后续构建很快，因为依赖缓存在 `thirdparty/_deps/` 中。
+NeoFlux 从 `thirdparty/` 下的 Git 子模块构建第三方依赖（glog、gflags、glfw、taitank、freetype、gtest）。首次构建从源码编译它们；后续构建为增量式，速度很快。克隆后先执行一次 `git submodule update --init --recursive`。
 
 ### 如何交叉编译？
 
@@ -50,7 +52,7 @@ NeoFlux 使用 FetchContent 下载并构建第三方依赖（glog、gflags、glf
 ### 为什么窗口是黑的？
 
 常见原因：
-1. **未加载字体** — 文本 Widget 需要字体目录中有 `.ttf`/`.otf` 文件。在 `Init()` 前调用 `app.SetFontDir("./fonts/")`。
+1. **未加载字体** — 文本 Widget 需要字体目录中有 `.ttf`/`.otf` 文件。在 `Init()` 前调用 `app.SetFontDir("./assets/fonts/")`。
 2. **未推送路由** — 所有示例都需要 `RouteRegistry::RegisterRoute()` 然后 `app.PushRoute("/")`。
 3. **窗口未暴露** — 某些平台上第一帧可能需要 resize 或 focus 事件。
 

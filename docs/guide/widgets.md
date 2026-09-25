@@ -263,54 +263,52 @@ and hit-testing will fail (click does nothing).
 
 ## MediaWidget
 
-A media playback widget backed by the **ffplay** subprocess (from FFmpeg).
-Launches ffplay as a child process to decode and render audio/video. This
-keeps the framework lightweight — no FFmpeg libraries are linked, and the
-same code works on Windows, Linux, and macOS.
+A media playback widget backed by **libmpv** (embedded, desktop). Video
+frames are decoded with the mpv render API into an OpenGL texture and
+composited by the render layer — the same integration model Flutter uses
+for video widgets.
 
 ```cpp
 auto media = std::make_shared<MediaWidget>();
 media->SetSource("video.mp4");
-media->SetExtraArgs("-vcodec h264 -acodec aac -fs");
+media->SetVolume(0.8);
 media->Play();
 container->AddChild(media);
 ```
 
-### FFplay Configuration
+### libmpv Discovery (CMake)
 
-- **Default path**: `"ffplay"` (resolved from `PATH` at runtime)
-- **Compile-time path**: `-DNEOFLUX_FFPLAY_PATH=/usr/bin/ffplay`
-- **Runtime path**: `media->SetFfplayPath("/custom/ffplay")`
-- **Extra args**: `media->SetExtraArgs("-fs -autoexit")` — appended after
-  the default `-autoexit` flag, before the source URL
+At configure time the build probes, in order:
 
-### Requirements
+1. `thirdparty/mpv-bundle/` — a prebuilt bundle
+   (`include/mpv/`, `libmpv.dll.a`, `libmpv-2.dll`) for out-of-the-box
+   Windows playback. The directory is gitignored.
+2. `thirdparty/mpv/` — the mpv source submodule with a manual build
+   installed next to it.
+3. System libmpv via `find_package(mpv)` / `pkg-config`
+   (`apt install libmpv-dev`, `brew install mpv`).
 
-ffplay must be installed and available on `PATH` (or configured via
-`NEOFLUX_FFPLAY_PATH`):
+When libmpv is found, `libmpv-2.dll` is copied next to the executable on
+Windows. When it is not found, `MediaWidget` compiles as disabled with a
+warning and the rest of the framework is unaffected.
 
-- **Windows**: Download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
-  and add `bin/` to `PATH`
-- **Linux**: `sudo apt install ffmpeg`
-- **macOS**: `brew install ffmpeg`
+### API
+
+- `SetSource(path_or_url)` — media source (file or URL)
+- `Play()` / `Pause()` / `Stop()` — playback control
+- `Seek(seconds)` — absolute seek
+- `SetVolume(0.0..1.0)` — volume control
+- `GetPosition()` / `GetDuration()` — progress in seconds
+- `SetStateCallback(...)` — observe `MediaState` transitions
+
+### Test Clip
+
+`neoflux/tests/data/sample.mp4` is a 2-second 320x240 H.264 clip (~120 KB)
+committed to the repo. It is used by `mpv_media_player_test.cpp` to verify
+the full playback pipeline (load -> play -> first frame -> pause -> stop ->
+seek -> state callback).
 
 :::warning
-MediaWidget uses subprocess isolation, so FFmpeg's GPL/LGPL license does
-not propagate to the NeoFlux framework binary. The framework itself
-remains GPL-3.0.
+MediaWidget links against libmpv. NeoFlux is GPL-3.0, matching libmpv's
+GPL-3.0 license, so the two are license-compatible.
 :::
-
-### Test Video
-
-Generate a 10-second test pattern video with audio:
-
-```bash
-# Linux/macOS
-bash examples/media_demo/generate_test_video.sh
-
-# Windows
-examples\media_demo\generate_test_video.bat
-```
-
-This creates `examples/media_demo/test_video.mp4` using ffmpeg's
-`testsrc` and `sine` filters.

@@ -20,7 +20,7 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 调试时使用：
 
 ```bash
-./bin/hello_neoflux --logtostderr --verbose_logging
+./bin/neoflux_app --logtostderr --verbose_logging
 ```
 
 ## 渲染后端
@@ -38,14 +38,16 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 | 选项 | 默认值 | 说明 |
 |------|--------|------|
 | `NEOFLUX_BUILD_TESTS` | `OFF` | 编译单元测试 |
-| `NEOFLUX_BUILD_EXAMPLES` | `OFF` | 编译示例应用 |
 | `NEOFLUX_ENABLE_CLANG_TIDY` | `OFF` | 构建时运行 clang-tidy |
+| `NEOFLUX_USE_TGFX` | `OFF` | 使用 tgfx 渲染后端（Windows 需 MSVC） |
 
-启用测试和示例：
+启用测试：
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
 ```
+
+示例不随仓库发布：在 `src/` 下创建你自己的应用（见快速开始指南），并把字体放入 `assets/fonts/`。
 
 ## 下一步
 

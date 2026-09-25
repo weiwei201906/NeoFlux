@@ -59,7 +59,8 @@ Reference: [Smart pointers on cppreference](https://en.cppreference.com/w/cpp/me
 
 :::warning
 Headers (`.h`) must contain only declarations. All implementations go in `.cpp`
-files. Template classes use `.inc` files with explicit instantiation in `.cpp`.
+files. Template classes are implemented directly in `.cpp` with explicit
+instantiation for the types the framework uses.
 :::
 
 This keeps compile times fast and hides implementation details.
@@ -76,7 +77,7 @@ No non-ASCII characters (including Chinese) are allowed in `.h`/`.cpp` files.
 All PRs must pass clang-tidy with zero warnings. Run:
 
 ```bash
-clang-tidy -p build src/**/*.cpp include/neoflux/**/*.h
+clang-tidy -p build neoflux/src/**/*.cpp neoflux/include/neoflux/**/*.h
 ```
 
 The project ships a `.clang-tidy` configuration. Common checks enforced:
@@ -136,7 +137,7 @@ Do not submit a PR until you have verified everything locally.
 - **Pure ASCII**: All source code, comments, log messages, and string literals
   must be ASCII. No non-ASCII characters (including Chinese) in `.h`/`.cpp`.
 - **Headers are declarations only**: All implementations go in `.cpp`. Template
-  classes use `.inc` + explicit instantiation.
+  classes use explicit instantiation in `.cpp`.
 
 ### Local Reproduction (Required)
 
@@ -145,20 +146,20 @@ Before opening a PR, you **must** verify locally:
 1. **Clean build**: Delete your build directory and configure from scratch:
    ```bash
    rm -rf build
-   cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON -DNEOFLUX_BUILD_EXAMPLES=ON
+   cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
    cmake --build build
    ```
 2. **Zero warnings**: Build must pass with `-Werror` (enabled by default).
 3. **clang-tidy**: Run clang-tidy and fix all warnings:
    ```bash
-   clang-tidy -p build src/**/*.cpp
+   clang-tidy -p build neoflux/src/**/*.cpp
    ```
 4. **Tests pass**: All unit tests must pass:
    ```bash
    cd build && ctest --output-on-failure
    ```
-5. **Examples run**: At minimum, run `hello_neoflux` and the example most
-   relevant to your change to confirm it works at runtime, not just compiles.
+5. **App runs**: At minimum, run `neoflux_app` (or your own app under
+   `src/`) to confirm the change works at runtime, not just compiles.
 
 PRs that fail any of these checks will be requested changes before review.
 
@@ -169,7 +170,7 @@ PRs that fail any of these checks will be requested changes before review.
 3. Run clang-tidy and fix all warnings
 4. Build with `-Werror` and ensure zero warnings
 5. Run the test suite
-6. Verify examples run locally
+6. Verify the application runs locally
 7. Submit a PR with a clear description of the change
 
 ## Commit Messages

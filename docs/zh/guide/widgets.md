@@ -130,50 +130,39 @@ TextField 必须在构造函数中调用 `EnableMeasureFunction()`，这样 Tait
 
 ## MediaWidget（媒体播放）
 
-基于 **ffplay** 子进程的媒体播放组件（来自 FFmpeg）。以子进程方式启动 ffplay 进行音视频解码和渲染。这保持了框架的轻量性——不链接任何 FFmpeg 库，相同代码可在 Windows、Linux 和 macOS 上运行。
+基于 **libmpv** 的嵌入式媒体播放组件（桌面端）。通过 mpv 渲染 API 将视频帧解码到 OpenGL 纹理，再由渲染层合成——与 Flutter 视频组件的集成模型一致。
 
 ```cpp
 auto media = std::make_shared<MediaWidget>();
 media->SetSource("video.mp4");
-media->SetExtraArgs("-vcodec h264 -acodec aac -fs");
+media->SetVolume(0.8);
 media->Play();
 container->AddChild(media);
 ```
 
-### FFplay 配置
+### libmpv 检测（CMake）
 
-- **默认路径**：`"ffplay"`（运行时从 `PATH` 解析）
-- **编译期路径**：`-DNEOFLUX_FFPLAY_PATH=/usr/bin/ffplay`
-- **运行期路径**：`media->SetFfplayPath("/custom/ffplay")`
-- **额外参数**：`media->SetExtraArgs("-fs -autoexit")` — 追加在默认 `-autoexit` 之后、源 URL 之前
+配置时按以下顺序探测：
 
-### 环境要求
+1. `thirdparty/mpv-bundle/` — 预编译 bundle（`include/mpv/`、`libmpv.dll.a`、`libmpv-2.dll`），Windows 开箱即用。该目录被 gitignore。
+2. `thirdparty/mpv/` — mpv 源码子模块，手动构建后放置在旁。
+3. 系统 libmpv（`find_package(mpv)` / `pkg-config`，即 `apt install libmpv-dev` / `brew install mpv`）。
 
-ffplay 必须已安装并在 `PATH` 中（或通过 `NEOFLUX_FFPLAY_PATH` 配置）：
+找到 libmpv 后，Windows 构建会把 `libmpv-2.dll` 拷贝到可执行文件同目录。找不到时 `MediaWidget` 以警告编译为不可用状态，不影响其余框架。
 
-- **Windows**：从 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 下载，将 `bin/` 加入 `PATH`
-- **Linux**：`sudo apt install ffmpeg`
-- **macOS**：`brew install ffmpeg`
+### API
+
+- `SetSource(path_or_url)` — 媒体源（文件或 URL）
+- `Play()` / `Pause()` / `Stop()` — 播放控制
+- `Seek(seconds)` — 绝对跳转
+- `SetVolume(0.0..1.0)` — 音量
+- `GetPosition()` / `GetDuration()` — 进度（秒）
+- `SetStateCallback(...)` — 观察 `MediaState` 状态迁移
+
+### 测试片段
+
+`neoflux/tests/data/sample.mp4` 是一段 2 秒 320x240 H.264 片段（约 120KB），已随仓库提交，供 `mpv_media_player_test.cpp` 验证完整播放链路（加载 → 播放 → 首帧 → 暂停 → 停止 → 跳转 → 状态回调）。
 
 :::warning
-MediaWidget 使用子进程隔离，因此 FFmpeg 的 GPL/LGPL 许可证不会传播到 NeoFlux 框架二进制文件。框架本身保持 GPL-3.0。
+MediaWidget 链接 libmpv。NeoFlux 为 GPL-3.0，与 libmpv 的 GPL-3.0 许可证兼容。
 :::
-
-### 测试视频
-
-生成 10 秒带音频的测试图案视频：
-
-```bash
-# Linux/macOS
-bash examples/media_demo/generate_test_video.sh
-
-# Windows
-examples\media_demo\generate_test_video.bat
-```
-
-这会使用 ffmpeg 的 `testsrc` 和 `sine` 滤镜生成 `examples/media_demo/test_video.mp4`。
-
-## 下一步
-
-- [Flex 布局](./layout)
-- [输入与事件](./input)

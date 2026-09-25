@@ -18,10 +18,10 @@
 
 ## 字体放置
 
-将字体文件放入 `thirdparty/fonts/` 目录，通过文件名（不含扩展名）引用：
+将字体文件放入 `assets/fonts/` 目录，通过文件名（不含扩展名）引用：
 
 ```cpp
-text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regular.ttf
+text->SetFont("NotoSansSC-Regular");  // 加载 assets/fonts/NotoSansSC-Regular.ttf
 ```
 
 ## 另见
