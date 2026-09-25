@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
 
     Application app;
     app.SetFontDir("./assets/fonts/");
-    if (!app.Init(argc, argv, 800, 600, "NeoFlux Quick Start")) {
+    if (!app.Init(argc, argv, 1200, 600, "NeoFlux Quick Start")) {
       LOG(ERROR) << "Failed to initialize application";
       return 1;
     }
