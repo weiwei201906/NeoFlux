@@ -48,6 +48,7 @@ export default defineConfig({
             { text: 'Input & Events', link: '/guide/input' },
             { text: 'Routing', link: '/guide/routing' },
             { text: 'Coroutines', link: '/guide/coroutines' },
+            { text: 'Fluent API', link: '/guide/fluent-api' },
           ],
         },
         {
@@ -70,6 +71,8 @@ export default defineConfig({
             { text: 'EventLoop', link: '/api/event-loop' },
             { text: 'Task (Coroutine)', link: '/api/task' },
             { text: 'RingQueue', link: '/api/ring-queue' },
+            { text: 'RouteRegistry', link: '/api/route-registry' },
+            { text: 'Common Types', link: '/api/types' },
           ],
         },
         {
@@ -84,6 +87,13 @@ export default defineConfig({
             { text: 'Expanded', link: '/api/expanded' },
             { text: 'SizedBox', link: '/api/sized-box' },
             { text: 'StatefulWidget', link: '/api/stateful' },
+            { text: 'More Controls', link: '/api/controls' },
+          ],
+        },
+        {
+          text: 'Media',
+          items: [
+            { text: 'Media & Players', link: '/api/media' },
           ],
         },
         {
@@ -91,6 +101,7 @@ export default defineConfig({
           items: [
             { text: 'RenderContext', link: '/api/render-context' },
             { text: 'RenderCommand', link: '/api/render-command' },
+            { text: 'Renderer & Backends', link: '/api/renderer' },
           ],
         },
       ],
@@ -126,6 +137,7 @@ export default defineConfig({
             { text: '输入与事件', link: '/zh/guide/input' },
             { text: '路由导航', link: '/zh/guide/routing' },
             { text: '协程', link: '/zh/guide/coroutines' },
+            { text: '流式 API', link: '/zh/guide/fluent-api' },
           ],
         },
         {
@@ -148,6 +160,8 @@ export default defineConfig({
             { text: 'EventLoop', link: '/zh/api/event-loop' },
             { text: 'Task (协程)', link: '/zh/api/task' },
             { text: 'RingQueue', link: '/zh/api/ring-queue' },
+            { text: 'RouteRegistry', link: '/zh/api/route-registry' },
+            { text: '公共类型', link: '/zh/api/types' },
           ],
         },
         {
@@ -162,6 +176,13 @@ export default defineConfig({
             { text: 'Expanded', link: '/zh/api/expanded' },
             { text: 'SizedBox', link: '/zh/api/sized-box' },
             { text: 'StatefulWidget', link: '/zh/api/stateful' },
+            { text: '更多控件', link: '/zh/api/controls' },
+          ],
+        },
+        {
+          text: '媒体',
+          items: [
+            { text: '媒体与播放器', link: '/zh/api/media' },
           ],
         },
         {
@@ -169,6 +190,7 @@ export default defineConfig({
           items: [
             { text: 'RenderContext', link: '/zh/api/render-context' },
             { text: 'RenderCommand', link: '/zh/api/render-command' },
+            { text: '渲染器与后端', link: '/zh/api/renderer' },
           ],
         },
       ],

@@ -1,12 +1,16 @@
 # Container
 
-Flexbox layout widget that maps to a Taitank node. The primary building block
-for layouts.
+```cpp
+class Container : public Widget;
+```
+
+The primary layout widget. It maps 1:1 to a Taitank flexbox node: children are
+laid out by Taitank, and the Container only paints its own rounded background.
 
 ## Header
 
 ```cpp
-#include <neoflux/widget/container.h>
+#include <neoflux/widgets/container.h>
 ```
 
 ## Construction
@@ -15,97 +19,36 @@ for layouts.
 auto container = std::make_shared<Container>();
 ```
 
-## Layout Methods
+## Adding children
 
-All methods return `Container&` for chaining.
+| Method | Signature | Notes |
+|--------|-----------|-------|
+| `SetChild` | `Container& SetChild(std::shared_ptr<Widget> child)` | Single-child convenience (chainable, returns `Container&`) |
+| `child` | `Container& child(std::shared_ptr<Widget> child)` | Append one child (chainable, returns `Container&`) |
+| `children` | `Container& children(std::initializer_list<std::shared_ptr<Widget>> children)` | Append many (chainable, returns `Container&`) |
+| `build` | `[[nodiscard]] std::shared_ptr<Widget> build()` | Inherited from `Widget`; chain terminator |
 
-### `SetFlexDirection()`
+See the [Fluent API](../guide/fluent-api.md) guide for the chained idiom.
 
-```cpp
-Container& SetFlexDirection(FlexDirection direction);
-```
+## Layout knobs (all chainable, return `Container&`)
 
-Sets the main axis direction. `FlexDirection::kRow` or `FlexDirection::kColumn`.
+| Method | Signature | Meaning |
+|--------|-----------|---------|
+| `SetFlexDirection` | `Container& SetFlexDirection(FlexDirection d)` | Main axis. `kRow` / `kRowReverse` / `kColumn` / `kColumnReverse`. Default `kColumn`. |
+| `SetJustifyContent` | `Container& SetJustifyContent(HAlign a)` | Main-axis alignment: `HAlign::kLeft/kCenter/kRight`. |
+| `SetAlignItems` | `Container& SetAlignItems(VAlign a)` | Cross-axis alignment: `VAlign::kTop/kCenter/kBottom`. |
+| `SetFlexGrow` | `Container& SetFlexGrow(float grow)` | How much this container expands to fill parent space. |
+| `SetWidth` | `Container& SetWidth(float w)` | Fixed width; 0 = flexible. |
+| `SetHeight` | `Container& SetHeight(float h)` | Fixed height; 0 = flexible. |
 
-### `SetJustifyContent()`
+## Spacing & appearance (chainable, return `Container&`)
 
-```cpp
-Container& SetJustifyContent(HAlign align);
-```
-
-Sets alignment along the main axis. Values: `kStart`, `kCenter`, `kEnd`,
-`kSpaceBetween`, `kSpaceAround`.
-
-### `SetAlignItems()`
-
-```cpp
-Container& SetAlignItems(VAlign align);
-```
-
-Sets alignment along the cross axis. Values: `kStart`, `kCenter`, `kEnd`,
-`kStretch`.
-
-### `SetFlexGrow()`
-
-```cpp
-Container& SetFlexGrow(float grow);
-```
-
-Sets the flex grow factor. Determines how much the item grows relative to
-siblings.
-
-### `SetFlexShrink()`
-
-```cpp
-Container& SetFlexShrink(float shrink);
-```
-
-Sets the flex shrink factor.
-
-### `SetWidth()` / `SetHeight()`
-
-```cpp
-Container& SetWidth(float width);
-Container& SetHeight(float height);
-```
-
-Sets explicit dimensions.
-
-## Spacing
-
-### `SetPadding()`
-
-```cpp
-Container& SetPadding(const EdgeInsets& padding);
-```
-
-Sets padding. `EdgeInsets` has fields: `left`, `top`, `right`, `bottom`.
-
-### `SetMargin()`
-
-```cpp
-Container& SetMargin(const EdgeInsets& margin);
-```
-
-Sets margin.
-
-## Appearance
-
-### `SetBackgroundColor()`
-
-```cpp
-Container& SetBackgroundColor(const Color& color);
-```
-
-Sets the background color. `Color` has fields: `r`, `g`, `b`, `a` (0-255).
-
-### `SetBorderRadius()`
-
-```cpp
-Container& SetBorderRadius(float radius);
-```
-
-Sets the corner radius in pixels. 0 = sharp corners.
+| Method | Signature | Meaning |
+|--------|-----------|---------|
+| `SetPadding` | `Container& SetPadding(const EdgeInsets& p)` | Inner padding. |
+| `SetMargin` | `Container& SetMargin(const EdgeInsets& m)` | Outer margin. |
+| `SetBackgroundColor` | `Container& SetBackgroundColor(const Color& c)` | Background fill. |
+| `SetBorderRadius` | `Container& SetBorderRadius(float r)` | Corner radius in px; 0 = sharp. |
 
 ## Example
 
@@ -113,10 +56,20 @@ Sets the corner radius in pixels. 0 = sharp corners.
 auto card = std::make_shared<Container>();
 card->SetFlexDirection(FlexDirection::kColumn)
     .SetPadding({.left = 16, .top = 12, .right = 16, .bottom = 12})
-    .SetMargin({.bottom = 8})
     .SetBackgroundColor({.r = 255, .g = 255, .b = 255, .a = 255})
     .SetBorderRadius(8.0F);
-
 card->AddChild(title);
 card->AddChild(body);
+```
+
+Equivalent fluent form:
+
+```cpp
+auto card = std::make_shared<Container>()
+    ->SetFlexDirection(FlexDirection::kColumn)
+    .SetPadding({.left = 16, .top = 12, .right = 16, .bottom = 12})
+    .SetBackgroundColor({255, 255, 255, 255})
+    .SetBorderRadius(8.0F)
+    .children({title, body})
+    .build();
 ```

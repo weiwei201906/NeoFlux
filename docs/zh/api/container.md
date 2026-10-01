@@ -1,45 +1,78 @@
 # Container
 
-Flexbox 容器组件，支持 padding、margin、背景色、圆角和 flex 布局。
+```cpp
+class Container : public Widget;
+```
 
-## 概述
+最主要的布局组件，与 Taitank flexbox 节点一一对应：子节点由 Taitank 布局，
+Container 自身只绘制圆角背景。
 
-`Container` 继承 `Widget`，是最常用的布局容器。它暴露 Taitank flexbox 属性，用于组织子组件。
+## 头文件
 
-## 基本用法
+```cpp
+#include <neoflux/widgets/container.h>
+```
+
+## 构造
 
 ```cpp
 auto container = std::make_shared<Container>();
-container->SetFlexDirection(FlexDirection::kColumn)
-    .SetJustifyContent(HAlign::kCenter)
-    .SetAlignItems(VAlign::kCenter)
-    .SetPadding({.left = 16, .top = 16, .right = 16, .bottom = 16})
-    .SetBackgroundColor({.r = 245, .g = 245, .b = 250, .a = 255})
-    .SetBorderRadius(8.0F);
-
-container->AddChild(child1);
-container->AddChild(child2);
 ```
 
-## 布局方法
+## 添加子节点
 
-| 方法 | 说明 |
-|------|------|
-| `SetFlexDirection(direction)` | 设置 flex 方向（kColumn / kRow / kRowReverse） |
-| `SetJustifyContent(align)` | 设置主轴对齐 |
-| `SetAlignItems(align)` | 设置交叉轴对齐 |
-| `SetPadding(insets)` | 设置内边距 |
-| `SetMargin(insets)` | 设置外边距 |
-| `SetWidth(width)` / `SetHeight(height)` | 设置固定尺寸 |
-| `SetFlexGrow(value)` | 设置弹性增长 |
-| `SetFlexShrink(value)` | 设置弹性收缩 |
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `SetChild` | `Container& SetChild(std::shared_ptr<Widget> child)` | 单子节点便捷方法（可链式，返回 `Container&`） |
+| `child` | `Container& child(std::shared_ptr<Widget> child)` | 追加一个子节点（可链式，返回 `Container&`） |
+| `children` | `Container& children(std::initializer_list<std::shared_ptr<Widget>> children)` | 追加多个（可链式，返回 `Container&`） |
+| `build` | `[[nodiscard]] std::shared_ptr<Widget> build()` | 继承自 `Widget`，链尾终止符 |
 
-## 样式方法
+链式写法详见 [流式 API](../guide/fluent-api.md)。
 
-| 方法 | 说明 |
-|------|------|
-| `SetBackgroundColor(color)` | 设置背景色 |
-| `SetBorderRadius(radius)` | 设置圆角 |
+## 布局旋钮（均可链式，返回 `Container&`）
+
+| 方法 | 签名 | 含义 |
+|------|------|------|
+| `SetFlexDirection` | `Container& SetFlexDirection(FlexDirection d)` | 主轴方向：`kRow` / `kRowReverse` / `kColumn` / `kColumnReverse`，默认 `kColumn`。 |
+| `SetJustifyContent` | `Container& SetJustifyContent(HAlign a)` | 主轴对齐：`HAlign::kLeft/kCenter/kRight`。 |
+| `SetAlignItems` | `Container& SetAlignItems(VAlign a)` | 交叉轴对齐：`VAlign::kTop/kCenter/kBottom`。 |
+| `SetFlexGrow` | `Container& SetFlexGrow(float grow)` | 本容器在父布局中撑满剩余空间的弹性系数。 |
+| `SetWidth` | `Container& SetWidth(float w)` | 固定宽度，0 表示自适应。 |
+| `SetHeight` | `Container& SetHeight(float h)` | 固定高度，0 表示自适应。 |
+
+## 间距与外观（均可链式，返回 `Container&`）
+
+| 方法 | 签名 | 含义 |
+|------|------|------|
+| `SetPadding` | `Container& SetPadding(const EdgeInsets& p)` | 内边距。 |
+| `SetMargin` | `Container& SetMargin(const EdgeInsets& m)` | 外边距。 |
+| `SetBackgroundColor` | `Container& SetBackgroundColor(const Color& c)` | 背景填充。 |
+| `SetBorderRadius` | `Container& SetBorderRadius(float r)` | 圆角半径（px），0 为直角。 |
+
+## 示例
+
+```cpp
+auto card = std::make_shared<Container>();
+card->SetFlexDirection(FlexDirection::kColumn)
+    .SetPadding({.left = 16, .top = 12, .right = 16, .bottom = 12})
+    .SetBackgroundColor({.r = 255, .g = 255, .b = 255, .a = 255})
+    .SetBorderRadius(8.0F);
+card->AddChild(title);
+card->AddChild(body);
+```
+
+等价的流式写法：
+
+```cpp
+auto card = std::make_shared<Container>()
+    ->SetFlexDirection(FlexDirection::kColumn)
+    .SetPadding({.left = 16, .top = 12, .right = 16, .bottom = 12})
+    .SetBackgroundColor({255, 255, 255, 255})
+    .SetBorderRadius(8.0F)
+    .children({title, body})
+    .build();
+```
 
 ## 另见
 
