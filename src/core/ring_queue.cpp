@@ -1,16 +1,13 @@
 // =============================================================================
 // NeoFlux - ring_queue.cpp
 //
-// Template implementation include + explicit instantiations of SpscRingQueue
-// for types used by the framework.
+// Explicit instantiation of SpscRingQueue for the framework's render command
+// queue. Method definitions live in the header (it is a template); this TU
+// forces the RenderCommand specialization's symbols into the neoflux library.
 // =============================================================================
 
 #include "neoflux/core/ring_queue.h"
 #include "neoflux/render/render_command.h"
-
-// Template method implementations (must be included before explicit
-// instantiation so the compiler generates the symbols).
-#include "ring_queue_impl.inc"
 
 namespace neoflux {
 

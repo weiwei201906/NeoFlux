@@ -3,19 +3,23 @@
 //
 // Lock-free single-producer single-consumer (SPSC) bounded ring queue.
 //
-// This header contains ONLY the template class declaration. Method
-// implementations live in src/core/ring_queue_impl.inc and are explicitly
-// instantiated in src/core/ring_queue.cpp for framework types.
-//
-// To use this queue with a custom type, include ring_queue_impl.inc and
-// explicitly instantiate the required specialization.
+// This is a template, so the method definitions live at the bottom of this
+// header (no separate .inc). The framework explicitly instantiates the
+// RenderCommand specialization in src/core/ring_queue.cpp; other TUs (e.g.
+// tests) instantiate their own specializations directly from this header.
 // =============================================================================
 
 #ifndef NEOFLUX_CORE_RING_QUEUE_H_
 #define NEOFLUX_CORE_RING_QUEUE_H_
 
 #include <atomic>
+#include <bit>
+#include <cassert>
 #include <cstddef>
+#include <memory>
+#include <new>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace neoflux {
@@ -92,6 +96,96 @@ class SpscRingQueue {
   // Consumer index (cache-line aligned).
   alignas(detail::kCacheLineSize) std::atomic<std::size_t> tail_;
 };
+
+// ---------------------------------------------------------------------------
+// Template method definitions (this is a template; definitions must be
+// visible to every TU that instantiates a specialization).
+// ---------------------------------------------------------------------------
+
+template <typename T>
+SpscRingQueue<T>::SpscRingQueue(const std::size_t capacity)
+    : capacity_(0),
+      mask_(0),
+      head_(0),
+      tail_(0) {
+  assert(capacity >= 2 && "SpscRingQueue capacity must be at least 2");
+  static_assert(std::is_move_constructible_v<T> ||
+                    std::is_copy_constructible_v<T>,
+                "T must be move-constructible or copy-constructible");
+
+  // Round up to the next power of two so that index wrapping can use a
+  // single bitwise AND (& mask_) instead of an integer modulo (%).
+  // Integer division is ~20-40 cycles; bitwise AND is 1 cycle.
+  capacity_ = std::bit_ceil(capacity);
+  mask_ = capacity_ - 1;
+  storage_.resize(capacity_ * sizeof(T));
+}
+
+template <typename T>
+SpscRingQueue<T>::~SpscRingQueue() {
+  T dummy{};
+  while (TryPop(dummy)) {
+    // popped and destroyed
+  }
+}
+
+template <typename T>
+bool SpscRingQueue<T>::TryPush(T value) {
+  const std::size_t head = head_.load(std::memory_order_relaxed);
+  const std::size_t next_head = (head + 1) & mask_;
+
+  if (next_head == tail_.load(std::memory_order_acquire)) {
+    return false;
+  }
+
+  std::construct_at(Slot(head), std::move(value));
+  head_.store(next_head, std::memory_order_release);
+  return true;
+}
+
+template <typename T>
+bool SpscRingQueue<T>::TryPop(T& out) {
+  const std::size_t tail = tail_.load(std::memory_order_relaxed);
+
+  if (tail == head_.load(std::memory_order_acquire)) {
+    return false;
+  }
+
+  out = std::move(*Slot(tail));
+  std::destroy_at(Slot(tail));
+  tail_.store((tail + 1) & mask_, std::memory_order_release);
+  return true;
+}
+
+template <typename T>
+bool SpscRingQueue<T>::Empty() const noexcept {
+  return head_.load(std::memory_order_acquire) ==
+         tail_.load(std::memory_order_acquire);
+}
+
+template <typename T>
+bool SpscRingQueue<T>::Full() const noexcept {
+  const std::size_t head = head_.load(std::memory_order_acquire);
+  return ((head + 1) & mask_) == tail_.load(std::memory_order_acquire);
+}
+
+template <typename T>
+std::size_t SpscRingQueue<T>::Size() const noexcept {
+  const std::size_t head = head_.load(std::memory_order_acquire);
+  const std::size_t tail = tail_.load(std::memory_order_acquire);
+  return (head - tail) & mask_;
+}
+
+template <typename T>
+std::size_t SpscRingQueue<T>::CapacityValue() const noexcept {
+  return capacity_;
+}
+
+template <typename T>
+T* SpscRingQueue<T>::Slot(std::size_t index) noexcept {
+  return std::launder(
+      reinterpret_cast<T*>(storage_.data() + (index * sizeof(T))));
+}
 
 }  // namespace neoflux
 

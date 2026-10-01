@@ -6,8 +6,6 @@
 
 #include <neoflux/core/ring_queue.h>
 
-#include "core/ring_queue_impl.inc"
-
 #include <thread>
 #include <vector>
 
