@@ -1,19 +1,19 @@
 # Fluent API / 链式写法
 
 NeoFlux 支持两种等价的 widget 树构建方式：显式的 `std::make_shared` +
-`AddChild` 写法，以及**流式构建（fluent builder）**写法——setter 与子节点添加方法都返回
+`AddChild` 写法，以及 **流式构建（fluent builder）** 写法——setter 与子节点添加方法都返回
 widget 引用，可以在一条表达式里链式搭完整棵树。
 
 ::: tip 真实方法名
-setter 是**大驼峰（PascalCase）**（`SetBackgroundColor`、`SetText` 等）。流式子节点方法是
+setter 是 **大驼峰（PascalCase）**（`SetBackgroundColor`、`SetText` 等）。流式子节点方法是
 小写（`child`、`children`），链尾终止符是小写 `build()`。不存在 snake_case 别名——请严格使用
 头文件里的名字。
 :::
 
 ## 为什么有两种写法？
 
-- **显式写法**自上而下阅读，调试时容易单步，子节点由数据动态生成时最顺手。
-- **流式写法**把一棵静态布局描述成一条嵌套表达式，读起来像布局本身，也无需为每个中间节点命名。
+- **显式写法** 自上而下阅读，调试时容易单步，子节点由数据动态生成时最顺手。
+- **流式写法** 把一棵静态布局描述成一条嵌套表达式，读起来像布局本身，也无需为每个中间节点命名。
 
 两种写法产出的 `shared_ptr<Widget>` 树完全相同。
 
@@ -21,7 +21,7 @@ setter 是**大驼峰（PascalCase）**（`SetBackgroundColor`、`SetText` 等�
 
 三个要素：
 
-1. 每个 setter 都**按引用返回具体的 widget 类型**——例如
+1. 每个 setter 都 **按引用返回具体的 widget 类型**——例如
    `Container& SetBackgroundColor(const Color&)`、`Text& SetFontSize(float)`。
    因此 `widget->SetA(x).SetB(y)` 可用。
 2. `Container::child(std::shared_ptr<Widget>)` 与
