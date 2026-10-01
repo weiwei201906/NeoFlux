@@ -9,6 +9,7 @@
 #define NEOFLUX_RENDER_RENDER_CONTEXT_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <vector>
 
@@ -36,6 +37,10 @@ class RenderContext {
   void DrawText(std::string_view text, const Point& position,
                 const Color& color, float font_size,
                 std::string_view font_name = "");
+
+  // Composites an OpenGL texture (e.g. a decoded video frame from the media
+  // backend) into the given rectangle.
+  void DrawTexture(std::uint32_t texture_id, const Rect& rect);
 
   // Saves the current transform/clip state.
   void Save();

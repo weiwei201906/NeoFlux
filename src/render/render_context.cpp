@@ -33,6 +33,10 @@ void RenderContext::DrawText(std::string_view text, const Point& position,
       std::string(text), position, color, font_size, std::string(font_name)));
 }
 
+void RenderContext::DrawTexture(std::uint32_t texture_id, const Rect& rect) {
+  commands_.push_back(RenderCommand::MakeDrawTexture(texture_id, rect));
+}
+
 void RenderContext::Save() {
   commands_.push_back(RenderCommand::MakeSave());
 }

@@ -97,6 +97,9 @@ add_library(neoflux STATIC
   src/render/render_command.cpp
   src/render/render_context.cpp
   src/render/tgfx_renderer.cpp
+  src/widget/media_widget.cpp
+  src/media/mpv_media_player.cpp
+  src/media/media_player_factory.cpp
 )
 
 # Platform-specific bridge implementations.
@@ -116,6 +119,64 @@ target_include_directories(neoflux
 
 # OpenGL is required for both the GLFW bridge and the OpenGL fallback renderer.
 find_package(OpenGL REQUIRED)
+
+# ---------------------------------------------------------------------------
+# libmpv (optional desktop media backend)
+#
+# A prebuilt bundle lives under thirdparty/mpv-bundle (headers + DLL + a MinGW
+# import lib). MSVC cannot link the shipped libmpv.dll.a, so we generate an MSVC
+# import library (mpv.lib) from the DLL exports at configure time using
+# dumpbin + the MSVC library manager. When mpv is present, NEOFLUX_HAS_MPV is
+# defined and the libmpv-backed MpvMediaPlayer is compiled in.
+# ---------------------------------------------------------------------------
+set(MPV_BUNDLE_DIR "${CMAKE_SOURCE_DIR}/thirdparty/mpv-bundle")
+set(MPV_DLL "${MPV_BUNDLE_DIR}/libmpv-2.dll")
+set(MPV_DEF "${MPV_BUNDLE_DIR}/mpv.def")
+set(MPV_IMPORTED_LIB "${MPV_BUNDLE_DIR}/mpv.lib")
+
+set(NEOFLUX_MPV_FOUND FALSE)
+if(EXISTS "${MPV_BUNDLE_DIR}/include/mpv/client.h" AND EXISTS "${MPV_DLL}")
+  if(NOT EXISTS "${MPV_IMPORTED_LIB}")
+    find_program(DUMPBIN_EXECUTABLE NAMES dumpbin)
+    find_program(LIB_EXECUTABLE NAMES lib)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(DUMPBIN_EXECUTABLE AND LIB_EXECUTABLE AND Python3_Interpreter_FOUND)
+      message(STATUS "Generating MSVC import library for libmpv: ${MPV_IMPORTED_LIB}")
+      execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/cmake/gen_mpv_def.py"
+                "${DUMPBIN_EXECUTABLE}" "${MPV_DLL}" "${MPV_DEF}"
+        RESULT_VARIABLE MPV_GEN_DEF_RESULT
+        ERROR_VARIABLE MPV_GEN_DEF_ERR)
+      if(MPV_GEN_DEF_RESULT EQUAL 0)
+        execute_process(
+          COMMAND "${LIB_EXECUTABLE}" /nologo
+                  /def:${MPV_DEF} /machine:x64 /out:${MPV_IMPORTED_LIB}
+          RESULT_VARIABLE MPV_GEN_LIB_RESULT
+          ERROR_VARIABLE MPV_GEN_LIB_ERR)
+      endif()
+      if(MPV_GEN_DEF_RESULT EQUAL 0 AND MPV_GEN_LIB_RESULT EQUAL 0)
+        set(NEOFLUX_MPV_FOUND TRUE)
+      else()
+        message(WARNING "libmpv import-lib generation failed: "
+                        "${MPV_GEN_DEF_RESULT} ${MPV_GEN_LIB_RESULT} "
+                        "${MPV_GEN_DEF_ERR} ${MPV_GEN_LIB_ERR}")
+      endif()
+    else()
+      message(STATUS "libmpv: dumpbin/lib/python not found; media backend disabled")
+    endif()
+  else()
+    set(NEOFLUX_MPV_FOUND TRUE)
+  endif()
+else()
+  message(STATUS "libmpv bundle not found under ${MPV_BUNDLE_DIR}; media backend disabled")
+endif()
+
+if(NEOFLUX_MPV_FOUND)
+  message(STATUS "libmpv media backend ENABLED (${MPV_IMPORTED_LIB})")
+else()
+  message(STATUS "libmpv media backend disabled")
+endif()
 
 target_link_libraries(neoflux
   PUBLIC
@@ -142,6 +203,16 @@ endif()
 # GLFW is only available on desktop platforms.
 if(TARGET glfw)
   target_link_libraries(neoflux PRIVATE glfw)
+endif()
+
+# Link the libmpv import library and expose the media backend. NEOFLUX_HAS_MPV
+# is also propagated to test executables that link neoflux so they can exercise
+# the MpvMediaPlayer implementation.
+if(NEOFLUX_MPV_FOUND)
+  target_include_directories(neoflux PRIVATE "${MPV_BUNDLE_DIR}/include")
+  target_link_libraries(neoflux PRIVATE "${MPV_IMPORTED_LIB}")
+  target_compile_definitions(neoflux PRIVATE NEOFLUX_HAS_MPV=1)
+  target_compile_definitions(neoflux INTERFACE NEOFLUX_HAS_MPV=1)
 endif()
 
 target_compile_features(neoflux PUBLIC cxx_std_20)
