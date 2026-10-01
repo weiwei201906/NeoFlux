@@ -4,8 +4,8 @@
 
 ## 运行
 
-```bash
-./bin/loading_demo
+```powershell
+.\build\bin\loading_demo.exe
 ```
 
 ## 核心概念

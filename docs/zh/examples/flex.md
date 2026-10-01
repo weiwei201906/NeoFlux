@@ -4,8 +4,8 @@
 
 ## 运行
 
-```bash
-./bin/flex_demo
+```powershell
+.\build\bin\flex_demo.exe
 ```
 
 ## 功能

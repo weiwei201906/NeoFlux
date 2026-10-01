@@ -1,102 +1,134 @@
 # Architecture
 
-NeoFlux uses a two-layer architecture that cleanly separates business logic
-from rendering.
+NeoFlux splits a UI application into two independently threaded layers that
+communicate through a single lock-free queue. The application layer owns all
+business logic and layout; the render layer owns the GPU/GL context and turns
+recorded commands into pixels.
 
-## Overview
+## Two-layer split
 
 ```
-┌──────────────────────────────────────────────────────┐
-│  Application Layer (main thread)                     │
-│                                                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │ Widget   │  │ Taitank  │  │ EventLoop +      │   │
-│  │ Tree     │→ │ Layout   │  │ Coroutines       │   │
-│  └──────────┘  └──────────┘  └────────┬─────────┘   │
-│                                       │              │
-│                              RenderCommand           │
-│                                       ▼              │
-│  ┌──────────────────────────────────────────────┐   │
-│  │  SPSC RingQueue (lock-free, FIFO)            │   │
-│  └───────────────────────┬──────────────────────┘   │
-└──────────────────────────┼──────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────┐
-│  Render Layer (render thread)                       │
-│                                                      │
-│  ┌─────────────────┐    ┌──────────────────────┐    │
-│  │ RenderCommand   │    │ tgfx (mobile)        │    │
-│  │ Consumer        │───▶│ GLFW + OpenGL (desk) │    │
-│  └─────────────────┘    └──────────────────────┘    │
-└──────────────────────────────────────────────────────┘
++----------------------- Application thread (Application::Run) ----------------------+
+|                                                                                   |
+|  EventLoop (--target_fps)                                                          |
+|    |  OnFrame()                                                                   |
+|    |   1. PollEvents() + ShouldClose()                                            |
+|    |   2. BuildDirtyWidgets()    rebuild dirty StatefulWidget subtrees            |
+|    |   3. LayoutWidgetTree()     Taitank flexbox over the widget tree             |
+|    |   4. PaintAndSubmit()       record kBeginFrame .. draw* .. kEndFrame         |
+|    |                          |                                                   |
+|    |                          |  RenderLayer::Submit(commands, n)                 |
+|    |                          v                                                   |
+|    |                SpscRingQueue<RenderCommand>   <-- 1 producer, 1 consumer     |
++----|--------------------------|----------------------------------------------------+
+     |  frame_cv_.notify_one   |
++----|--------------------------v----------------------------------------------------+
+|    |              Render thread (RenderLayer::RenderLoop)                          |
+|    |                 waits on frame_cv_, drains queue, honors Begin/End bounds     |
+|    |                            |                                                 |
+|    |                            v                                                 |
+|    |                     TgfxRenderer  (tgfx, or built-in GL fallback)            |
+|    |                            |                                                 |
+|    |      desktop: GlfwBridge (GLFW window + WGL context) -> SwapBuffers()        |
+|    |      mobile:  platform surface (ANativeWindow / CAMetalLayer)                 |
++----+-----------------------------------------------------------------------------+
 ```
 
-## Application Layer
+## Application layer (UI thread)
 
-The application layer runs on the main thread and is responsible for:
+Runs on the thread that calls `Application::Run()`. It is the only thread that
+may touch widget objects.
 
-- **Widget tree management**: Building, updating, and tearing down widget trees.
-- **Taitank layout**: Running flexbox layout on the widget tree each frame.
-- **Input dispatch**: Hit-testing and routing pointer/scroll events.
-- **Event loop**: Processing events, driving coroutines, and triggering frames.
-- **Render command generation**: Converting laid-out widgets into
-  `RenderCommand` objects.
+- **Widget tree** — a `shared_ptr` tree of `Widget` nodes. Stateful widgets
+  rebuild their subtree; leaf widgets (`Text`, `Button`) report intrinsic sizes.
+- **Taitank layout** — every `Widget` owns an opaque `taitank::TaitankNode`.
+  `PerformLayout(w, h)` runs `taitank::DoLayout` on the root and copies the
+  computed rectangles back into the widgets.
+- **Event loop** — a condition-variable-driven loop in `EventLoop`. It sleeps
+  when idle and is woken by `WakeUp()` (input, `MarkFrameDirty()`, timers).
+  `--target_fps` caps the maximum frame rate.
+- **Command recording** — during `PaintAndSubmit()` the application appends a
+  `kBeginFrame` marker, the widget paint calls (draw / clip / text commands),
+  and a `kEndFrame` marker into a `RenderContext`.
 
-### Frame Pipeline
+A frame is only produced when something is actually dirty — `OnFrame()` early-
+outs if neither `frame_dirty_` nor a widget rebuild occurred, which keeps idle
+CPU near zero.
 
-Each frame in the application layer follows this sequence:
+## Render layer (render thread)
 
-1. **Poll events** — GLFW input events are dispatched to the widget tree.
-2. **Build dirty widgets** — Widgets marked with `MarkNeedsBuild()` are rebuilt.
-3. **Layout** — `Taitank::DoLayout` computes widget positions and sizes.
-4. **Paint** — Each widget's `Paint()` method generates `RenderCommand`s.
-5. **Submit** — Commands are pushed to the SPSC ring queue.
+`RenderLayer::Start()` spawns a dedicated `std::thread` running `RenderLoop()`.
+This thread exclusively owns the GL context.
 
-A frame is only processed when the `frame_dirty_` flag is set (by input events,
-route changes, or `MarkFrameDirty()`), reducing idle CPU usage.
+- **GL context ownership** — on desktop the context is created by the
+  `GlfwBridge`. It is briefly made current on the main thread so the OpenGL
+  loader (`glfwGetProcAddress` / WGL) can resolve function pointers, then
+  released and re-acquired on the render thread for all actual drawing.
+- **Frame state machine** — commands are only executed between `kBeginFrame`
+  and `kEndFrame`. This prevents the render thread from presenting a partial
+  frame while the application is still submitting commands.
+- **Backend** — `TgfxRenderer` wraps `tgfx`. When `NEOFLUX_USE_TGFX` is off,
+  the same class falls back to a built-in OpenGL renderer (shader + VBO +
+  FreeType glyph atlas). The `--render_backend` flag selects `vulkan`, `gl`,
+  or `cpu`; unimplemented options log a warning and use GL.
 
-## Render Layer
+## How commands cross threads
 
-The render layer runs on a dedicated thread and is responsible for:
+The two layers never call each other's rendering code across a frame. Instead:
 
-- **Consuming commands** — Pulling `RenderCommand`s from the ring queue.
-- **Drawing** — Executing draw calls via tgfx (mobile) or OpenGL (desktop).
-- **Buffer swapping** — Presenting the rendered frame to the screen.
+1. The **application thread** is the sole producer: `RenderLayer::Submit()`
+   calls `command_queue_.TryPush(cmd)` for every recorded command. If the
+   queue is full the overflowing commands are dropped (rate-limited warning).
+2. `Submit()` then sets `frame_ready_ = true` and `frame_cv_.notify_one()` to
+   wake the render thread.
+3. The **render thread** is the sole consumer: it waits on `frame_cv_` (16 ms
+   max), then `TryPop()`s every available command and dispatches it to
+   `TgfxRenderer`. At `kEndFrame` it calls `EndFrame()` and, on desktop,
+   `GlfwBridge::SwapBuffers()`.
 
-### Desktop Rendering (GLFW Bridge)
+### SpscRingQueue details
 
-On desktop platforms, NeoFlux uses GLFW for window management and OpenGL 3.3
-for rendering. The `GlfwBridge` class wraps GLFW calls and provides:
+Defined in `include/neoflux/core/ring_queue.h`:
 
-- Window creation and resizing
-- Mouse/keyboard input callbacks
-- OpenGL context management
-- Framebuffer size queries
+| Property | Value |
+|----------|-------|
+| Kind | Bounded, **single-producer / single-consumer**, lock-free |
+| Capacity | Set by `--render_queue_capacity` (default `2048`), rounded up to the next power of two |
+| Usable slots | `capacity - 1` (one slot reserved to distinguish full from empty) |
+| Indices | `head_` (producer) and `tail_` (consumer) are `alignas(64)` to avoid false sharing on cache-line boundaries |
+| Wrap-around | Power-of-two size lets index wrapping use `& mask_` instead of `%` |
+| API | `TryPush()` (producer), `TryPop()` (consumer), plus `Empty()` / `Full()` / `Size()` snapshots |
 
-### Mobile Rendering (tgfx)
+::: warning Only one producer and one consumer
+The queue is intentionally SPSC-safe, not MPMC. Never push to it from the
+render thread or pop from the application thread. The `frame_cv_` condition
+variable is the only mutex-protected hand-shake; the queue itself is wait-free.
+:::
 
-On mobile platforms, NeoFlux uses [tgfx](https://github.com/Tencent/tgfx) for
-rendering. tgfx provides a unified 2D graphics API that backs onto the platform's
-native graphics API (Vulkan/Metal/GLES).
+## Input flow
 
-## SPSC Ring Queue
+Pointer and scroll events originate on the window thread via the `GlfwBridge`
+and are delivered to `Application`, which:
 
-Communication between layers uses a **single-producer, single-consumer**
-lock-free ring queue:
+1. Scales cursor coordinates from the real (DPI-scaled) window size to the
+   logical layout size.
+2. Runs a recursive `HitTest()` (children tested top-most first), with a
+   hover hit-cache that is invalidated on every layout change.
+3. Routes press/release to the widget that consumed the press, move events to
+   the hovered (or pressed) widget, and lets scroll events **bubble up**
+   ancestors until one consumes them.
 
-- **Producer**: Application layer (main thread)
-- **Consumer**: Render layer (render thread)
-- **Capacity**: Configurable via `--render_queue_capacity` (default 2048)
-- **Elements**: `RenderCommand` union (draw rect, draw text, clip, transform)
+`pressed_widget_` is held as a `weak_ptr` so a widget-tree rebuild between
+press and release cannot leave a dangling pointer. See
+[Input & Events](./input) for the full event contract.
 
-The queue uses cache-line-aligned head/tail counters and `std::construct_at` /
-`std::destroy_at` for safe element construction, supporting non-trivially
-copyable types like `std::string`.
+## Platform matrix
 
-## Thread Safety
+| Platform | Windowing | GL/GL context | Render target |
+|----------|-----------|----------------|---------------|
+| Windows / Linux / macOS | `GlfwBridge` (GLFW) | WGL / GLX / CGL via GLFW | window framebuffer |
+| Android / iOS | OS-provided surface | n/a | `ANativeWindow` / `CAMetalLayer` |
 
-- The widget tree is only accessed from the main thread.
-- The render queue is the only shared data structure.
-- `pressed_widget_` uses `std::weak_ptr` to avoid dangling references across
-  frames.
-- `frame_dirty_` is an `std::atomic<bool>` for lock-free dirty flag checks.
+The preprocessor selects the bridge: `glfw_bridge.cpp` is built on desktop,
+`mobile_bridge.cpp` on Android/iOS (`NEOFLUX_PLATFORM_DESKTOP` vs
+`NEOFLUX_PLATFORM_MOBILE`).

@@ -4,8 +4,8 @@ A layout showcase demonstrating Taitank flex layout capabilities.
 
 ## Run
 
-```bash
-./bin/flex_demo
+```powershell
+.\build\bin\flex_demo.exe
 ```
 
 ## Features

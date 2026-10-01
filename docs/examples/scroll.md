@@ -4,8 +4,8 @@ Demonstrates `ScrollView`: a header bar plus a scrollable list of colored items.
 
 ## Run
 
-```bash
-./bin/scroll_demo
+```powershell
+.\build\bin\scroll_demo.exe
 ```
 
 ## Features

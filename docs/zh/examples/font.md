@@ -4,8 +4,8 @@
 
 ## 运行
 
-```bash
-./bin/font_demo
+```powershell
+.\build\bin\font_demo.exe
 ```
 
 ## 功能

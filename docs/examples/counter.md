@@ -4,8 +4,8 @@ A minimal counter app demonstrating `StatefulWidget` and `Button` callbacks.
 
 ## Run
 
-```bash
-./bin/counter
+```powershell
+.\build\bin\counter.exe
 ```
 
 ## Features

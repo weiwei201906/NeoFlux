@@ -4,8 +4,8 @@
 
 ## 运行
 
-```bash
-./bin/counter
+```powershell
+.\build\bin\counter.exe
 ```
 
 ## 功能
