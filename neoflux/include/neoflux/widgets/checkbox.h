@@ -71,6 +71,10 @@ class Checkbox : public Widget {
   bool OnPointerDown(const Point& local_pos) override;
 
  private:
+  // Sets the checked state and tweens the check-mark reveal (~150ms). In
+  // headless contexts the reveal snaps to the target value.
+  void ApplyChecked(bool checked);
+
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

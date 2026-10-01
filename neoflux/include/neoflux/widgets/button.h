@@ -10,10 +10,12 @@
 #ifndef NEOFLUX_WIDGET_BUTTON_H_
 #define NEOFLUX_WIDGET_BUTTON_H_
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <string_view>
 
+#include "neoflux/core/animation.h"
 #include "neoflux/core/types.h"
 #include "neoflux/widgets/widget.h"
 
@@ -24,6 +26,8 @@ class Button : public Widget {
  public:
   // Callback type for button press events.
   using OnPressed = std::function<void()>;
+  // Callback type for long-press events (fired after a 500ms hold).
+  using OnLongPress = std::function<void()>;
 
   explicit Button(std::string label);
   ~Button() override;
@@ -38,6 +42,9 @@ class Button : public Widget {
 
   // Sets the callback invoked when the button is pressed.
   Button& SetOnPressed(OnPressed callback) noexcept;
+
+  // Sets the callback invoked after a 500ms hold (long press).
+  Button& SetOnLongPress(OnLongPress callback) noexcept;
 
   // Sets the button background color.
   Button& SetBackgroundColor(const Color& color) noexcept;
@@ -69,20 +76,31 @@ class Button : public Widget {
   // Handles pointer up: triggers callback if released inside the button.
   void OnPointerUp(const Point& local_pos) override;
 
+  // Handles pointer entering the button bounds (hover highlight).
+  void OnPointerEnter() override;
+
+  // Handles pointer leaving the button bounds.
+  void OnPointerExit() override;
+
  private:
   // Returns true if the given point is inside the button bounds.
   [[nodiscard]] bool ContainsPoint(const Point& point) const noexcept;
 
   std::string label_{};
   OnPressed on_pressed_{};
+  OnLongPress on_long_press_{};
   Color background_color_;
   Color text_color_;
   Color pressed_color_;
+  Color hover_color_{.r = 0x42, .g = 0xA5, .b = 0xF5, .a = 0xFF};
   float font_size_;
   std::string font_name_{};
   float horizontal_padding_;
   float vertical_padding_;
-  bool is_pressed_;
+  bool is_pressed_ = false;
+  bool hovered_ = false;
+  bool long_press_fired_ = false;
+  AnimationRuntime anim_;
 };
 
 }  // namespace neoflux

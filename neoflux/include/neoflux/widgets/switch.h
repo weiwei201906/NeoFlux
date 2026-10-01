@@ -72,6 +72,10 @@ class Switch : public Widget {
   bool OnPointerDown(const Point& local_pos) override;
 
  private:
+  // Sets the checked state and tweens the knob slide (~150ms). In headless
+  // contexts (no event loop) the knob snaps to the target position.
+  void ApplyChecked(bool checked);
+
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };

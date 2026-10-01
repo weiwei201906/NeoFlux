@@ -8,6 +8,7 @@
 // =============================================================================
 
 #include <neoflux/widgets/align.h>
+#include <neoflux/widgets/button.h>
 #include <neoflux/widgets/card.h>
 #include <neoflux/widgets/center.h>
 #include <neoflux/widgets/checkbox.h>
@@ -281,6 +282,65 @@ TEST(CheckboxTest, PaintEmitsCommandsWhenChecked) {
 
   // Box fill plus the centered check mark.
   EXPECT_GE(context.GetCommandCount(), 2U);
+}
+
+// ---------------------------------------------------------------------------
+// Animation / state-machine behavior (headless: coroutines are no-ops and the
+// widget snaps to its final visual state; these guard the synchronous path).
+// ---------------------------------------------------------------------------
+
+TEST(SwitchTest, HeadlessPaintShowsTrackAndKnobWhenChecked) {
+  Switch sw;
+  sw.SetChecked(true);
+  sw.SetBounds(
+      Rect{.x = 0.0F, .y = 0.0F, .width = 60.0F, .height = 30.0F});
+
+  RenderContext context;
+  sw.Paint(context);
+
+  // Track rounded-rect plus the travelling knob rounded-rect.
+  EXPECT_GE(context.GetCommandCount(), 2U);
+}
+
+TEST(CheckboxTest, UncheckedPaintDrawsBoxOnly) {
+  Checkbox box;
+  box.SetChecked(false);
+  box.SetBounds(
+      Rect{.x = 0.0F, .y = 0.0F, .width = 22.0F, .height = 22.0F});
+
+  RenderContext context;
+  box.Paint(context);
+
+  // Only the box fill; no check-mark block.
+  EXPECT_EQ(context.GetCommandCount(), 1U);
+}
+
+TEST(ProgressIndicatorTest, HeadlessDisplayedMatchesTarget) {
+  ProgressIndicator bar;
+  bar.SetValue(0.75F);
+  bar.SetBounds(
+      Rect{.x = 0.0F, .y = 0.0F, .width = 100.0F, .height = 8.0F});
+
+  RenderContext context;
+  bar.Paint(context);
+
+  // Track plus a fill (displayed value snapped to the 0.75 target).
+  EXPECT_GE(context.GetCommandCount(), 2U);
+}
+
+TEST(ButtonTest, HoverEnterExitDoesNotBreakPress) {
+  Button button("OK");
+  button.SetBounds(
+      Rect{.x = 0.0F, .y = 0.0F, .width = 100.0F, .height = 40.0F});
+  bool fired = false;
+  button.SetOnPressed([&]() { fired = true; });
+
+  button.OnPointerEnter();
+  button.OnPointerExit();
+  EXPECT_TRUE(button.HandlePress(Point{.x = 50.0F, .y = 20.0F}));
+  button.HandleRelease(Point{.x = 50.0F, .y = 20.0F});
+
+  EXPECT_TRUE(fired);
 }
 
 }  // namespace

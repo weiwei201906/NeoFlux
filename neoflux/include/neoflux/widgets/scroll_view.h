@@ -15,6 +15,7 @@
 #include <memory>
 #include <string_view>
 
+#include "neoflux/core/animation.h"
 #include "neoflux/core/types.h"
 #include "neoflux/widgets/widget.h"
 
@@ -87,6 +88,9 @@ class ScrollView : public Widget {
   float drag_start_scroll_y_ = 0.0F;
   float last_move_y_ = 0.0F;
   float last_velocity_ = 0.0F;
+
+  // Coroutine runtime for the release fling (weak_ptr-guarded).
+  AnimationRuntime anim_;
 };
 
 }  // namespace neoflux

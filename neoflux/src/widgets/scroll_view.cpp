@@ -11,14 +11,26 @@
 #include "neoflux/widgets/scroll_view.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 
 #include <glog/logging.h>
 
 #include "taitank.h"
 
+#include "neoflux/core/animation.h"
 #include "neoflux/renderers/render_context.h"
 
 namespace neoflux {
+
+namespace {
+// Release fling duration: the glide decays over ~250ms.
+constexpr std::chrono::milliseconds kFlingDuration{250};
+// Minimum release velocity (px/frame) to trigger a fling.
+constexpr float kFlingThreshold = 0.5F;
+// Scales the tracked velocity into the glide displacement.
+constexpr float kFlingGain = 0.5F;
+}  // namespace
 
 ScrollView::ScrollView() {
   auto* node = GetTaitankNode();
@@ -102,7 +114,25 @@ bool ScrollView::OnPointerDown(const Point& local_pos) {
 }
 
 void ScrollView::OnPointerUp(const Point& /*local_pos*/) {
+  const float release_velocity = last_velocity_;
   scroll_state_ = ScrollState::kIdle;
+  // Launch a weak_ptr-guarded fling coroutine that decays the release
+  // velocity. If the user grabs mid-fling, scroll_state_ flips to kDragging
+  // and the step callback suppresses further displacement (condition lock).
+  anim_.Bind(weak_from_this());
+  if (anim_.CanAnimate() && std::abs(release_velocity) > kFlingThreshold) {
+    anim_.Tween(
+        0.0F, 1.0F, kFlingDuration,
+        [this, release_velocity](float t) {
+          if (scroll_state_ != ScrollState::kIdle) {
+            return;  // User grabbed: cancel the glide.
+          }
+          const float decay = 1.0F - t;  // linear deceleration
+          scroll_y_ -= release_velocity * decay * kFlingGain;
+          ClampScroll();
+          MarkNeedsBuild();
+        });
+  }
 }
 
 bool ScrollView::OnPointerMove(const Point& local_pos) {

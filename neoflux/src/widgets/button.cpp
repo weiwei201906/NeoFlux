@@ -11,6 +11,7 @@
 #include "neoflux/widgets/button.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -25,13 +26,16 @@ namespace neoflux {
 
 namespace {
 
+// Long-press hold duration before the long-press callback fires.
+constexpr std::chrono::milliseconds kLongPressDuration{500};
+
 // Estimates the rendered width of a UTF-8 label. CJK code points are
 // approximately font_size wide; Latin characters are ~0.55 * font_size.
 float EstimateLabelWidth(std::string_view label, float font_size) {
   constexpr float kLatinWidthRatio = 0.55F;
   float width = 0.0F;
   for (std::size_t i = 0; i < label.size();) {
-    const auto byte = static_cast<unsigned char>(label[i]);
+    const auto byte = static_cast<unsigned char>(label.at(i));
     std::size_t char_len = 1;
     if ((byte & 0x80U) == 0U) {
       char_len = 1;
@@ -52,14 +56,12 @@ float EstimateLabelWidth(std::string_view label, float font_size) {
 
 Button::Button(std::string label)
     : label_(std::move(label)),
-      on_pressed_(),
       background_color_{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF},
       text_color_{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF},
       pressed_color_{.r = 0x19, .g = 0x76, .b = 0xD2, .a = 0xFF},
       font_size_(14.0F),
       horizontal_padding_(16.0F),
-      vertical_padding_(8.0F),
-      is_pressed_(false) {
+      vertical_padding_(8.0F) {
   // Button is a leaf node: enable the Taitank measure function.
   EnableMeasureFunction();
 }
@@ -78,6 +80,11 @@ std::string_view Button::GetLabel() const noexcept { return label_; }
 
 Button& Button::SetOnPressed(OnPressed callback) noexcept {
   on_pressed_ = std::move(callback);
+  return *this;
+}
+
+Button& Button::SetOnLongPress(OnLongPress callback) noexcept {
+  on_long_press_ = std::move(callback);
   return *this;
 }
 
@@ -119,11 +126,39 @@ void Button::HandleRelease(const Point& local_pos) {
 }
 
 bool Button::OnPointerDown(const Point& local_pos) {
-  return HandlePress(local_pos);
+  const bool inside = HandlePress(local_pos);
+  if (inside) {
+    // Launch a long-press detection coroutine. The Delay guard re-checks
+    // is_pressed_ before firing; if the pointer is released before 500ms the
+    // coroutine sees the released state and silently returns (condition-lock).
+    anim_.Bind(weak_from_this());
+    if (anim_.CanAnimate()) {
+      long_press_fired_ = false;
+      anim_.Delay(kLongPressDuration, [this]() {
+        if (is_pressed_ && on_long_press_) {
+          long_press_fired_ = true;
+          on_long_press_();
+          MarkNeedsBuild();
+        }
+      });
+    }
+  }
+  return inside;
 }
 
 void Button::OnPointerUp(const Point& local_pos) {
   HandleRelease(local_pos);
+  long_press_fired_ = false;
+}
+
+void Button::OnPointerEnter() {
+  hovered_ = true;
+  MarkNeedsBuild();
+}
+
+void Button::OnPointerExit() {
+  hovered_ = false;
+  MarkNeedsBuild();
 }
 
 Size Button::OnMeasure(float width, int width_mode, float height,
@@ -149,7 +184,12 @@ Size Button::OnMeasure(float width, int width_mode, float height,
 }
 
 void Button::Paint(RenderContext& context) {
-  const Color background = is_pressed_ ? pressed_color_ : background_color_;
+  Color background = background_color_;
+  if (is_pressed_) {
+    background = pressed_color_;
+  } else if (hovered_) {
+    background = hover_color_;
+  }
   context.DrawRect(
       {.x = 0.0F, .y = 0.0F, .width = bounds_.width, .height = bounds_.height},
       background);

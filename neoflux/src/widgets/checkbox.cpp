@@ -25,10 +25,12 @@
 #include "neoflux/widgets/checkbox.h"
 
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "neoflux/core/animation.h"
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
 
@@ -69,7 +71,14 @@ struct Checkbox::Impl {
   Color mark_color{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF};
   float box_size = 22.0F;
   float font_size = 14.0F;
+  // Animated check-mark reveal: 0 = hidden, 1 = fully shown. Driven by a
+  // Sleep()-ticked coroutine; snaps to the target in headless contexts.
+  float check_progress = 0.0F;
+  AnimationRuntime anim;
 };
+
+// Check-mark reveal duration for the toggle animation.
+constexpr std::chrono::milliseconds kCheckDuration{150};
 
 Checkbox::Checkbox() : impl_(std::make_unique<Impl>()) {
   EnableMeasureFunction();
@@ -77,6 +86,7 @@ Checkbox::Checkbox() : impl_(std::make_unique<Impl>()) {
 
 Checkbox::Checkbox(bool checked) : impl_(std::make_unique<Impl>()) {
   impl_->checked = checked;
+  impl_->check_progress = checked ? 1.0F : 0.0F;
   EnableMeasureFunction();
 }
 
@@ -85,12 +95,27 @@ Checkbox::~Checkbox() = default;
 std::string_view Checkbox::GetWidgetName() const noexcept { return "Checkbox"; }
 
 Checkbox& Checkbox::SetChecked(bool checked) noexcept {
-  impl_->checked = checked;
-  MarkNeedsBuild();
+  ApplyChecked(checked);
   return *this;
 }
 
 bool Checkbox::IsChecked() const noexcept { return impl_->checked; }
+
+void Checkbox::ApplyChecked(bool checked) {
+  impl_->checked = checked;
+  impl_->anim.Bind(weak_from_this());
+  const float target = checked ? 1.0F : 0.0F;
+  if (impl_->anim.CanAnimate()) {
+    impl_->anim.Tween(impl_->check_progress, target, kCheckDuration,
+                      [this](float progress) {
+                        impl_->check_progress = progress;
+                        MarkNeedsBuild();
+                      });
+  } else {
+    impl_->check_progress = target;
+  }
+  MarkNeedsBuild();
+}
 
 Checkbox& Checkbox::SetOnChanged(OnChanged callback) noexcept {
   impl_->on_changed = std::move(callback);
@@ -142,9 +167,10 @@ void Checkbox::Paint(RenderContext& context) {
       box_fill, kBoxRadius);
 
   // With only rectangle primitives available, render the checked mark as a
-  // centered filled block inside the box.
-  if (impl_->checked) {
-    const float mark_size = impl_->box_size * 0.5F;
+  // centered filled block inside the box. The block scales in with the
+  // animated check-progress (0 = hidden, 1 = fully shown).
+  if (impl_->check_progress > 0.0F) {
+    const float mark_size = impl_->box_size * 0.5F * impl_->check_progress;
     const float mark_x = (impl_->box_size - mark_size) * 0.5F;
     const float mark_y = box_y + ((impl_->box_size - mark_size) * 0.5F);
     context.DrawRoundedRect(
@@ -163,8 +189,7 @@ void Checkbox::Paint(RenderContext& context) {
 }
 
 bool Checkbox::OnPointerDown(const Point& /*local_pos*/) {
-  impl_->checked = !impl_->checked;
-  MarkNeedsBuild();
+  ApplyChecked(!impl_->checked);
   if (impl_->on_changed) {
     impl_->on_changed(impl_->checked);
   }

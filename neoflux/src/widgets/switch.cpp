@@ -23,10 +23,12 @@
 #include "neoflux/widgets/switch.h"
 
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "neoflux/core/animation.h"
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
 
@@ -67,7 +69,14 @@ struct Switch::Impl {
   float track_width = 52.0F;
   float track_height = 30.0F;
   float font_size = 14.0F;
+  // Animated knob position: 0 = off (left), 1 = on (right). Driven by a
+  // Sleep()-ticked coroutine; snaps to the target in headless contexts.
+  float knob_progress = 0.0F;
+  AnimationRuntime anim;
 };
+
+// Knob slide duration for the toggle animation.
+constexpr std::chrono::milliseconds kToggleDuration{150};
 
 Switch::Switch() : impl_(std::make_unique<Impl>()) {
   EnableMeasureFunction();
@@ -75,6 +84,7 @@ Switch::Switch() : impl_(std::make_unique<Impl>()) {
 
 Switch::Switch(bool checked) : impl_(std::make_unique<Impl>()) {
   impl_->checked = checked;
+  impl_->knob_progress = checked ? 1.0F : 0.0F;
   EnableMeasureFunction();
 }
 
@@ -83,12 +93,28 @@ Switch::~Switch() = default;
 std::string_view Switch::GetWidgetName() const noexcept { return "Switch"; }
 
 Switch& Switch::SetChecked(bool checked) noexcept {
-  impl_->checked = checked;
-  MarkNeedsBuild();
+  ApplyChecked(checked);
   return *this;
 }
 
 bool Switch::IsChecked() const noexcept { return impl_->checked; }
+
+void Switch::ApplyChecked(bool checked) {
+  impl_->checked = checked;
+  impl_->anim.Bind(weak_from_this());
+  const float target = checked ? 1.0F : 0.0F;
+  if (impl_->anim.CanAnimate()) {
+    impl_->anim.Tween(impl_->knob_progress, target, kToggleDuration,
+                      [this](float progress) {
+                        impl_->knob_progress = progress;
+                        MarkNeedsBuild();
+                      });
+  } else {
+    // Headless (no event loop / stack-allocated): snap to the final position.
+    impl_->knob_progress = target;
+  }
+  MarkNeedsBuild();
+}
 
 Switch& Switch::SetOnChanged(OnChanged callback) noexcept {
   impl_->on_changed = std::move(callback);
@@ -151,7 +177,7 @@ void Switch::Paint(RenderContext& context) {
   const float knob_size = impl_->track_height - (2.0F * margin);
   const float knob_travel =
       impl_->track_width - (2.0F * margin) - knob_size;
-  const float knob_x = margin + (impl_->checked ? knob_travel : 0.0F);
+  const float knob_x = margin + (impl_->knob_progress * knob_travel);
   context.DrawRoundedRect(
       {.x = knob_x, .y = track_y + margin, .width = knob_size,
        .height = knob_size},
@@ -168,8 +194,7 @@ void Switch::Paint(RenderContext& context) {
 }
 
 bool Switch::OnPointerDown(const Point& /*local_pos*/) {
-  impl_->checked = !impl_->checked;
-  MarkNeedsBuild();
+  ApplyChecked(!impl_->checked);
   if (impl_->on_changed) {
     impl_->on_changed(impl_->checked);
   }

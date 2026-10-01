@@ -22,8 +22,10 @@
 #include "neoflux/widgets/progress_indicator.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
+#include "neoflux/core/animation.h"
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
 
@@ -32,13 +34,17 @@ namespace neoflux {
 namespace {
 // Natural width when the parent does not constrain the bar.
 constexpr float kDefaultWidth = 200.0F;
+// Smooth transition duration when the target value changes.
+constexpr std::chrono::milliseconds kValueTweenDuration{200};
 }  // namespace
 
 struct ProgressIndicator::Impl {
-  float value = 0.0F;
+  float value = 0.0F;       // Clamped target value (returned by GetValue).
+  float displayed = 0.0F;   // Animated value used for painting.
   Color track_color{.r = 0xE0, .g = 0xE0, .b = 0xE0, .a = 0xFF};
   Color fill_color{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF};
   float thickness = 8.0F;
+  AnimationRuntime anim;
 };
 
 ProgressIndicator::ProgressIndicator() : impl_(std::make_unique<Impl>()) {
@@ -54,6 +60,17 @@ std::string_view ProgressIndicator::GetWidgetName() const noexcept {
 
 ProgressIndicator& ProgressIndicator::SetValue(float value) noexcept {
   impl_->value = std::clamp(value, 0.0F, 1.0F);
+  impl_->anim.Bind(weak_from_this());
+  if (impl_->anim.CanAnimate()) {
+    impl_->anim.Tween(impl_->displayed, impl_->value, kValueTweenDuration,
+                      [this](float v) {
+                        impl_->displayed = v;
+                        MarkNeedsBuild();
+                      });
+  } else {
+    // Headless (no event loop / stack-allocated): snap to the target.
+    impl_->displayed = impl_->value;
+  }
   MarkNeedsBuild();
   return *this;
 }
@@ -99,7 +116,7 @@ void ProgressIndicator::Paint(RenderContext& context) {
       {.x = 0.0F, .y = 0.0F, .width = bounds_.width, .height = height},
       impl_->track_color, track_radius);
 
-  const float fill_width = bounds_.width * impl_->value;
+  const float fill_width = bounds_.width * impl_->displayed;
   if (fill_width <= 0.0F) {
     return;
   }

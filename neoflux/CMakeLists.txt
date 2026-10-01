@@ -16,6 +16,7 @@ add_library(neoflux STATIC
   src/core/ring_queue.cpp
   src/core/font_manager.cpp
   src/core/types.cpp
+  src/core/animation.cpp
   src/widgets/widget.cpp
   src/widgets/container.cpp
   src/widgets/text.cpp
