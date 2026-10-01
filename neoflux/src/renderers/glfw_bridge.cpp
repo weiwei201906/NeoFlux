@@ -87,7 +87,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
   return true;
 }
 
-void GlfwBridge::Shutdown() noexcept {
+void GlfwBridge::Shutdown() noexcept {  // NOLINT(bugprone-exception-escape): glog LOG macro may throw
   if (!impl_->initialized) {
     return;
   }
@@ -273,7 +273,7 @@ bool GlfwBridge::Init(int /*width*/, int /*height*/,
   return false;
 }
 
-void GlfwBridge::Shutdown() noexcept {}
+void GlfwBridge::Shutdown() noexcept {  // NOLINT(bugprone-exception-escape): glog LOG macro may throw}
 
 void GlfwBridge::PollEvents() {}
 

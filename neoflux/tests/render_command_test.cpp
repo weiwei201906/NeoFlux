@@ -80,11 +80,11 @@ TEST(RenderContextTest, RecordsCommands) {
   ctx.Restore();
 
   EXPECT_EQ(ctx.GetCommandCount(), 5U);
-  EXPECT_EQ(ctx.GetCommands()[0].type, RenderCommandType::kDrawRect);
-  EXPECT_EQ(ctx.GetCommands()[1].type, RenderCommandType::kDrawText);
-  EXPECT_EQ(ctx.GetCommands()[2].type, RenderCommandType::kSave);
-  EXPECT_EQ(ctx.GetCommands()[3].type, RenderCommandType::kTranslate);
-  EXPECT_EQ(ctx.GetCommands()[4].type, RenderCommandType::kRestore);
+  EXPECT_EQ(ctx.GetCommands().at(0).type, RenderCommandType::kDrawRect);
+  EXPECT_EQ(ctx.GetCommands().at(1).type, RenderCommandType::kDrawText);
+  EXPECT_EQ(ctx.GetCommands().at(2).type, RenderCommandType::kSave);
+  EXPECT_EQ(ctx.GetCommands().at(3).type, RenderCommandType::kTranslate);
+  EXPECT_EQ(ctx.GetCommands().at(4).type, RenderCommandType::kRestore);
 }
 
 TEST(RenderContextTest, Clear) {

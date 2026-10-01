@@ -76,7 +76,7 @@ void EventLoop::WakeUp() noexcept { frame_cv_.notify_one(); }
 
 bool EventLoop::IsRunning() const noexcept { return running_.load(); }
 
-void EventLoop::SetTargetFps(int fps) noexcept {
+void EventLoop::SetTargetFps(int fps) noexcept {  // NOLINT(bugprone-exception-escape): glog LOG macro may throw
   if (fps <= 0) {
     LOG(WARNING) << "Invalid target FPS: " << fps << ", using 60";
     target_fps_ = 60;

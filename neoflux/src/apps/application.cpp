@@ -42,7 +42,13 @@ namespace neoflux {
 
 Application::Application() = default;
 
-Application::~Application() { Stop(); }
+Application::~Application() {
+  try {
+    Stop();
+  } catch (...) {
+    LOG(ERROR) << "Exception in Application destructor";
+  }
+}
 
 bool Application::Init(int argc, char** argv, int window_width,
                        int window_height, std::string_view window_title,
