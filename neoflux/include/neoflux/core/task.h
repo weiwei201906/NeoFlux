@@ -62,7 +62,7 @@ template <typename Rep, typename Period>
       duration)};
 }
 
-// Task<T> — a coroutine that produces a value of type T.
+// Task<T> - a coroutine that produces a value of type T.
 // Tasks are lazy: they do not start until awaited or explicitly scheduled.
 template <typename T = void>
 class Task {
