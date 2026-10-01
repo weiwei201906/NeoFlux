@@ -45,6 +45,14 @@ class MpvMediaPlayer final : public MediaPlayer {
   [[nodiscard]] MediaState GetState() const noexcept override;
   [[nodiscard]] int GetVideoWidth() const noexcept override;
   [[nodiscard]] int GetVideoHeight() const noexcept override;
+
+  // Number of times the libmpv render update callback has fired since the
+  // render context was created. The callback runs on an internal mpv thread;
+  // this counter is atomic and safe to poll from any thread. Primarily exposed
+  // for observability and tests (e.g. verifying the GPU render path actually
+  // receives frame-update notifications).
+  [[nodiscard]] std::uint32_t GetRenderUpdateCount() const noexcept;
+
   void SetStateCallback(StateCallback callback) override;
   void SetFrameCallback(FrameCallback callback) override;
   void InitRender() override;
@@ -53,6 +61,12 @@ class MpvMediaPlayer final : public MediaPlayer {
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
+
+  // C-callable trampoline for mpv_render_context_set_update_callback. ctx is
+  // this object; it runs on an internal mpv thread and only bumps the atomic
+  // update counter. Static so it converts to a plain function pointer without
+  // leaking mpv/GL types into this header.
+  static void OnRenderUpdate(void* ctx);
 };
 
 }  // namespace neoflux

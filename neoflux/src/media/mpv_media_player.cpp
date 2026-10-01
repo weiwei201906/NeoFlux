@@ -12,6 +12,7 @@
 
 #include "neoflux/media/mpv_media_player.h"
 
+#include <atomic>
 #include <mutex>
 #include <utility>
 
@@ -103,12 +104,6 @@ void* GetProcAddress(void* /*ctx*/, const char* name) {
   return reinterpret_cast<void*>(glfwGetProcAddress(name));
 }
 
-// mpv render update callback: invoked when a new frame is available.
-void OnMpvRenderUpdate(void* ctx) {
-  auto* self = static_cast<MpvMediaPlayer*>(ctx);
-  (void)self;  // Actual frame pickup happens in UpdateTexture on render thread.
-}
-
 }  // namespace
 
 // =============================================================================
@@ -171,6 +166,11 @@ struct MpvMediaPlayer::Impl {
   FrameCallback frame_callback;
   std::mutex mutex;
   bool render_initialized = false;
+  // Incremented by OnMpvRenderUpdate on an arbitrary mpv-internal thread each
+  // time a new frame update is signalled. Read from the render thread (or a
+  // test) via GetRenderUpdateCount(). Relaxed ordering is sufficient: this is
+  // a monotonically increasing observability counter, not used to order data.
+  std::atomic<std::uint32_t> update_count_{0};
 };
 
 bool MpvMediaPlayer::Impl::CreateMpvHandle() {
@@ -350,6 +350,24 @@ int MpvMediaPlayer::GetVideoHeight() const noexcept {
   return impl_->video_height;
 }
 
+std::uint32_t MpvMediaPlayer::GetRenderUpdateCount() const noexcept {
+  return impl_->update_count_.load(std::memory_order_relaxed);
+}
+
+// Static trampoline for the mpv C update callback. Registered with
+// mpv_render_context_set_update_callback in InitRender(); ctx is the
+// MpvMediaPlayer* (this). It runs on an arbitrary mpv-internal thread, so it
+// must do as little as possible: only bump the atomic observability counter.
+// The actual frame pickup happens in UpdateTexture() on the render thread.
+// Being a static member lets it reach the private impl_ without a friend, and
+// exposes no mpv/GL types in the header.
+void MpvMediaPlayer::OnRenderUpdate(void* ctx) {
+  auto* self = static_cast<MpvMediaPlayer*>(ctx);
+  if (self != nullptr) {
+    self->impl_->update_count_.fetch_add(1, std::memory_order_relaxed);
+  }
+}
+
 void MpvMediaPlayer::SetStateCallback(StateCallback callback) {
   std::scoped_lock lock(impl_->mutex);
   impl_->state_callback = std::move(callback);
@@ -389,7 +407,7 @@ void MpvMediaPlayer::InitRender() {
     return;
   }
 
-  mpv_render_context_set_update_callback(impl_->render_ctx, OnMpvRenderUpdate,
+  mpv_render_context_set_update_callback(impl_->render_ctx, &MpvMediaPlayer::OnRenderUpdate,
                                          this);
   impl_->render_initialized = true;
   LOG(INFO) << "MpvMediaPlayer: render context initialized";
@@ -504,6 +522,7 @@ double MpvMediaPlayer::GetDuration() const noexcept { return 0.0; }
 MediaState MpvMediaPlayer::GetState() const noexcept { return impl_->state; }
 int MpvMediaPlayer::GetVideoWidth() const noexcept { return 0; }
 int MpvMediaPlayer::GetVideoHeight() const noexcept { return 0; }
+std::uint32_t MpvMediaPlayer::GetRenderUpdateCount() const noexcept { return 0; }
 void MpvMediaPlayer::SetStateCallback(StateCallback callback) { (void)callback; }
 void MpvMediaPlayer::SetFrameCallback(FrameCallback callback) { (void)callback; }
 void MpvMediaPlayer::InitRender() {}
