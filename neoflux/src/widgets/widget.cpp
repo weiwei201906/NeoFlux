@@ -192,6 +192,10 @@ void Widget::ClearChildren() {
   children_.clear();
 }
 
+std::shared_ptr<Widget> Widget::build() {
+  return shared_from_this();
+}
+
 const std::vector<std::shared_ptr<Widget>>& Widget::GetChildren()
     const noexcept {
   return children_;

@@ -143,6 +143,21 @@ class Widget : public std::enable_shared_from_this<Widget> {
   // Removes all children. Also clears them from the Taitank node.
   void ClearChildren();
 
+  // Terminal of the fluent builder chain.
+  //
+  // Returns the shared ownership of this widget so a chained expression that
+  // was seeded by std::make_shared<WidgetSubclass>() yields the owning
+  // shared_ptr<Widget>:
+  //
+  //   auto view = std::make_shared<Container>()
+  //       ->child(std::make_shared<Text>("Hi"))
+  //       ->child(std::make_shared<Button>())
+  //       .build();
+  //
+  // Valid only when this widget is already managed by a shared_ptr; do not call
+  // it on a stack-allocated widget.
+  [[nodiscard]] std::shared_ptr<Widget> build();
+
   // Returns a read-only view of the children.
   [[nodiscard]] const std::vector<std::shared_ptr<Widget>>& GetChildren()
       const noexcept;

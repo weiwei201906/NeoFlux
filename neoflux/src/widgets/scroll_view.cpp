@@ -36,7 +36,7 @@ std::string_view ScrollView::GetWidgetName() const noexcept {
   return "ScrollView";
 }
 
-void ScrollView::SetContent(std::shared_ptr<Widget> content) {
+ScrollView& ScrollView::SetContent(std::shared_ptr<Widget> content) {
   ClearChildren();
   if (content != nullptr) {
     auto* node = content->GetTaitankNode();
@@ -48,6 +48,7 @@ void ScrollView::SetContent(std::shared_ptr<Widget> content) {
     }
     AddChild(std::move(content));
   }
+  return *this;
 }
 
 void ScrollView::ScrollTo(float x, float y) noexcept {

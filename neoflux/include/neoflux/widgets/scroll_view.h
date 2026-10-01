@@ -39,8 +39,9 @@ class ScrollView : public Widget {
 
   [[nodiscard]] std::string_view GetWidgetName() const noexcept override;
 
-  // Sets the content widget. Replaces any existing content.
-  void SetContent(std::shared_ptr<Widget> content);
+  // Sets the content widget. Replaces any existing content. Returns
+  // *this for fluent chaining.
+  ScrollView& SetContent(std::shared_ptr<Widget> content);
 
   // Sets the scroll offset in pixels (clamped to valid range).
   void ScrollTo(float x, float y) noexcept;

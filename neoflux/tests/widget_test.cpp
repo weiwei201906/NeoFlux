@@ -154,5 +154,36 @@ TEST(ButtonTest, PressOutsideDoesNothing) {
   EXPECT_FALSE(pressed);
 }
 
+
+TEST(ContainerTest, FluentChildAndChildren)
+{
+  auto root = std::make_shared<Container>();
+  root->SetFlexDirection(FlexDirection::kColumn)
+      .child(std::make_shared<Text>("one"))
+      .children({std::make_shared<Text>("two"), std::make_shared<Text>("three")});
+
+  EXPECT_EQ(root->GetChildCount(), 3U);
+}
+
+TEST(ContainerTest, BuildReturnsSharedOwnership)
+{
+  std::shared_ptr<Widget> view = std::make_shared<Container>()
+      ->child(std::make_shared<Text>("Hi"))
+      .child(std::make_shared<Button>("OK"))
+      .build();
+
+  ASSERT_NE(view, nullptr);
+  EXPECT_EQ(view->GetChildCount(), 2U);
+  EXPECT_EQ(view->GetWidgetName(), "Container");
+}
+
+TEST(WidgetTest, SetterChainingKeepsConcreteType)
+{
+  auto text = std::make_shared<Text>("chain");
+  text->SetFontSize(18.0F)
+      .SetTextColor(Color{.r = 1, .g = 2, .b = 3, .a = 255});
+  EXPECT_EQ(text->GetText(), "chain");
+}
+
 }  // namespace
 }  // namespace neoflux

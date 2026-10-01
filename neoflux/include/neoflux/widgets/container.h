@@ -11,6 +11,7 @@
 #define NEOFLUX_WIDGET_CONTAINER_H_
 
 #include <memory>
+#include <initializer_list>
 #include <string_view>
 
 #include "neoflux/core/types.h"
@@ -51,6 +52,13 @@ class Container : public Widget {
 
   // Sets the child widget (convenience for single-child containers).
   Container& SetChild(std::shared_ptr<Widget> child);
+
+  // Appends a child widget. Returns *this for fluent chaining.
+  Container& child(std::shared_ptr<Widget> child);
+
+  // Appends multiple child widgets. Returns *this for fluent chaining.
+  Container& children(
+      std::initializer_list<std::shared_ptr<Widget>> children);
 
   // Sets the flex direction (default: kColumn).
   Container& SetFlexDirection(FlexDirection direction) noexcept;

@@ -59,7 +59,7 @@ class MediaWidget : public Widget {
   // --- Playback controls ---
 
   // Sets the media source (file path or URL).
-  void SetSource(std::string_view source);
+  MediaWidget& SetSource(std::string_view source);
 
   // Returns the current media source.
   [[nodiscard]] std::string_view GetSource() const noexcept;
@@ -77,7 +77,7 @@ class MediaWidget : public Widget {
   void Seek(double position_seconds);
 
   // Sets volume (0.0 = mute, 1.0 = full).
-  void SetVolume(double volume);
+  MediaWidget& SetVolume(double volume);
 
   // Returns current volume.
   [[nodiscard]] double GetVolume() const noexcept;
@@ -97,10 +97,10 @@ class MediaWidget : public Widget {
   // --- Appearance ---
 
   // Sets the placeholder background color (shown before first frame).
-  void SetBackgroundColor(const Color& color) noexcept;
+  MediaWidget& SetBackgroundColor(const Color& color) noexcept;
 
   // Sets the placeholder text color.
-  void SetTextColor(const Color& color) noexcept;
+  MediaWidget& SetTextColor(const Color& color) noexcept;
 
  private:
   struct Impl;

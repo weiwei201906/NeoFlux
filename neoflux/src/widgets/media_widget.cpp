@@ -125,10 +125,11 @@ bool MediaWidget::OnPointerDown(const Point& /*local_pos*/) {
   return true;
 }
 
-void MediaWidget::SetSource(std::string_view source) {
+MediaWidget& MediaWidget::SetSource(std::string_view source) {
   if (impl_->player != nullptr) {
     impl_->player->SetSource(source);
   }
+  return *this;
 }
 
 std::string_view MediaWidget::GetSource() const noexcept {
@@ -164,10 +165,11 @@ void MediaWidget::Seek(double position_seconds) {
   }
 }
 
-void MediaWidget::SetVolume(double volume) {
+MediaWidget& MediaWidget::SetVolume(double volume) {
   if (impl_->player != nullptr) {
     impl_->player->SetVolume(volume);
   }
+  return *this;
 }
 
 double MediaWidget::GetVolume() const noexcept {
@@ -202,12 +204,14 @@ MediaPlayer* MediaWidget::GetPlayer() noexcept {
   return impl_->player.get();
 }
 
-void MediaWidget::SetBackgroundColor(const Color& color) noexcept {
+MediaWidget& MediaWidget::SetBackgroundColor(const Color& color) noexcept {
   impl_->background_color = color;
+  return *this;
 }
 
-void MediaWidget::SetTextColor(const Color& color) noexcept {
+MediaWidget& MediaWidget::SetTextColor(const Color& color) noexcept {
   impl_->text_color = color;
+  return *this;
 }
 
 }  // namespace neoflux

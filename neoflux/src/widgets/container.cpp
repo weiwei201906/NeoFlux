@@ -121,6 +121,19 @@ Container& Container::SetChild(std::shared_ptr<Widget> child) {
   return *this;
 }
 
+Container& Container::child(std::shared_ptr<Widget> child) {
+  AddChild(std::move(child));
+  return *this;
+}
+
+Container& Container::children(
+    std::initializer_list<std::shared_ptr<Widget>> children) {
+  for (const auto& c : children) {
+    AddChild(c);
+  }
+  return *this;
+}
+
 Container& Container::SetFlexDirection(FlexDirection direction) noexcept {
   auto* node = GetTaitankNode();
   if (node != nullptr) {
