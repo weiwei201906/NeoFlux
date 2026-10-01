@@ -4,8 +4,8 @@
 
 ## 运行
 
-```bash
-./bin/drag_demo
+```powershell
+.\build\bin\drag_demo.exe
 ```
 
 ## 核心概念

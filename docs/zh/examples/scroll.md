@@ -4,8 +4,8 @@
 
 ## 运行
 
-```bash
-./bin/scroll_demo
+```powershell
+.\build\bin\scroll_demo.exe
 ```
 
 ## 功能

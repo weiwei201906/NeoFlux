@@ -1,146 +1,158 @@
 # Quick Start
 
-This guide walks through creating your first NeoFlux application from scratch.
+This guide walks you from a fresh clone to a running NeoFlux window on Windows
+with the MSVC toolchain and the Ninja build generator.
 
-## 1. Project Structure
+## Prerequisites
 
-Create a new directory for your project:
+- **CMake 3.20 or newer**
+- **MSVC 2022** (Visual Studio 17) with the "Desktop development with C++" workload
+- **Ninja** build tool (bundled with Visual Studio, or installed separately)
+- A C++20-compatible compiler (MSVC 19.3x+)
 
+Third-party dependencies (`gflags`, `glog`, `Taitank`, `GLFW`, `FreeType`,
+and optionally `tgfx`) are pulled in through CMake `add_subdirectory(thirdparty)`
+— you do not need to install them by hand.
+
+::: tip OpenGL on Windows
+The desktop build creates its context through GLFW/WGL, so any modern GPU
+driver that exposes OpenGL 2.1+ works.
+:::
+
+## Build the repo (MSVC + Ninja)
+
+Open an **x64 Native Tools Command Prompt for VS 2022** (or run
+`vcvars64.bat` from a regular terminal) so that `cl.exe`, `link.exe` and
+`ninja` are on `PATH`, then configure and build from the repository root:
+
+```powershell
+# Configure (out-of-source build)
+cmake -S . -B build -G Ninja
+
+# Build the static library + all examples
+cmake --build build
 ```
-my_app/
-├── CMakeLists.txt
-├── main.cpp
-└── neoflux/          # NeoFlux source (git submodule or copy)
+
+Build artifacts land under `build\bin\`:
+
+| Path                          | Content                      |
+|-------------------------------|------------------------------|
+| `build\bin\hello_neoflux.exe` | Hello World demo             |
+| `build\bin\counter.exe`       | Counter demo                 |
+| `build\bin\flex_demo.exe`     | Flex layout showcase        |
+| `build\bin\font_demo.exe`     | Font rendering demo          |
+| `build\bin\scroll_demo.exe`   | ScrollView demo              |
+| `build\bin\loading_demo.exe`  | Coroutine state-machine demo |
+| `build\bin\drag_demo.exe`     | Draggable + long-press demo  |
+| `build\lib\`                  | `neoflux` static library     |
+
+To build with unit tests enabled instead:
+
+```powershell
+cmake -S . -B build -G Ninja -DNEOFLUX_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-## 2. Get NeoFlux
+::: warning GUI subsystem, no console
+Examples are built with `CMAKE_WIN32_EXECUTABLE ON`, so on Windows the
+launcher does **not** open a console window. By default logs are written to
+files under `./logs/`, not to the terminal. Use the logging flags below when
+you want to see output.
+:::
 
-### Option A: Git Submodule (recommended)
+## Run the example
 
-```bash
-git init
-git submodule add https://github.com/weiwei201906/NeoFlux.git neoflux
+From the repository root (so the relative `thirdparty/fonts` and `./logs`
+paths resolve):
+
+```powershell
+.\build\bin\hello_neoflux.exe
 ```
 
-### Option B: FetchContent (no submodule)
+A window titled *NeoFlux - Hello World* opens. You will see a title, a live
+counter, and buttons: one increments the counter, the other pushes a second
+route you can pop back from.
 
-Add this to your `CMakeLists.txt` (see below) — NeoFlux is downloaded
-automatically at configure time.
+## Runtime flags (gflags)
 
-## 3. main.cpp
+All flags are optional. Pass them on the command line after the executable:
+
+```powershell
+.\build\bin\hello_neoflux.exe --render_backend=gl --target_fps=120 --logtostderr --verbose_logging
+```
+
+| Flag | Example value | What it does |
+|------|---------------|--------------|
+| `--render_backend` | `gl` | Selects the render backend. One of `vulkan` (default), `gl`, `cpu`. Unimplemented backends fall back to OpenGL with a warning. |
+| `--target_fps` | `120` | Caps the application event-loop frame rate. |
+| `--render_queue_capacity` | `4096` | Size of the SPSC render-command ring queue (rounded up to a power of two). |
+| `--verbose_logging` | (present) | Enables `VLOG(1)` debug output. |
+| `--logtostderr` | (present) | Sends all logs to stderr instead of files. |
+| `--log_dir=PATH` | `--log_dir=./logs` | Directory for `.log` files (default `./logs`). |
+
+::: tip Fast debugging loop
+For day-to-day development, run with stderr logging and verbose output:
+
+```powershell
+.\build\bin\hello_neoflux.exe --logtostderr --verbose_logging
+```
+
+See the [Configuration](./configuration) page for the complete flag reference.
+:::
+
+## A minimal application
+
+Every NeoFlux program follows the same shape: register routes, create an
+`Application`, push the initial route, then run the blocking event loop.
 
 ```cpp
 #include <neoflux/app/application.h>
-#include <neoflux/widget/container.h>
-#include <neoflux/widget/text.h>
 #include <neoflux/widget/button.h>
+#include <neoflux/widget/container.h>
 #include <neoflux/widget/route_registry.h>
+#include <neoflux/widget/text.h>
+#include <neoflux/widget/widget.h>
 
 using namespace neoflux;
 
-// Route builder: returns the root widget tree for "/"
 std::shared_ptr<Widget> BuildHomePage(BuildContext& /*ctx*/) {
   auto root = std::make_shared<Container>();
   root->SetFlexDirection(FlexDirection::kColumn)
-      .SetBackgroundColor({.r = 245, .g = 245, .b = 245, .a = 255})
       .SetJustifyContent(HAlign::kCenter)
       .SetAlignItems(VAlign::kCenter)
+      .SetBackgroundColor({.r = 245, .g = 245, .b = 245, .a = 255})
       .SetPadding({.left = 24, .top = 24, .right = 24, .bottom = 24});
 
   auto title = std::make_shared<Text>("Hello NeoFlux");
-  title->SetFontSize(28.0F)
-      .SetTextColor({.r = 33, .g = 33, .b = 33, .a = 255});
+  title->SetFontSize(28.0F).SetTextColor({.r = 33, .g = 33, .b = 33, .a = 255});
   root->AddChild(title);
 
   auto button = std::make_shared<Button>("Click Me");
-  button->SetOnPressed([]() {
-    LOG(INFO) << "Button pressed!";
-  });
+  button->SetOnPressed([]() { /* handle click */ });
   root->AddChild(button);
-
   return root;
 }
 
 int main(int argc, char** argv) {
-  // Register routes before initializing the app.
   RouteRegistry::Instance().RegisterRoute("/", BuildHomePage);
 
   Application app;
   if (!app.Init(argc, argv, 480, 360, "My First NeoFlux App")) {
     return 1;
   }
-
-  // Push the initial route and run the event loop (blocks until window close).
   app.PushRoute("/");
   app.Run();
   return 0;
 }
 ```
 
-## 4. CMakeLists.txt
+Link against the `neoflux` static target (plus `glog::glog` and `gflags` if
+you use logging/flags directly), and you are set.
 
-### With submodule
+## Next steps
 
-```cmake
-cmake_minimum_required(VERSION 3.20)
-project(my_app LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-add_subdirectory(neoflux)
-
-add_executable(my_app main.cpp)
-target_link_libraries(my_app PRIVATE neoflux)
-```
-
-### With FetchContent
-
-```cmake
-cmake_minimum_required(VERSION 3.20)
-project(my_app LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-include(FetchContent)
-FetchContent_Declare(
-  neoflux
-  GIT_REPOSITORY https://github.com/weiwei201906/NeoFlux.git
-  GIT_TAG main
-)
-FetchContent_MakeAvailable(neoflux)
-
-add_executable(my_app main.cpp)
-target_link_libraries(my_app PRIVATE neoflux)
-```
-
-## 5. Build and Run
-
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . -j
-./my_app
-```
-
-You should see a window with "Hello NeoFlux" text and a clickable button.
-
-## Key Concepts
-
-| Concept | Description |
-|---------|-------------|
-| **Route builder** | A function that returns a widget tree. Called when the route is pushed. |
-| **Container** | Base layout widget. Flex direction, alignment, padding, background. |
-| **Text** | Leaf widget that renders UTF-8 text. |
-| **Button** | Clickable widget with `SetOnPressed()` callback. |
-| **RouteRegistry** | Maps route names to builder functions. |
-| **Application** | Owns window, event loop, render layer, and navigation stack. |
-
-## Next Steps
-
-- Learn the [widget system](./widgets)
-- Explore [flex layout](./layout)
-- Handle [user input](./input)
-- Add [navigation](./routing) between pages
-- Use [coroutines](./coroutines) for animations and timed work
+- Read [Architecture](./architecture) to understand the two-layer design and
+  how render commands cross threads.
+- Walk through the [Examples](../examples/hello) to see real widget code.
+- Explore the [Widgets guide](./widgets) for the full widget set.

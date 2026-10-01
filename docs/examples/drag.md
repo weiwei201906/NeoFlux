@@ -4,8 +4,8 @@ Demonstrates the `Draggable` widget with pointer events and the "state machine a
 
 ## Running
 
-```bash
-./bin/drag_demo
+```powershell
+.\build\bin\drag_demo.exe
 ```
 
 ## Key Concepts

@@ -5,8 +5,8 @@ sizes/colors, and CJK text rendering.
 
 ## Run
 
-```bash
-./bin/font_demo
+```powershell
+.\build\bin\font_demo.exe
 ```
 
 ## Features

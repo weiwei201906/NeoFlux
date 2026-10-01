@@ -4,8 +4,8 @@ Demonstrates the widget state machine integrated with C++20 coroutines. A "Start
 
 ## Running
 
-```bash
-./bin/loading_demo
+```powershell
+.\build\bin\loading_demo.exe
 ```
 
 ## Key Concepts
