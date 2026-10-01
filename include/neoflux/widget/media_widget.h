@@ -9,15 +9,16 @@
 // in the platform backend, and frames are rendered to a GL texture that the
 // NeoFlux render layer composites into the widget's bounding rectangle.
 //
+// Pimpl: render/GL state (the player handle and current texture) lives in
+// MediaWidget::Impl, defined in the .cpp, so this header leaks no mpv/GL types.
+//
 // All method implementations are in src/widget/media_widget.cpp.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_MEDIA_WIDGET_H_
 #define NEOFLUX_WIDGET_MEDIA_WIDGET_H_
 
-#include <cstdint>
 #include <memory>
-#include <string>
 #include <string_view>
 
 #include "neoflux/media/media_player.h"
@@ -102,17 +103,8 @@ class MediaWidget : public Widget {
   void SetTextColor(const Color& color) noexcept;
 
  private:
-  // Initializes the media player render context on the render thread.
-  void EnsurePlayerInit();
-
-  std::unique_ptr<MediaPlayer> player_{};
-  bool render_init_requested_ = false;
-  std::uint32_t current_texture_ = 0;
-  int texture_width_ = 0;
-  int texture_height_ = 0;
-
-  Color background_color_{.r = 20, .g = 20, .b = 20, .a = 255};
-  Color text_color_{.r = 255, .g = 255, .b = 255, .a = 255};
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

@@ -5,6 +5,9 @@
 // Uses the mpv render API to decode video frames into an OpenGL texture that
 // can be composited by the NeoFlux render layer.
 //
+// Pimpl: this header leaks no mpv or GL types. All implementation state and
+// the mpv/GL interaction live in MpvMediaPlayer::Impl, defined in the .cpp.
+//
 // All method implementations are in src/media/mpv_media_player.cpp.
 // =============================================================================
 
@@ -12,14 +15,9 @@
 #define NEOFLUX_MEDIA_MPV_MEDIA_PLAYER_H_
 
 #include <cstdint>
-#include <mutex>
-#include <string>
+#include <memory>
 
 #include "neoflux/media/media_player.h"
-
-// Forward declarations to avoid including mpv headers in the public API.
-typedef struct mpv_handle mpv_handle;
-typedef struct mpv_render_context mpv_render_context;
 
 namespace neoflux {
 
@@ -51,34 +49,8 @@ class MpvMediaPlayer final : public MediaPlayer {
   [[nodiscard]] std::uint32_t UpdateTexture() override;
 
  private:
-  // Creates the mpv handle and configures basic options. Called from the
-  // constructor. Returns true on success.
-  bool CreateMpvHandle();
-
-  // mpv event handler. Polls events and updates state/properties.
-  void PollEvents();
-
-  // Sets an mpv property as double. Thread-safe.
-  void SetPropertyDouble(const char* name, double value);
-
-  // Gets an mpv property as double. Returns 0 on failure.
-  [[nodiscard]] double GetPropertyDouble(const char* name) const;
-
-  // Sends a command to mpv (e.g. "loadfile", "pause").
-  void Command(const char* args[]);
-
-  mpv_handle* mpv_ = nullptr;
-  mpv_render_context* render_ctx_ = nullptr;
-  std::uint32_t texture_id_ = 0;
-  int video_width_ = 0;
-  int video_height_ = 0;
-  double volume_ = 1.0;
-  MediaState state_ = MediaState::kIdle;
-  std::string source_{};
-  StateCallback state_callback_{};
-  FrameCallback frame_callback_{};
-  mutable std::mutex mutex_{};
-  bool render_initialized_ = false;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux
