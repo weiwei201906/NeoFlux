@@ -46,12 +46,15 @@ RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, mo
       renderer_(nullptr),
       glfw_bridge_(nullptr) {}
 
-RenderLayer::~RenderLayer() {
+RenderLayer::~RenderLayer() {  // NOLINT(bugprone-exception-escape): all Stop() exceptions are caught below
   // Destructors must not throw; Stop() joins threads and waits on futures,
   // which can theoretically throw. Swallow exceptions during teardown.
   try {
     Stop();
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Exception during RenderLayer teardown: " << e.what();
   } catch (...) {
+    LOG(WARNING) << "Unknown exception during RenderLayer teardown";
   }
 }
 
