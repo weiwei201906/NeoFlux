@@ -12,7 +12,7 @@ target_link_libraries(hello_neoflux
 )
 
 target_include_directories(hello_neoflux PRIVATE
-  ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_SOURCE_DIR}/neoflux/include
 )
 
 # On Windows with MinGW, -mwindows produces a GUI subsystem executable that

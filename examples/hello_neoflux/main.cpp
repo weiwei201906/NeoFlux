@@ -10,12 +10,12 @@
 // that navigates between two routes.
 // =============================================================================
 
-#include <neoflux/app/application.h>
-#include <neoflux/widget/button.h>
-#include <neoflux/widget/container.h>
-#include <neoflux/widget/route_registry.h>
-#include <neoflux/widget/text.h>
-#include <neoflux/widget/widget.h>
+#include <neoflux/apps/application.h>
+#include <neoflux/widgets/button.h>
+#include <neoflux/widgets/container.h>
+#include <neoflux/widgets/route_registry.h>
+#include <neoflux/widgets/text.h>
+#include <neoflux/widgets/widget.h>
 
 #include <memory>
 #include <string_view>
