@@ -448,11 +448,14 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
   gl.GenFramebuffers(1, &fbo);
   gl.BindFramebuffer(kGlFramebuffer, fbo);
 
-  // Query video dimensions.
-  int width = 0;
-  int height = 0;
-  mpv_get_property(self.mpv, "width", MPV_FORMAT_INT64, &width);
-  mpv_get_property(self.mpv, "height", MPV_FORMAT_INT64, &height);
+  // Query video dimensions. mpv reports these as int64; read into int64_t
+  // locals (MPV_FORMAT_INT64 writes 8 bytes) then narrow to int for GL.
+  std::int64_t width64 = 0;
+  std::int64_t height64 = 0;
+  mpv_get_property(self.mpv, "width", MPV_FORMAT_INT64, &width64);
+  mpv_get_property(self.mpv, "height", MPV_FORMAT_INT64, &height64);
+  int width = static_cast<int>(width64);
+  int height = static_cast<int>(height64);
   if (width <= 0 || height <= 0) {
     width = 640;
     height = 360;
