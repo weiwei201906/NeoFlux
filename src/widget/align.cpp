@@ -47,37 +47,48 @@ taitank::FlexAlign MainJustify(VAlign vertical) {
 
 }  // namespace
 
+struct Align::Impl {
+  HAlign horizontal = HAlign::kCenter;
+  VAlign vertical = VAlign::kCenter;
+
+  // Pushes the current alignment onto the Taitank node.
+  void ApplyTo(taitank::TaitankNode* node) const;
+};
+
+void Align::Impl::ApplyTo(taitank::TaitankNode* node) const {
+  if (node == nullptr) {
+    return;
+  }
+  taitank::SetAlignItems(node, CrossAlign(horizontal));
+  taitank::SetJustifyContent(node, MainJustify(vertical));
+}
+
 Align::Align(HAlign horizontal, VAlign vertical,
              std::shared_ptr<Widget> child)
-    : horizontal_(horizontal), vertical_(vertical) {
+    : impl_(std::make_unique<Impl>()) {
+  impl_->horizontal = horizontal;
+  impl_->vertical = vertical;
   SetFlexGrow(1.0F);
-  ApplyAlignment();
+  impl_->ApplyTo(GetTaitankNode());
   if (child != nullptr) {
     SetChild(std::move(child));
   }
 }
 
+Align::~Align() = default;
+
 std::string_view Align::GetWidgetName() const noexcept { return "Align"; }
 
 Align& Align::SetHorizontal(HAlign horizontal) noexcept {
-  horizontal_ = horizontal;
-  ApplyAlignment();
+  impl_->horizontal = horizontal;
+  impl_->ApplyTo(GetTaitankNode());
   return *this;
 }
 
 Align& Align::SetVertical(VAlign vertical) noexcept {
-  vertical_ = vertical;
-  ApplyAlignment();
+  impl_->vertical = vertical;
+  impl_->ApplyTo(GetTaitankNode());
   return *this;
-}
-
-void Align::ApplyAlignment() noexcept {
-  auto* node = GetTaitankNode();
-  if (node == nullptr) {
-    return;
-  }
-  taitank::SetAlignItems(node, CrossAlign(horizontal_));
-  taitank::SetJustifyContent(node, MainJustify(vertical_));
 }
 
 }  // namespace neoflux

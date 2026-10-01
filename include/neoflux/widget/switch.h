@@ -16,17 +16,15 @@
 // A toggle switch: a pill track with a sliding knob that flips between two
 // states. Clicking anywhere on the widget toggles it and notifies a callback.
 //
-// All method implementations are in src/widget/switch.cpp.
+// Pimpl: Switch::Impl (switch.cpp) holds the checked state, colors, geometry,
+// and change callback. This header includes nothing but <memory> and the base.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_SWITCH_H_
 #define NEOFLUX_WIDGET_SWITCH_H_
 
-#include <functional>
-#include <string>
-#include <string_view>
+#include <memory>
 
-#include "neoflux/core/types.h"
 #include "neoflux/widget/widget.h"
 
 namespace neoflux {
@@ -63,7 +61,7 @@ class Switch : public Widget {
 
   // Reports intrinsic size to the Taitank layout engine.
   [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
-                               int height_mode) override;
+                                int height_mode) override;
 
   void Paint(RenderContext& context) override;
 
@@ -71,18 +69,8 @@ class Switch : public Widget {
   bool OnPointerDown(const Point& local_pos) override;
 
  private:
-  // Toggles the state and fires the change callback.
-  void Toggle();
-
-  OnChanged on_changed_{};
-  std::string label_{};
-  bool checked_ = false;
-  Color on_color_{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF};
-  Color off_color_{.r = 0xBD, .g = 0xBD, .b = 0xBD, .a = 0xFF};
-  Color knob_color_{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF};
-  float track_width_ = 52.0F;
-  float track_height_ = 30.0F;
-  float font_size_ = 14.0F;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

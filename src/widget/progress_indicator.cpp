@@ -31,7 +31,14 @@ namespace {
 constexpr float kDefaultWidth = 200.0F;
 }  // namespace
 
-ProgressIndicator::ProgressIndicator() {
+struct ProgressIndicator::Impl {
+  float value = 0.0F;
+  Color track_color{.r = 0xE0, .g = 0xE0, .b = 0xE0, .a = 0xFF};
+  Color fill_color{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF};
+  float thickness = 8.0F;
+};
+
+ProgressIndicator::ProgressIndicator() : impl_(std::make_unique<Impl>()) {
   // Leaf node: report intrinsic size to the layout engine.
   EnableMeasureFunction();
 }
@@ -43,32 +50,32 @@ std::string_view ProgressIndicator::GetWidgetName() const noexcept {
 }
 
 ProgressIndicator& ProgressIndicator::SetValue(float value) noexcept {
-  value_ = std::clamp(value, 0.0F, 1.0F);
+  impl_->value = std::clamp(value, 0.0F, 1.0F);
   MarkNeedsBuild();
   return *this;
 }
 
-float ProgressIndicator::GetValue() const noexcept { return value_; }
+float ProgressIndicator::GetValue() const noexcept { return impl_->value; }
 
 ProgressIndicator& ProgressIndicator::SetTrackColor(const Color& color) noexcept {
-  track_color_ = color;
+  impl_->track_color = color;
   return *this;
 }
 
 ProgressIndicator& ProgressIndicator::SetFillColor(const Color& color) noexcept {
-  fill_color_ = color;
+  impl_->fill_color = color;
   return *this;
 }
 
 ProgressIndicator& ProgressIndicator::SetThickness(float thickness) noexcept {
-  thickness_ = thickness > 0.0F ? thickness : 1.0F;
+  impl_->thickness = thickness > 0.0F ? thickness : 1.0F;
   return *this;
 }
 
 Size ProgressIndicator::OnMeasure(float width, int width_mode, float height,
                                   int height_mode) {
   float measured_width = kDefaultWidth;
-  float measured_height = thickness_;
+  float measured_height = impl_->thickness;
   if (width_mode == 1) {  // exactly
     measured_width = width;
   } else if (width_mode == 2) {  // at_most
@@ -77,7 +84,7 @@ Size ProgressIndicator::OnMeasure(float width, int width_mode, float height,
   if (height_mode == 1) {
     measured_height = height;
   } else if (height_mode == 2) {
-    measured_height = std::min(thickness_, height);
+    measured_height = std::min(impl_->thickness, height);
   }
   return {.width = measured_width, .height = measured_height};
 }
@@ -87,9 +94,9 @@ void ProgressIndicator::Paint(RenderContext& context) {
   const float track_radius = height * 0.5F;
   context.DrawRoundedRect(
       {.x = 0.0F, .y = 0.0F, .width = bounds_.width, .height = height},
-      track_color_, track_radius);
+      impl_->track_color, track_radius);
 
-  const float fill_width = bounds_.width * value_;
+  const float fill_width = bounds_.width * impl_->value;
   if (fill_width <= 0.0F) {
     return;
   }
@@ -98,7 +105,7 @@ void ProgressIndicator::Paint(RenderContext& context) {
   const float fill_radius = std::min(track_radius, fill_width * 0.5F);
   context.DrawRoundedRect({.x = 0.0F, .y = 0.0F, .width = fill_width,
                            .height = height},
-                          fill_color_, fill_radius);
+                          impl_->fill_color, fill_radius);
 }
 
 }  // namespace neoflux

@@ -22,7 +22,6 @@
 #include "neoflux/widget/checkbox.h"
 
 #include <algorithm>
-#include <cstddef>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -58,45 +57,63 @@ constexpr float kBoxRadius = 4.0F;
 
 }  // namespace
 
-Checkbox::Checkbox() { EnableMeasureFunction(); }
+struct Checkbox::Impl {
+  OnChanged on_changed;
+  std::string label;
+  bool checked = false;
+  Color checked_color{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF};
+  Color box_color{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF};
+  Color mark_color{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF};
+  float box_size = 22.0F;
+  float font_size = 14.0F;
+};
 
-Checkbox::Checkbox(bool checked) : checked_(checked) { EnableMeasureFunction(); }
+Checkbox::Checkbox() : impl_(std::make_unique<Impl>()) {
+  EnableMeasureFunction();
+}
+
+Checkbox::Checkbox(bool checked) : impl_(std::make_unique<Impl>()) {
+  impl_->checked = checked;
+  EnableMeasureFunction();
+}
 
 Checkbox::~Checkbox() = default;
 
 std::string_view Checkbox::GetWidgetName() const noexcept { return "Checkbox"; }
 
 Checkbox& Checkbox::SetChecked(bool checked) noexcept {
-  checked_ = checked;
+  impl_->checked = checked;
   MarkNeedsBuild();
   return *this;
 }
 
-bool Checkbox::IsChecked() const noexcept { return checked_; }
+bool Checkbox::IsChecked() const noexcept { return impl_->checked; }
 
 Checkbox& Checkbox::SetOnChanged(OnChanged callback) noexcept {
-  on_changed_ = std::move(callback);
+  impl_->on_changed = std::move(callback);
   return *this;
 }
 
 Checkbox& Checkbox::SetLabel(std::string label) {
-  label_ = std::move(label);
+  impl_->label = std::move(label);
   MarkNeedsBuild();
   return *this;
 }
 
 Checkbox& Checkbox::SetCheckedColor(const Color& color) noexcept {
-  checked_color_ = color;
+  impl_->checked_color = color;
   return *this;
 }
 
 Size Checkbox::OnMeasure(float width, int width_mode, float height,
                         int height_mode) {
   const float label_width =
-      label_.empty() ? 0.0F : kLabelGap + EstimateLabelWidth(label_, font_size_);
-  const float intrinsic_width = box_size_ + label_width;
+      impl_->label.empty()
+          ? 0.0F
+          : kLabelGap + EstimateLabelWidth(impl_->label, impl_->font_size);
+  const float intrinsic_width = impl_->box_size + label_width;
   const float intrinsic_height =
-      std::max(box_size_, font_size_ * 1.3F);
+      std::max(impl_->box_size, impl_->font_size * 1.3F);
 
   float measured_width = intrinsic_width;
   float measured_height = intrinsic_height;
@@ -114,44 +131,41 @@ Size Checkbox::OnMeasure(float width, int width_mode, float height,
 }
 
 void Checkbox::Paint(RenderContext& context) {
-  const float box_y = (bounds_.height - box_size_) * 0.5F;
-  const Color box_fill = checked_ ? checked_color_ : box_color_;
+  const float box_y = (bounds_.height - impl_->box_size) * 0.5F;
+  const Color box_fill = impl_->checked ? impl_->checked_color : impl_->box_color;
   context.DrawRoundedRect(
-      {.x = 0.0F, .y = box_y, .width = box_size_, .height = box_size_},
+      {.x = 0.0F, .y = box_y, .width = impl_->box_size,
+       .height = impl_->box_size},
       box_fill, kBoxRadius);
 
   // With only rectangle primitives available, render the checked mark as a
   // centered filled block inside the box.
-  if (checked_) {
-    const float mark_size = box_size_ * 0.5F;
-    const float mark_x = (box_size_ - mark_size) * 0.5F;
-    const float mark_y = box_y + ((box_size_ - mark_size) * 0.5F);
+  if (impl_->checked) {
+    const float mark_size = impl_->box_size * 0.5F;
+    const float mark_x = (impl_->box_size - mark_size) * 0.5F;
+    const float mark_y = box_y + ((impl_->box_size - mark_size) * 0.5F);
     context.DrawRoundedRect(
         {.x = mark_x, .y = mark_y, .width = mark_size, .height = mark_size},
-        mark_color_, mark_size * 0.25F);
+        impl_->mark_color, mark_size * 0.25F);
   }
 
-  if (!label_.empty()) {
+  if (!impl_->label.empty()) {
     const float baseline_y =
-        box_y + ((box_size_ + font_size_) * 0.5F);
-    context.DrawText(label_,
-                     {.x = box_size_ + kLabelGap, .y = baseline_y},
+        box_y + ((impl_->box_size + impl_->font_size) * 0.5F);
+    context.DrawText(impl_->label,
+                     {.x = impl_->box_size + kLabelGap, .y = baseline_y},
                      Color{.r = 0x33, .g = 0x33, .b = 0x33, .a = 0xFF},
-                     font_size_, "");
+                     impl_->font_size, "");
   }
 }
 
 bool Checkbox::OnPointerDown(const Point& /*local_pos*/) {
-  Toggle();
-  return true;
-}
-
-void Checkbox::Toggle() {
-  checked_ = !checked_;
+  impl_->checked = !impl_->checked;
   MarkNeedsBuild();
-  if (on_changed_) {
-    on_changed_(checked_);
+  if (impl_->on_changed) {
+    impl_->on_changed(impl_->checked);
   }
+  return true;
 }
 
 }  // namespace neoflux

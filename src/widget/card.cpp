@@ -13,8 +13,8 @@
 // of the License at http://www.apache.org/licenses/LICENSE-2.0
 //
 // Implementation of Card. All layout is delegated to Taitank via the Container
-// base; this file only preconfigures the surface color, corner radius, and
-// inner padding.
+// base; this file defines Card::Impl and preconfigures the surface color,
+// corner radius, and inner padding.
 // =============================================================================
 
 #include "neoflux/widget/card.h"
@@ -30,7 +30,9 @@ constexpr float kDefaultRadius = 12.0F;
 constexpr float kDefaultPadding = 16.0F;
 }  // namespace
 
-Card::Card(std::shared_ptr<Widget> child) {
+struct Card::Impl {};
+
+Card::Card(std::shared_ptr<Widget> child) : impl_(std::make_unique<Impl>()) {
   SetBackgroundColor(kSurfaceColor);
   SetBorderRadius(kDefaultRadius);
   SetCardPadding(kDefaultPadding);
@@ -38,6 +40,8 @@ Card::Card(std::shared_ptr<Widget> child) {
     SetChild(std::move(child));
   }
 }
+
+Card::~Card() = default;
 
 std::string_view Card::GetWidgetName() const noexcept { return "Card"; }
 

@@ -11,19 +11,25 @@
 
 namespace neoflux {
 
-Padding::Padding(float all, std::shared_ptr<Widget> child) {
+struct Padding::Impl {};
+
+Padding::Padding(float all, std::shared_ptr<Widget> child)
+    : impl_(std::make_unique<Impl>()) {
   SetPadding({.left = all, .top = all, .right = all, .bottom = all});
   if (child != nullptr) {
     SetChild(std::move(child));
   }
 }
 
-Padding::Padding(const EdgeInsets& insets, std::shared_ptr<Widget> child) {
+Padding::Padding(const EdgeInsets& insets, std::shared_ptr<Widget> child)
+    : impl_(std::make_unique<Impl>()) {
   SetPadding(insets);
   if (child != nullptr) {
     SetChild(std::move(child));
   }
 }
+
+Padding::~Padding() = default;
 
 std::string_view Padding::GetWidgetName() const noexcept { return "Padding"; }
 

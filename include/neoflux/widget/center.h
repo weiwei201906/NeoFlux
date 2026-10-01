@@ -5,7 +5,8 @@
 // on both axes. Implemented as a Container with flex-grow=1 and centered
 // justify/align.
 //
-// All method implementations are in src/widget/center.cpp.
+// Pimpl: Center::Impl (center.cpp) holds implementation state. This header
+// includes nothing but <memory> and the widget base.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_CENTER_H_
@@ -21,8 +22,13 @@ namespace neoflux {
 class Center : public Container {
  public:
   explicit Center(std::shared_ptr<Widget> child = nullptr);
+  ~Center() override;
 
   [[nodiscard]] std::string_view GetWidgetName() const noexcept override;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

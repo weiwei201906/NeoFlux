@@ -16,7 +16,8 @@
 // a uniform inner padding. It is a Container preconfigured with a light
 // surface color, corner radius, and padding.
 //
-// All method implementations are in src/widget/card.cpp.
+// Pimpl: Card::Impl (card.cpp) holds implementation state. This header
+// includes nothing but <memory> and the widget base.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_CARD_H_
@@ -24,7 +25,6 @@
 
 #include <memory>
 
-#include "neoflux/core/types.h"
 #include "neoflux/widget/container.h"
 
 namespace neoflux {
@@ -33,6 +33,7 @@ namespace neoflux {
 class Card : public Container {
  public:
   explicit Card(std::shared_ptr<Widget> child = nullptr);
+  ~Card() override;
 
   [[nodiscard]] std::string_view GetWidgetName() const noexcept override;
 
@@ -44,6 +45,10 @@ class Card : public Container {
 
   // Sets the uniform inner padding around the content.
   Card& SetCardPadding(float padding) noexcept;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

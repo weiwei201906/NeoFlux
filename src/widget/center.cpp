@@ -13,7 +13,10 @@
 
 namespace neoflux {
 
-Center::Center(std::shared_ptr<Widget> child) {
+struct Center::Impl {};
+
+Center::Center(std::shared_ptr<Widget> child)
+    : impl_(std::make_unique<Impl>()) {
   SetFlexGrow(1.0F);
   SetJustifyContent(HAlign::kCenter);
   SetAlignItems(VAlign::kCenter);
@@ -21,6 +24,8 @@ Center::Center(std::shared_ptr<Widget> child) {
     SetChild(std::move(child));
   }
 }
+
+Center::~Center() = default;
 
 std::string_view Center::GetWidgetName() const noexcept { return "Center"; }
 

@@ -17,17 +17,16 @@
 //
 // A binary checked/unchecked box with an optional trailing label.
 //
-// All method implementations are in src/widget/checkbox.cpp.
+// Pimpl: Checkbox::Impl (checkbox.cpp) holds the checked state, colors, box
+// metrics, label, and change callback. This header includes nothing but
+// <memory> and the widget base.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_CHECKBOX_H_
 #define NEOFLUX_WIDGET_CHECKBOX_H_
 
-#include <functional>
-#include <string>
-#include <string_view>
+#include <memory>
 
-#include "neoflux/core/types.h"
 #include "neoflux/widget/widget.h"
 
 namespace neoflux {
@@ -61,7 +60,7 @@ class Checkbox : public Widget {
 
   // Reports intrinsic size to the Taitank layout engine.
   [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
-                               int height_mode) override;
+                                int height_mode) override;
 
   void Paint(RenderContext& context) override;
 
@@ -69,17 +68,8 @@ class Checkbox : public Widget {
   bool OnPointerDown(const Point& local_pos) override;
 
  private:
-  // Toggles the state and fires the change callback.
-  void Toggle();
-
-  OnChanged on_changed_{};
-  std::string label_{};
-  bool checked_ = false;
-  Color checked_color_{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF};
-  Color box_color_{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF};
-  Color mark_color_{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF};
-  float box_size_ = 22.0F;
-  float font_size_ = 14.0F;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

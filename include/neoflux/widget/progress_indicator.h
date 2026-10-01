@@ -15,13 +15,15 @@
 // A horizontal progress bar: a rounded track with a filled portion drawn from
 // the left, proportional to the current value in [0, 1].
 //
-// All method implementations are in src/widget/progress_indicator.cpp.
+// Pimpl: ProgressIndicator::Impl (progress_indicator.cpp) holds the value and
+// colors. This header includes nothing but <memory> and the widget base.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_PROGRESS_INDICATOR_H_
 #define NEOFLUX_WIDGET_PROGRESS_INDICATOR_H_
 
-#include "neoflux/core/types.h"
+#include <memory>
+
 #include "neoflux/widget/widget.h"
 
 namespace neoflux {
@@ -51,15 +53,13 @@ class ProgressIndicator : public Widget {
 
   // Reports intrinsic bar size to the Taitank layout engine.
   [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
-                                int height_mode) override;
+                               int height_mode) override;
 
   void Paint(RenderContext& context) override;
 
  private:
-  float value_ = 0.0F;
-  Color track_color_{.r = 0xE0, .g = 0xE0, .b = 0xE0, .a = 0xFF};
-  Color fill_color_{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF};
-  float thickness_ = 8.0F;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

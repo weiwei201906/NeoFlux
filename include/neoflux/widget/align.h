@@ -5,7 +5,8 @@
 // at a chosen horizontal/vertical alignment (e.g. top-left, bottom-right).
 // More general than Center, which is equivalent to Align(kCenter, kCenter).
 //
-// All method implementations are in src/widget/align.cpp.
+// Pimpl: Align::Impl (align.cpp) holds the alignment state. This header
+// includes nothing but <memory> and the widget base.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_ALIGN_H_
@@ -23,6 +24,7 @@ class Align : public Container {
  public:
   Align(HAlign horizontal, VAlign vertical,
         std::shared_ptr<Widget> child = nullptr);
+  ~Align() override;
 
   [[nodiscard]] std::string_view GetWidgetName() const noexcept override;
 
@@ -33,11 +35,8 @@ class Align : public Container {
   Align& SetVertical(VAlign vertical) noexcept;
 
  private:
-  // Pushes the current alignment onto the Taitank node.
-  void ApplyAlignment() noexcept;
-
-  HAlign horizontal_ = HAlign::kCenter;
-  VAlign vertical_ = VAlign::kCenter;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

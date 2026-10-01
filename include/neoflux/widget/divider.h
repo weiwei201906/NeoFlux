@@ -6,13 +6,15 @@
 // fixes its thickness on the cross axis; the line itself is painted as a solid
 // background rect.
 //
-// All method implementations are in src/widget/divider.cpp.
+// Pimpl: all state lives in Divider::Impl (divider.cpp). This header includes
+// nothing but <memory> and the widget base.
 // =============================================================================
 
 #ifndef NEOFLUX_WIDGET_DIVIDER_H_
 #define NEOFLUX_WIDGET_DIVIDER_H_
 
-#include "neoflux/core/types.h"
+#include <memory>
+
 #include "neoflux/widget/container.h"
 
 namespace neoflux {
@@ -28,6 +30,7 @@ class Divider : public Container {
  public:
   Divider();
   explicit Divider(float thickness);
+  ~Divider() override;
 
   [[nodiscard]] std::string_view GetWidgetName() const noexcept override;
 
@@ -41,11 +44,8 @@ class Divider : public Container {
   Divider& SetOrientation(DividerOrientation orientation) noexcept;
 
  private:
-  // Applies the fixed thickness to the Taitank node for the current axis.
-  void ApplyThickness() noexcept;
-
-  float thickness_ = 1.0F;
-  DividerOrientation orientation_ = DividerOrientation::kHorizontal;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

@@ -20,7 +20,6 @@
 #include "neoflux/widget/switch.h"
 
 #include <algorithm>
-#include <cstddef>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -55,50 +54,70 @@ constexpr float kLabelGap = 8.0F;
 
 }  // namespace
 
-Switch::Switch() { EnableMeasureFunction(); }
+struct Switch::Impl {
+  OnChanged on_changed;
+  std::string label;
+  bool checked = false;
+  Color on_color{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF};
+  Color off_color{.r = 0xBD, .g = 0xBD, .b = 0xBD, .a = 0xFF};
+  Color knob_color{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF};
+  float track_width = 52.0F;
+  float track_height = 30.0F;
+  float font_size = 14.0F;
+};
 
-Switch::Switch(bool checked) : checked_(checked) { EnableMeasureFunction(); }
+Switch::Switch() : impl_(std::make_unique<Impl>()) {
+  EnableMeasureFunction();
+}
+
+Switch::Switch(bool checked) : impl_(std::make_unique<Impl>()) {
+  impl_->checked = checked;
+  EnableMeasureFunction();
+}
 
 Switch::~Switch() = default;
 
 std::string_view Switch::GetWidgetName() const noexcept { return "Switch"; }
 
 Switch& Switch::SetChecked(bool checked) noexcept {
-  checked_ = checked;
+  impl_->checked = checked;
   MarkNeedsBuild();
   return *this;
 }
 
-bool Switch::IsChecked() const noexcept { return checked_; }
+bool Switch::IsChecked() const noexcept { return impl_->checked; }
 
 Switch& Switch::SetOnChanged(OnChanged callback) noexcept {
-  on_changed_ = std::move(callback);
+  impl_->on_changed = std::move(callback);
   return *this;
 }
 
 Switch& Switch::SetLabel(std::string label) {
-  label_ = std::move(label);
+  impl_->label = std::move(label);
   MarkNeedsBuild();
   return *this;
 }
 
 Switch& Switch::SetOnColor(const Color& color) noexcept {
-  on_color_ = color;
+  impl_->on_color = color;
   return *this;
 }
 
 Switch& Switch::SetOffColor(const Color& color) noexcept {
-  off_color_ = color;
+  impl_->off_color = color;
   return *this;
 }
 
 Size Switch::OnMeasure(float width, int width_mode, float height,
                       int height_mode) {
-  const float label_width =
-      label_.empty() ? 0.0F : kLabelGap + EstimateLabelWidth(label_, font_size_);
-  const float intrinsic_width = track_width_ + label_width;
+  const float label_width = impl_->label.empty()
+                                ? 0.0F
+                                : kLabelGap +
+                                      EstimateLabelWidth(impl_->label,
+                                                         impl_->font_size);
+  const float intrinsic_width = impl_->track_width + label_width;
   const float intrinsic_height =
-      std::max(track_height_, font_size_ * 1.3F);
+      std::max(impl_->track_height, impl_->font_size * 1.3F);
 
   float measured_width = intrinsic_width;
   float measured_height = intrinsic_height;
@@ -116,44 +135,42 @@ Size Switch::OnMeasure(float width, int width_mode, float height,
 }
 
 void Switch::Paint(RenderContext& context) {
-  const float track_y = (bounds_.height - track_height_) * 0.5F;
-  const Color track_color = checked_ ? on_color_ : off_color_;
+  const float track_y = (bounds_.height - impl_->track_height) * 0.5F;
+  const Color track_color = impl_->checked ? impl_->on_color : impl_->off_color;
   context.DrawRoundedRect(
-      {.x = 0.0F, .y = track_y, .width = track_width_, .height = track_height_},
-      track_color, track_height_ * 0.5F);
+      {.x = 0.0F, .y = track_y, .width = impl_->track_width,
+       .height = impl_->track_height},
+      track_color, impl_->track_height * 0.5F);
 
   // Knob geometry: inset by a small margin inside the track, travelling from
   // the left edge (off) to the right edge (on).
-  const float margin = track_height_ * 0.125F;
-  const float knob_size = track_height_ - (2.0F * margin);
-  const float knob_travel = track_width_ - (2.0F * margin) - knob_size;
-  const float knob_x = margin + (checked_ ? knob_travel : 0.0F);
+  const float margin = impl_->track_height * 0.125F;
+  const float knob_size = impl_->track_height - (2.0F * margin);
+  const float knob_travel =
+      impl_->track_width - (2.0F * margin) - knob_size;
+  const float knob_x = margin + (impl_->checked ? knob_travel : 0.0F);
   context.DrawRoundedRect(
       {.x = knob_x, .y = track_y + margin, .width = knob_size,
        .height = knob_size},
-      knob_color_, knob_size * 0.5F);
+      impl_->knob_color, knob_size * 0.5F);
 
-  if (!label_.empty()) {
+  if (!impl_->label.empty()) {
     const float baseline_y =
-        track_y + ((track_height_ + font_size_) * 0.5F);
-    context.DrawText(label_,
-                     {.x = track_width_ + kLabelGap, .y = baseline_y},
+        track_y + ((impl_->track_height + impl_->font_size) * 0.5F);
+    context.DrawText(impl_->label,
+                     {.x = impl_->track_width + kLabelGap, .y = baseline_y},
                      Color{.r = 0x33, .g = 0x33, .b = 0x33, .a = 0xFF},
-                     font_size_, "");
+                     impl_->font_size, "");
   }
 }
 
 bool Switch::OnPointerDown(const Point& /*local_pos*/) {
-  Toggle();
-  return true;
-}
-
-void Switch::Toggle() {
-  checked_ = !checked_;
+  impl_->checked = !impl_->checked;
   MarkNeedsBuild();
-  if (on_changed_) {
-    on_changed_(checked_);
+  if (impl_->on_changed) {
+    impl_->on_changed(impl_->checked);
   }
+  return true;
 }
 
 }  // namespace neoflux
