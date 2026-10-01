@@ -1,14 +1,15 @@
 // =============================================================================
 // NeoFlux - glfw_bridge.h
 //
-// GLFW bridge for desktop platforms. All method implementations are in
-// glfw_bridge.cpp.
+// GLFW window/input bridge for desktop. Pimpl: all state (GLFWwindow*,
+// callbacks, cursor cache) lives in struct Impl defined in glfw_bridge.cpp.
 // =============================================================================
 
 #ifndef NEOFLUX_RENDER_GLFW_BRIDGE_H_
 #define NEOFLUX_RENDER_GLFW_BRIDGE_H_
 
 #include <functional>
+#include <memory>
 #include <string_view>
 
 #include "neoflux/core/noncopyable.h"
@@ -30,16 +31,13 @@ enum class InputAction : std::uint8_t { kPress = 1, kRelease = 0, kRepeat = 2 };
 using InputEventCallback =
     std::function<void(MouseButton button, InputAction action, const Point& pos)>;
 
-// Callback type for mouse scroll events. Receives the scroll delta in
-// normalized units (positive = up/right).
+// Callback type for mouse scroll events.
 using ScrollEventCallback = std::function<void(double xoffset, double yoffset)>;
 
-// Callback type for framebuffer resize events. Receives the new framebuffer
-// size in pixels.
+// Callback type for framebuffer resize events.
 using ResizeCallback = std::function<void(int width, int height)>;
 
-// Callback type for mouse cursor move events. Receives the new cursor position
-// in window coordinates (pixels, origin at top-left).
+// Callback type for mouse cursor move events.
 using MouseMoveCallback = std::function<void(const Point& pos)>;
 
 // Desktop window and input bridge using GLFW.
@@ -52,7 +50,7 @@ class GlfwBridge : public NonCopyable {
   bool Init(int width, int height, std::string_view title);
 
   // Destroys the window and shuts down GLFW.
-  void Shutdown();
+  void Shutdown() noexcept;
 
   // Polls for window and input events (non-blocking).
   void PollEvents() const;
@@ -66,8 +64,7 @@ class GlfwBridge : public NonCopyable {
   // Returns the window's framebuffer size in pixels.
   void GetFramebufferSize(int& width, int& height) const;
 
-  // Returns the window client-area size in screen coordinates. This may
-  // differ from the requested size due to DPI virtualisation on Windows.
+  // Returns the window client-area size in screen coordinates.
   void GetWindowSize(int& width, int& height) const;
 
   // Returns the native window handle (GLFWwindow*).
@@ -109,14 +106,8 @@ class GlfwBridge : public NonCopyable {
   static void ScrollCallback(GLFWwindow* window, double xoffset,
                              double yoffset);
 
-  GLFWwindow* window_;
-  bool initialized_;
-  InputEventCallback input_callback_{};
-  ScrollEventCallback scroll_callback_{};
-  ResizeCallback resize_callback_{};
-  MouseMoveCallback mouse_move_callback_{};
-  double last_cursor_x_ = 0.0;
-  double last_cursor_y_ = 0.0;
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace neoflux

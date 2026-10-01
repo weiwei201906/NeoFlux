@@ -2,10 +2,10 @@
 # NeoFlux examples
 # =============================================================================
 
-# Build examples as GUI subsystem on Windows (no console window).
-# CMAKE_WIN32_EXECUTABLE works on both MSVC and MinGW. On non-Windows
-# platforms this variable has no effect.
-set(CMAKE_WIN32_EXECUTABLE ON)
+# Build examples with the console subsystem on Windows so their `int main()`
+# entry point resolves (MSVC /subsystem:windows expects WinMain). A console
+# window also surfaces glog output during development.
+set(CMAKE_WIN32_EXECUTABLE OFF)
 
 add_subdirectory(hello_neoflux)
 add_subdirectory(counter)
