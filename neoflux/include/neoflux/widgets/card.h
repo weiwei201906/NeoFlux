@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// This file is adapted from EUI-Neo (https://github.com/sudoevolve/EUI-NEO, commit 782c56993dc1890e0589e2100cfa74322bb0e0bf).
+// NOTICE: see THIRD_PARTY_NOTICES.md for full upstream attribution.
 // =============================================================================
 // NeoFlux - card.h
 //
