@@ -1,853 +1,116 @@
 ﻿// =============================================================================
 // NeoFlux - tgfx_renderer.cpp
 //
-// Renderer backend. When tgfx is available (NEOFLUX_USE_TGFX), this file
-// delegates to tgfx for all rendering. Otherwise, a lightweight OpenGL
-// fallback renderer is used for desktop platforms.
+// tgfx Canvas renderer. Replays RenderCommand objects as tgfx::Canvas draw
+// calls. On desktop, GLFW owns the window and a WGL OpenGL context; this file
+// hands that already-current context to tgfx's OpenGL (WGL) backend via
+// tgfx::GLDevice::Current() and draws into the default framebuffer (id 0).
 //
-// The fallback path provides:
-//   - Colored rectangle rendering via vertex buffer
-//   - UTF-8 text rendering via FreeType glyph texture atlas
-//   - Transform stack (save/restore/translate) for widget positioning
+// All tgfx / GL / GLFW state lives in TgfxRenderer::Impl (Pimpl).
 // =============================================================================
 
 #include "neoflux/render/tgfx_renderer.h"
 
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <cstring>
-#include <cctype>
-#include <filesystem>
-#include <numbers>
 #include <string>
-#include <string_view>
-#include <unordered_map>
-#include <vector>
+#include <utility>
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "neoflux/core/noncopyable.h"
 #include "neoflux/core/font_manager.h"
 #include "neoflux/core/types.h"
-#include "neoflux/render/render_command.h"
+
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+#include <GLFW/glfw3.h>
+
+#include "tgfx/core/Canvas.h"
+#include "tgfx/core/Color.h"
+#include "tgfx/core/Font.h"
+#include "tgfx/core/Paint.h"
+#include "tgfx/core/RRect.h"
+#include "tgfx/core/Rect.h"
+#include "tgfx/core/Surface.h"
+#include "tgfx/core/Typeface.h"
+#include "tgfx/gpu/Backend.h"
+#include "tgfx/gpu/Context.h"
+#include "tgfx/gpu/opengl/GLDevice.h"
+#include "tgfx/gpu/opengl/GLTypes.h"
+#endif
 
 namespace neoflux {
 
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-#include <GLFW/glfw3.h>
-#include <ft2build.h>
-#include FT_FREETYPE_H
+struct TgfxRenderer::Impl {
+  GLFWwindow* window = nullptr;
 
-namespace {
+  // tgfx objects. The device wraps the GLFW-owned WGL context; the context is
+  // locked on the render thread for the whole frame.
+  std::shared_ptr<tgfx::GLDevice> device;
+  tgfx::Context* context = nullptr;
+  std::shared_ptr<tgfx::Surface> surface;
+  tgfx::Canvas* canvas = nullptr;
 
-// Standard C types for GL function pointers (avoids GL.h dependency).
-using GlEnum = unsigned int;
-using GlBitfield = unsigned int;
-using GlInt = int;
-using GlUint = unsigned int;
-using GlSizei = int;
-using GlFloat = float;
-using GlVoid = void;
-using GlSizeiptr = long long;  // NOLINT
-using GlIntptr = long long;    // NOLINT
+  std::shared_ptr<tgfx::Typeface> typeface;
+  FontManager font_manager;
 
-// ---------------------------------------------------------------------------
-// OpenGL function loader. Loads all required entry points via
-// glfwGetProcAddress after a context is current.
-// ---------------------------------------------------------------------------
-struct GlLoader {
-  void(APIENTRY* glEnable)(GlEnum) = nullptr;
-  void(APIENTRY* glDisable)(GlEnum) = nullptr;
-  void(APIENTRY* glBlendFunc)(GlEnum, GlEnum) = nullptr;
-  void(APIENTRY* glViewport)(GlInt, GlInt, GlSizei, GlSizei) = nullptr;
-  void(APIENTRY* glClearColor)(GlFloat, GlFloat, GlFloat, GlFloat) = nullptr;
-  void(APIENTRY* glClear)(GlBitfield) = nullptr;
-  GlUint(APIENTRY* glCreateShader)(GlEnum) = nullptr;
-  void(APIENTRY* glShaderSource)(GlUint, GlSizei, const char* const*,
-                                 const GlInt*) = nullptr;
-  void(APIENTRY* glCompileShader)(GlUint) = nullptr;
-  void(APIENTRY* glGetShaderiv)(GlUint, GlEnum, GlInt*) = nullptr;
-  void(APIENTRY* glGetShaderInfoLog)(GlUint, GlSizei, GlSizei*, char*) = nullptr;
-  GlUint(APIENTRY* glCreateProgram)() = nullptr;
-  void(APIENTRY* glAttachShader)(GlUint, GlUint) = nullptr;
-  void(APIENTRY* glLinkProgram)(GlUint) = nullptr;
-  void(APIENTRY* glGetProgramiv)(GlUint, GlEnum, GlInt*) = nullptr;
-  void(APIENTRY* glGetProgramInfoLog)(GlUint, GlSizei, GlSizei*, char*) = nullptr;
-  void(APIENTRY* glDeleteShader)(GlUint) = nullptr;
-  GlInt(APIENTRY* glGetUniformLocation)(GlUint, const char*) = nullptr;
-  void(APIENTRY* glUseProgram)(GlUint) = nullptr;
-  void(APIENTRY* glUniform4f)(GlInt, GlFloat, GlFloat, GlFloat, GlFloat) = nullptr;
-  void(APIENTRY* glUniform2f)(GlInt, GlFloat, GlFloat) = nullptr;
-  void(APIENTRY* glUniform1i)(GlInt, GlInt) = nullptr;
-  void(APIENTRY* glGenVertexArrays)(GlSizei, GlUint*) = nullptr;
-  void(APIENTRY* glGenBuffers)(GlSizei, GlUint*) = nullptr;
-  void(APIENTRY* glBindVertexArray)(GlUint) = nullptr;
-  void(APIENTRY* glBindBuffer)(GlEnum, GlUint) = nullptr;
-  void(APIENTRY* glEnableVertexAttribArray)(GlUint) = nullptr;
-  void(APIENTRY* glVertexAttribPointer)(GlUint, GlInt, GlEnum, unsigned char,
-                                        GlSizei, const GlVoid*) = nullptr;
-  void(APIENTRY* glBufferData)(GlEnum, GlSizeiptr, const GlVoid*, GlEnum) = nullptr;
-  void(APIENTRY* glBufferSubData)(GlEnum, GlIntptr, GlSizeiptr, const GlVoid*) = nullptr;
-  void(APIENTRY* glDrawArrays)(GlEnum, GlInt, GlSizei) = nullptr;
-  void(APIENTRY* glGenTextures)(GlSizei, GlUint*) = nullptr;
-  void(APIENTRY* glBindTexture)(GlEnum, GlUint) = nullptr;
-  void(APIENTRY* glTexParameteri)(GlEnum, GlEnum, GlInt) = nullptr;
-  void(APIENTRY* glTexImage2D)(GlEnum, GlInt, GlInt, GlSizei, GlSizei, GlInt,
-                               GlEnum, GlEnum, const GlVoid*) = nullptr;
-  void(APIENTRY* glTexSubImage2D)(GlEnum, GlInt, GlInt, GlInt, GlSizei, GlSizei,
-                                  GlEnum, GlEnum, const GlVoid*) = nullptr;
-  void(APIENTRY* glActiveTexture)(GlEnum) = nullptr;
-  void(APIENTRY* glPixelStorei)(GlEnum, GlInt) = nullptr;
-  void(APIENTRY* glScissor)(GlInt, GlInt, GlSizei, GlSizei) = nullptr;
-  void(APIENTRY* glDeleteTextures)(GlSizei, const GlUint*) = nullptr;
-  void(APIENTRY* glDeleteBuffers)(GlSizei, const GlUint*) = nullptr;
-  void(APIENTRY* glDeleteVertexArrays)(GlSizei, const GlUint*) = nullptr;
-  void(APIENTRY* glDeleteProgram)(GlUint) = nullptr;
-  GlEnum(APIENTRY* glGetError)() = nullptr;
+  int width = 0;    // Logical (window) size, layout coordinates.
+  int height = 0;
+  int fb_width = 0;  // Physical framebuffer size (for the render target).
+  int fb_height = 0;
+  bool ready = false;
 
-  bool Load() {
-// NOLINTBEGIN(bugprone-macro-parentheses)
-#define NEOFLUX_LOAD_GL(name)                                       \
-  name = reinterpret_cast<decltype(name)>(glfwGetProcAddress(#name)); \
-  if (name == nullptr) {                                            \
-    LOG(ERROR) << "Failed to load " << #name;                       \
-    return false;                                                   \
-  }
-  // NOLINTEND(bugprone-macro-parentheses)
-  // NOLINTBEGIN(bugprone-macro-parentheses)
-  NEOFLUX_LOAD_GL(glEnable)
-  NEOFLUX_LOAD_GL(glDisable)
-  NEOFLUX_LOAD_GL(glBlendFunc)
-    NEOFLUX_LOAD_GL(glViewport)
-    NEOFLUX_LOAD_GL(glClearColor)
-    NEOFLUX_LOAD_GL(glClear)
-    NEOFLUX_LOAD_GL(glCreateShader)
-    NEOFLUX_LOAD_GL(glShaderSource)
-    NEOFLUX_LOAD_GL(glCompileShader)
-    NEOFLUX_LOAD_GL(glGetShaderiv)
-    NEOFLUX_LOAD_GL(glGetShaderInfoLog)
-    NEOFLUX_LOAD_GL(glCreateProgram)
-    NEOFLUX_LOAD_GL(glAttachShader)
-    NEOFLUX_LOAD_GL(glLinkProgram)
-    NEOFLUX_LOAD_GL(glGetProgramiv)
-    NEOFLUX_LOAD_GL(glGetProgramInfoLog)
-    NEOFLUX_LOAD_GL(glDeleteShader)
-    NEOFLUX_LOAD_GL(glGetUniformLocation)
-    NEOFLUX_LOAD_GL(glUseProgram)
-    NEOFLUX_LOAD_GL(glUniform4f)
-    NEOFLUX_LOAD_GL(glUniform2f)
-    NEOFLUX_LOAD_GL(glUniform1i)
-    NEOFLUX_LOAD_GL(glGenVertexArrays)
-    NEOFLUX_LOAD_GL(glGenBuffers)
-    NEOFLUX_LOAD_GL(glBindVertexArray)
-    NEOFLUX_LOAD_GL(glBindBuffer)
-    NEOFLUX_LOAD_GL(glEnableVertexAttribArray)
-    NEOFLUX_LOAD_GL(glVertexAttribPointer)
-    NEOFLUX_LOAD_GL(glBufferData)
-    NEOFLUX_LOAD_GL(glBufferSubData)
-    NEOFLUX_LOAD_GL(glDrawArrays)
-    NEOFLUX_LOAD_GL(glGenTextures)
-    NEOFLUX_LOAD_GL(glBindTexture)
-    NEOFLUX_LOAD_GL(glTexParameteri)
-    NEOFLUX_LOAD_GL(glTexImage2D)
-    NEOFLUX_LOAD_GL(glTexSubImage2D)
-    NEOFLUX_LOAD_GL(glActiveTexture)
-    NEOFLUX_LOAD_GL(glPixelStorei)
-    NEOFLUX_LOAD_GL(glScissor)
-    NEOFLUX_LOAD_GL(glDeleteTextures)
-    NEOFLUX_LOAD_GL(glDeleteBuffers)
-    NEOFLUX_LOAD_GL(glDeleteVertexArrays)
-    NEOFLUX_LOAD_GL(glDeleteProgram)
-    NEOFLUX_LOAD_GL(glGetError)
-  // NOLINTEND(bugprone-macro-parentheses)
-#undef NEOFLUX_LOAD_GL
+  // Acquires the tgfx device/context for the already-current WGL context.
+  // Must be called on the thread where the GLFW context is current.
+  bool EnsureDevice() {
+    if (ready) {
+      return true;
+    }
+    device = tgfx::GLDevice::Current();
+    if (device == nullptr) {
+      LOG(ERROR) << "tgfx::GLDevice::Current() returned nullptr; no current "
+                    "WGL context on this thread";
+      return false;
+    }
+    context = device->lockContext();
+    if (context == nullptr) {
+      LOG(ERROR) << "tgfx device->lockContext() returned nullptr";
+      return false;
+    }
+    ready = true;
+    LOG(INFO) << "tgfx WGL device attached to existing GLFW context";
     return true;
   }
 };
-
-// Vertex format: position (x, y) + texcoord (u, v), 4 floats per vertex.
-constexpr int kVertexSize = 4;
-
-// Pre-allocated VBO capacity in bytes. Large enough for a full rounded-rect
-// fan (~42 vertices) or a long text string (~256 glyphs).
-constexpr GlSizeiptr kMaxVboBytes = 64LL * 1024;
-
-// Texture atlas dimensions for glyph caching.
-constexpr int kAtlasSize = 1024;
-
-// Per-glyph metadata stored in the atlas cache.
-struct GlyphInfo {
-  float u0 = 0.0F;
-  float v0 = 0.0F;
-  float u1 = 0.0F;
-  float v1 = 0.0F;
-  float bearing_x = 0.0F;
-  float bearing_y = 0.0F;
-  float advance = 0.0F;
+#else
+struct TgfxRenderer::Impl {
   int width = 0;
   int height = 0;
 };
-
-// Transform entry: accumulated (x, y) translation.
-struct Transform {
-  float x = 0.0F;
-  float y = 0.0F;
-};
-
-// ---------------------------------------------------------------------------
-// Lightweight OpenGL fallback renderer.
-// ---------------------------------------------------------------------------
-class GlRendererImpl : public NonCopyable {
- public:
-  GlRendererImpl() = default;
-  ~GlRendererImpl() { Cleanup(); }
-  GlRendererImpl(const GlRendererImpl&) = delete;
-  GlRendererImpl& operator=(const GlRendererImpl&) = delete;
-  GlRendererImpl(GlRendererImpl&&) = delete;
-  GlRendererImpl& operator=(GlRendererImpl&&) = delete;
-
-  bool Init(int width, int height, void* native_handle) {
-    window_ = static_cast<GLFWwindow*>(native_handle);
-    width_ = width;
-    height_ = height;
-    // GL initialization is deferred to BeginFrame, which runs on the render
-    // thread where the GL context is current. FreeType does not need GL.
-    InitFonts();
-    return true;
-  }
-
-  void BeginFrame(const Color& clear) {
-    if (!InitializeGL()) {
-      return;
-    }
-    // Query the actual framebuffer size (may differ from window size due to
-    // DPI scaling). glViewport scales NDC to framebuffer pixels; u_resolution
-    // stays at layout (window) size so shader math uses layout coordinates.
-    int fb_width = 0;
-    int fb_height = 0;
-    glfwGetFramebufferSize(window_, &fb_width, &fb_height);
-    if (fb_width <= 0 || fb_height <= 0) {
-      fb_width = width_;
-      fb_height = height_;
-    }
-    gl.glViewport(0, 0, fb_width, fb_height);
-    // Query the logical window size every frame so resizes are reflected in
-    // the shader's u_resolution without a separate callback.
-    int win_width = 0;
-    int win_height = 0;
-    glfwGetWindowSize(window_, &win_width, &win_height);
-    if (win_width > 0 && win_height > 0) {
-      width_ = win_width;
-      height_ = win_height;
-    }
-    gl.glClearColor(clear.r / 255.0F, clear.g / 255.0F, clear.b / 255.0F,
-                    clear.a / 255.0F);
-    gl.glClear(0x00004000U | 0x00000100U);
-    // Update u_resolution every frame so window resizes take effect
-    // without re-initializing GL. u_resolution uses logical (layout) size,
-    // not physical framebuffer size.
-    gl.glUseProgram(program_);
-    gl.glUniform2f(u_resolution_, static_cast<float>(width_),
-                   static_cast<float>(height_));
-    transform_stack_.clear();
-    transform_stack_.push_back({0.0F, 0.0F});
-    clip_stack_.clear();
-  }
-
-  void EndFrame() { /* buffer swap handled by GLFW bridge */ }
-
-  void DrawRect(const Rect& rect, const Color& color) {
-    if (!gl_ready_) {
-      return;
-    }
-    const Transform& t = transform_stack_.back();
-
-    // Use relative vertices and u_translate for positioning.
-    const float vertices[] = {
-      rect.x, rect.y, 0.0F, 0.0F,
-      rect.x + rect.width, rect.y, 0.0F, 0.0F,
-      rect.x, rect.y + rect.height, 0.0F, 0.0F,
-      rect.x + rect.width, rect.y, 0.0F, 0.0F,
-      rect.x + rect.width, rect.y + rect.height, 0.0F, 0.0F,
-      rect.x, rect.y + rect.height, 0.0F, 0.0F,
-    };
-
-    gl.glUseProgram(program_);
-    gl.glUniform2f(u_translate_, t.x, t.y);
-    gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
-                   color.b / 255.0F, color.a / 255.0F);
-    gl.glUniform1i(u_use_texture_, 0);
-    gl.glBindVertexArray(vao_);
-    gl.glBindBuffer(0x8892, vbo_);
-    gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
-    gl.glDrawArrays(0x0004, 0, 6);
-  }
-
-  // Draws a filled rounded rectangle using a triangle fan. The boundary
-  // is sampled at kRoundedSegments points per corner; interior is filled
-  // from the rectangle centre. Coordinates use y-down (screen space), so
-  // the y-component of each arc uses -sin(angle).
-  void DrawRoundedRect(const Rect& rect, const Color& color, float radius) {
-    if (!gl_ready_) {
-      return;
-    }
-    if (radius <= 0.0F || rect.width <= 0.0F || rect.height <= 0.0F) {
-      DrawRect(rect, color);
-      return;
-    }
-    const float r = std::min(radius, std::min(rect.width, rect.height) * 0.5F);
-    const Transform& t = transform_stack_.back();
-    constexpr int kSeg = 10;
-    // 1 centre + 4 corners * kSeg boundary points (last point of each
-    // corner is shared with first point of next, so we skip the duplicate
-    // on corners 1-3 and add a final closing point).
-    constexpr int kBoundary = (4 * kSeg) + 1;
-    constexpr int kVertexCount = 1 + kBoundary;
-    float vertices[kVertexCount * 4];
-    const float cx = rect.x + (rect.width * 0.5F);
-    const float cy = rect.y + (rect.height * 0.5F);
-    int idx = 0;
-    vertices[idx++] = cx;
-    vertices[idx++] = cy;
-    vertices[idx++] = 0.0F;
-    vertices[idx++] = 0.0F;
-    // Corner centres in order TL, TR, BR, BL. Each corner sweeps a
-    // quarter-circle clockwise (visually CCW in y-down space).
-    constexpr float kPi = std::numbers::pi_v<float>;
-    struct Corner {
-      float cxy[2];
-      float a0;
-    };
-    const Corner corners[4] = {
-        {.cxy = {rect.x + r, rect.y + r}, .a0 = kPi},
-        {.cxy = {rect.x + rect.width - r, rect.y + r}, .a0 = kPi * 0.5F},
-        {.cxy = {rect.x + rect.width - r, rect.y + rect.height - r}, .a0 = 0.0F},
-        {.cxy = {rect.x + r, rect.y + rect.height - r}, .a0 = -kPi * 0.5F},
-    };
-    for (const Corner& corner : corners) {
-      for (int s = 0; s < kSeg; ++s) {
-        const float a = corner.a0 -
-                        ((kPi * 0.5F) * static_cast<float>(s) /
-                         static_cast<float>(kSeg));
-        const float px = corner.cxy[0] + (r * std::cos(a));
-        const float py = corner.cxy[1] - (r * std::sin(a));
-        vertices[idx++] = px;
-        vertices[idx++] = py;
-        vertices[idx++] = 0.0F;
-        vertices[idx++] = 0.0F;
-      }
-    }
-    // Closing point = first boundary point (TL left end).
-    vertices[idx++] = rect.x;
-    vertices[idx++] = rect.y + r;
-    vertices[idx++] = 0.0F;
-    vertices[idx++] = 0.0F;
-
-    gl.glUseProgram(program_);
-    gl.glUniform2f(u_translate_, t.x, t.y);
-    gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
-                   color.b / 255.0F, color.a / 255.0F);
-    gl.glUniform1i(u_use_texture_, 0);
-    gl.glBindVertexArray(vao_);
-    gl.glBindBuffer(0x8892, vbo_);
-    gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
-    gl.glDrawArrays(0x0006, 0, kVertexCount);  // GL_TRIANGLE_FAN
-  }
-
-  void DrawText(std::string_view text, const Point& position,
-                const Color& color, float font_size,
-                std::string_view font_name) {
-    if (!gl_ready_) {
-      return;
-    }
-    const Transform& t = transform_stack_.back();
-    FT_Face face = GetFontFace(font_name);
-    if (face == nullptr) {
-      return;
-    }
-    float cursor_x = position.x;
-    const float baseline_y = position.y;
-
-    gl.glUseProgram(program_);
-    gl.glUniform2f(u_translate_, t.x, t.y);
-    gl.glUniform4f(u_color_, color.r / 255.0F, color.g / 255.0F,
-                   color.b / 255.0F, color.a / 255.0F);
-    gl.glUniform1i(u_use_texture_, 1);
-    gl.glActiveTexture(0x84C0);
-    gl.glBindTexture(0x0DE1, atlas_texture_);
-    gl.glBindVertexArray(vao_);
-    gl.glBindBuffer(0x8892, vbo_);
-
-    std::size_t i = 0;
-    while (i < text.size()) {
-      std::uint32_t cp = 0;
-      const auto c = static_cast<unsigned char>(text[i]);
-      int seq_len = 1;
-      if (c < 0x80) {
-        cp = c;
-      } else if ((c & 0xE0) == 0xC0) {
-        cp = c & 0x1F;
-        seq_len = 2;
-      } else if ((c & 0xF0) == 0xE0) {
-        cp = c & 0x0F;
-        seq_len = 3;
-      } else if ((c & 0xF8) == 0xF0) {
-        cp = c & 0x07;
-        seq_len = 4;
-      }
-      for (int j = 1; j < seq_len && i + j < text.size(); ++j) {
-        cp = (cp << 6) | (static_cast<unsigned char>(text[i + j]) & 0x3FU);
-      }
-      i += seq_len;
-
-      const GlyphInfo* glyph = GetGlyph(face, cp, font_size);
-      if (glyph == nullptr) {
-        continue;
-      }
-
-      const float draw_x = cursor_x + glyph->bearing_x;
-      const float draw_y = baseline_y - glyph->bearing_y;
-      const float x0 = draw_x;
-      const float y0 = draw_y;
-      const float x1 = draw_x + static_cast<float>(glyph->width);
-      const float y1 = draw_y + static_cast<float>(glyph->height);
-
-      const float vertices[] = {
-        x0, y0, glyph->u0, glyph->v0, x1, y0, glyph->u1, glyph->v0,
-        x0, y1, glyph->u0, glyph->v1, x1, y0, glyph->u1, glyph->v0,
-        x1, y1, glyph->u1, glyph->v1, x0, y1, glyph->u0, glyph->v1,
-      };
-
-      gl.glBufferSubData(0x8892, 0, sizeof(vertices), vertices);
-      gl.glDrawArrays(0x0004, 0, 6);
-
-      cursor_x += glyph->advance;
-    }
-  }
-
-  void Save() {
-    transform_stack_.push_back(transform_stack_.empty()
-                                   ? Transform{0.0F, 0.0F}
-                                   : transform_stack_.back());
-    // Save current clip rect (width < 0 means no clipping).
-    clip_stack_.push_back(clip_stack_.empty()
-                              ? Rect{.x = 0, .y = 0, .width = -1.0F, .height = -1.0F}
-                              : clip_stack_.back());
-  }
-
-  void Restore() {
-    if (transform_stack_.size() > 1) {
-      transform_stack_.pop_back();
-    }
-    if (clip_stack_.size() > 1) {
-      clip_stack_.pop_back();
-      ApplyClip(clip_stack_.back());
-    }
-  }
-
-  void Translate(float delta_x, float delta_y) {
-    if (!transform_stack_.empty()) {
-      transform_stack_.back().x += delta_x;
-      transform_stack_.back().y += delta_y;
-    }
-  }
-
-  void ClipRect(const Rect& rect) {
-    // Intersect with current clip (if any) and apply.
-    Rect result = rect;
-    if (!clip_stack_.empty() && clip_stack_.back().width >= 0.0F) {
-      const Rect& cur = clip_stack_.back();
-      const float x1 = std::max(cur.x, rect.x);
-      const float y1 = std::max(cur.y, rect.y);
-      const float x2 = std::min(cur.x + cur.width, rect.x + rect.width);
-      const float y2 = std::min(cur.y + cur.height, rect.y + rect.height);
-      result = {.x = x1, .y = y1, .width = std::max(0.0F, x2 - x1),
-                .height = std::max(0.0F, y2 - y1)};
-    }
-    // NOLINTNEXTLINE(bugprone-branch-clone)
-    if (clip_stack_.empty()) {
-      clip_stack_.push_back(result);
-    } else {
-      clip_stack_.back() = result;
-    }
-    ApplyClip(result);
-  }
-
-  // Applies a clip rect via glScissor. rect.width < 0 disables scissor.
-  void ApplyClip(const Rect& rect) const {
-    if (rect.width < 0.0F || rect.height < 0.0F) {
-      gl.glDisable(0x0C11);  // GL_SCISSOR_TEST
-      return;
-    }
-    gl.glEnable(0x0C11);  // GL_SCISSOR_TEST
-    // glScissor uses bottom-left origin; our coords are top-left.
-    gl.glScissor(static_cast<GlInt>(rect.x),
-                 static_cast<GlInt>(static_cast<float>(height_) - rect.y -
-                                    rect.height),
-                 static_cast<GlSizei>(rect.width),
-                 static_cast<GlSizei>(rect.height));
-  }
-
-  void Resize(int width, int height) {
-    width_ = width;
-    height_ = height;
-  }
-
- private:
-  bool InitializeGL() {
-    if (gl_ready_) {
-      return true;
-    }
-    if (!gl.Load()) {
-      LOG(ERROR) << "Failed to load OpenGL functions";
-      return false;
-    }
-
-    static const char* kVertSrc = R"(
-      #version 330 core
-      layout(location = 0) in vec4 a_pos;
-      uniform vec2 u_resolution;
-      uniform vec2 u_translate;
-      out vec2 v_uv;
-      void main() {
-        vec2 p = a_pos.xy + u_translate;
-        vec2 clip = (p / u_resolution) * 2.0 - 1.0;
-        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-        v_uv = a_pos.zw;
-      })";
-    static const char* kFragSrc = R"(
-      #version 330 core
-      in vec2 v_uv;
-      uniform vec4 u_color;
-      uniform sampler2D u_texture;
-      uniform int u_use_texture;
-      out vec4 frag_color;
-      void main() {
-        if (u_use_texture != 0) {
-          float a = texture(u_texture, v_uv).r;
-          frag_color = vec4(u_color.rgb, u_color.a * a);
-        } else {
-          frag_color = u_color;
-        }
-      })";
-
-    const GlUint vs = gl.glCreateShader(0x8B31);
-    const GlUint fs = gl.glCreateShader(0x8B30);
-    gl.glShaderSource(vs, 1, &kVertSrc, nullptr);
-    gl.glShaderSource(fs, 1, &kFragSrc, nullptr);
-    gl.glCompileShader(vs);
-    gl.glCompileShader(fs);
-
-    GlInt ok = 0;
-    gl.glGetShaderiv(vs, 0x8B81, &ok);
-    if (ok == 0) {
-      char log[512];
-      gl.glGetShaderInfoLog(vs, 512, nullptr, log);
-      LOG(ERROR) << "Vertex shader compile failed: " << log;
-      return false;
-    }
-    gl.glGetShaderiv(fs, 0x8B81, &ok);
-    if (ok == 0) {
-      char log[512];
-      gl.glGetShaderInfoLog(fs, 512, nullptr, log);
-      LOG(ERROR) << "Fragment shader compile failed: " << log;
-      return false;
-    }
-
-    program_ = gl.glCreateProgram();
-    gl.glAttachShader(program_, vs);
-    gl.glAttachShader(program_, fs);
-    gl.glLinkProgram(program_);
-    gl.glGetProgramiv(program_, 0x8B82, &ok);
-    if (ok == 0) {
-      char log[512];
-      gl.glGetProgramInfoLog(program_, 512, nullptr, log);
-      LOG(ERROR) << "Shader link failed: " << log;
-      return false;
-    }
-    gl.glDeleteShader(vs);
-    gl.glDeleteShader(fs);
-
-    u_resolution_ = gl.glGetUniformLocation(program_, "u_resolution");
-    u_translate_ = gl.glGetUniformLocation(program_, "u_translate");
-    u_color_ = gl.glGetUniformLocation(program_, "u_color");
-    u_texture_ = gl.glGetUniformLocation(program_, "u_texture");
-    u_use_texture_ = gl.glGetUniformLocation(program_, "u_use_texture");
-
-    gl.glGenVertexArrays(1, &vao_);
-    gl.glGenBuffers(1, &vbo_);
-    gl.glBindVertexArray(vao_);
-    gl.glBindBuffer(0x8892, vbo_);
-    // Pre-allocate VBO storage. Using glBufferSubData per-draw avoids
-    // repeated reallocation (which can stall on first use) and is the
-    // recommended path for dynamic vertex data.
-    gl.glBufferData(0x8892, kMaxVboBytes, nullptr, 0x88E8);
-    gl.glEnableVertexAttribArray(0);
-    gl.glVertexAttribPointer(0, kVertexSize, 0x1406, 0,
-                             kVertexSize * static_cast<GlSizei>(sizeof(float)),
-                             nullptr);
-
-    gl.glGenTextures(1, &atlas_texture_);
-    gl.glBindTexture(0x0DE1, atlas_texture_);
-    gl.glTexParameteri(0x0DE1, 0x2800, 0x2601);
-    gl.glTexParameteri(0x0DE1, 0x2801, 0x2601);
-    gl.glTexParameteri(0x0DE1, 0x2802, 0x812F);
-    gl.glTexParameteri(0x0DE1, 0x2803, 0x812F);
-    // GL_R8 internal format: 8-bit single-channel grayscale for glyph coverage.
-    gl.glTexImage2D(0x0DE1, 0, 0x8229, kAtlasSize, kAtlasSize, 0, 0x1903,
-                    0x1401, nullptr);
-    // Clear the atlas to zero (transparent). glTexImage2D with nullptr
-    // leaves the texture contents undefined, which can cause garbage
-    // pixels (white squares) on first frame before any glyph is uploaded.
-    {
-      std::vector<unsigned char> zeros(
-          static_cast<std::size_t>(kAtlasSize) * kAtlasSize, 0);
-      gl.glTexSubImage2D(0x0DE1, 0, 0, 0, kAtlasSize, kAtlasSize, 0x1903,
-                         0x1401, zeros.data());
-    }
-
-    gl.glEnable(0x0BE2);
-    gl.glBlendFunc(0x0302, 0x0303);
-
-    gl.glUseProgram(program_);
-    gl.glUniform2f(u_resolution_, static_cast<float>(width_),
-                   static_cast<float>(height_));
-    gl.glUniform2f(u_translate_, 0.0F, 0.0F);
-    gl.glUniform1i(u_texture_, 0);
-
-    gl_ready_ = true;
-    LOG(INFO) << "OpenGL fallback renderer initialized (" << width_ << "x"
-              << height_ << ")";
-    return true;
-  }
-
-  // Initializes FreeType and scans the default font directories.
-  void InitFonts() {
-    if (FT_Init_FreeType(&ft_library_) != 0) {
-      LOG(ERROR) << "Failed to initialize FreeType";
-      return;
-    }
-    // Scan common font locations. Developers place their fonts in
-    // thirdparty/fonts/ and reference them by filename stem.
-    font_manager_.ScanDirectory("thirdparty/fonts");
-    font_manager_.ScanDirectory("../thirdparty/fonts");
-    font_manager_.ScanDirectory("../../thirdparty/fonts");
-    if (font_manager_.GetFontCount() == 0) {
-      LOG(WARNING) << "No fonts found in thirdparty/fonts/. "
-                   << "Text rendering will be disabled.";
-    }
-  }
-
-  // Returns the FT_Face for the given font name, loading and caching it on
-  // first use. If font_name is empty, returns the default font. Returns
-  // nullptr if the font cannot be found or loaded.
-  FT_Face GetFontFace(std::string_view font_name) {
-    if (ft_library_ == nullptr) {
-      return nullptr;
-    }
-    std::string name(font_name);
-    if (name.empty()) {
-      name = font_manager_.GetDefaultFont();
-    }
-    if (name.empty()) {
-      return nullptr;
-    }
-    // Normalize to lowercase for case-insensitive cache lookup (matches
-    // FontManager's internal keying).
-    std::transform(name.begin(), name.end(), name.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-    const auto it = font_faces_.find(name);
-    if (it != font_faces_.end()) {
-      return it->second;
-    }
-
-    const std::string path = font_manager_.GetPath(name);
-    if (path.empty()) {
-      LOG(WARNING) << "Font not found: " << name;
-      return nullptr;
-    }
-
-    FT_Face face = nullptr;
-    if (FT_New_Face(ft_library_, path.c_str(), 0, &face) != 0) {
-      LOG(ERROR) << "Failed to load font: " << path;
-      return nullptr;
-    }
-    font_faces_[name] = face;
-    LOG(INFO) << "Loaded font: " << name << " (" << path << ")";
-    return face;
-  }
-
-  const GlyphInfo* GetGlyph(FT_Face face, std::uint32_t codepoint,
-                            float font_size) {
-    if (face == nullptr) {
-      return nullptr;
-    }
-
-    const int size_key = static_cast<int>(font_size);
-    const auto key = (static_cast<std::uint64_t>(codepoint) << 32) |
-                     static_cast<std::uint32_t>(size_key);
-    auto it = glyph_cache_.find(key);
-    if (it != glyph_cache_.end()) {
-      return &it->second;
-    }
-
-    FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(size_key));
-
-    if (FT_Load_Char(face, codepoint, FT_LOAD_DEFAULT) != 0) {
-      return nullptr;
-    }
-    if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL) != 0) {
-      return nullptr;
-    }
-
-    const FT_Bitmap& bitmap = face->glyph->bitmap;
-    const int w = static_cast<int>(bitmap.width);
-    const int h = static_cast<int>(bitmap.rows);
-
-    if (w == 0 || h == 0) {
-      GlyphInfo info;
-      info.advance = static_cast<float>(
-          static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);  // NOLINT(bugprone-signed-bitwise)
-      glyph_cache_[key] = info;
-      return &glyph_cache_[key];
-    }
-
-    if (atlas_x_ + w > kAtlasSize) {
-      atlas_x_ = 0;
-      atlas_y_ = atlas_row_height_ + 1;
-      atlas_row_height_ = 0;
-    }
-    if (atlas_y_ + h > kAtlasSize) {
-      LOG(WARNING) << "Glyph atlas full";
-      return nullptr;
-    }
-
-    // Copy glyph bitmap to a tightly packed grayscale buffer. FreeType may
-    // pad rows (pitch > width) or use negative pitch (bottom-up).
-    std::vector<unsigned char> packed(static_cast<std::size_t>(w) * h);
-    const int pitch = bitmap.pitch;
-    if (pitch >= 0) {
-      for (int row = 0; row < h; ++row) {
-        std::memcpy(packed.data() + static_cast<std::size_t>(row) * w,
-                    bitmap.buffer + row * pitch,
-                    static_cast<std::size_t>(w));
-      }
-    } else {
-      // Negative pitch: bitmap is bottom-up. Read from bottom row.
-      for (int row = 0; row < h; ++row) {
-        std::memcpy(packed.data() + static_cast<std::size_t>(row) *
-                                        static_cast<std::size_t>(w),
-                    bitmap.buffer + (h - 1 - row) * (-pitch),
-                    static_cast<std::size_t>(w));
-      }
-    }
-
-    gl.glBindTexture(0x0DE1, atlas_texture_);
-    gl.glPixelStorei(0x0CF5, 1);  // GL_UNPACK_ALIGNMENT = 1
-    gl.glTexSubImage2D(0x0DE1, 0, atlas_x_, atlas_y_, w, h, 0x1903, 0x1401,
-                       packed.data());
-    gl.glPixelStorei(0x0CF5, 4);  // reset to default
-
-    GlyphInfo info;
-    info.u0 = static_cast<float>(atlas_x_) / kAtlasSize;
-    info.v0 = static_cast<float>(atlas_y_) / kAtlasSize;
-    info.u1 = static_cast<float>(atlas_x_ + w) / kAtlasSize;
-    info.v1 = static_cast<float>(atlas_y_ + h) / kAtlasSize;
-    info.bearing_x = static_cast<float>(face->glyph->bitmap_left);
-    info.bearing_y = static_cast<float>(face->glyph->bitmap_top);
-    info.advance = static_cast<float>(
-        static_cast<std::uint32_t>(face->glyph->advance.x) >> 6U);  // NOLINT(bugprone-signed-bitwise)
-    info.width = w;
-    info.height = h;
-    glyph_cache_[key] = info;
-
-    atlas_x_ += w + 1;
-    atlas_row_height_ = std::max(atlas_row_height_, h);
-
-    return &glyph_cache_[key];
-  }
-
-  void Cleanup() {
-    if (gl_ready_) {
-      gl.glDeleteTextures(1, &atlas_texture_);
-      gl.glDeleteBuffers(1, &vbo_);
-      gl.glDeleteVertexArrays(1, &vao_);
-      gl.glDeleteProgram(program_);
-    }
-    for (auto& [name, face] : font_faces_) {
-      if (face != nullptr) {
-        FT_Done_Face(face);
-      }
-    }
-    font_faces_.clear();
-    if (ft_library_ != nullptr) {
-      FT_Done_FreeType(ft_library_);
-    }
-  }
-
-  GlLoader gl;
-  GLFWwindow* window_ = nullptr;
-  int width_ = 0;
-  int height_ = 0;
-  bool gl_ready_ = false;
-
-  GlUint program_ = 0;
-  GlUint vao_ = 0;
-  GlUint vbo_ = 0;
-  GlUint atlas_texture_ = 0;
-
-  GlInt u_resolution_ = -1;
-  GlInt u_translate_ = -1;
-  GlInt u_color_ = -1;
-  GlInt u_texture_ = -1;
-  GlInt u_use_texture_ = -1;
-
-  FT_Library ft_library_ = nullptr;
-  FontManager font_manager_{};
-  std::unordered_map<std::string, FT_Face> font_faces_{};
-
-  std::unordered_map<std::uint64_t, GlyphInfo> glyph_cache_{};
-  int atlas_x_ = 0;
-  int atlas_y_ = 0;
-  int atlas_row_height_ = 0;
-
-  std::vector<Transform> transform_stack_{};
-  std::vector<Rect> clip_stack_{};
-};
-
-}  // namespace
-
-#endif  // NEOFLUX_PLATFORM_DESKTOP
-
-// =============================================================================
-// TgfxRenderer public interface
-// =============================================================================
-
-TgfxRenderer::TgfxRenderer() = default;
-
-TgfxRenderer::~TgfxRenderer() {
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-  delete static_cast<GlRendererImpl*>(impl_);
 #endif
-}
+
+TgfxRenderer::TgfxRenderer() : impl_(std::make_unique<Impl>()) {}
+
+TgfxRenderer::~TgfxRenderer() = default;
 
 bool TgfxRenderer::Init(int width, int height, void* native_handle) {
-  if (initialized_) {
-    return true;
-  }
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  auto* impl = new GlRendererImpl();
-  if (!impl->Init(width, height, native_handle)) {
-    delete impl;
-    return false;
+  impl_->window = static_cast<GLFWwindow*>(native_handle);
+  impl_->width = width;
+  impl_->height = height;
+  impl_->font_manager.ScanDirectory("thirdparty/fonts");
+  impl_->font_manager.ScanDirectory("../thirdparty/fonts");
+  impl_->font_manager.ScanDirectory("../../thirdparty/fonts");
+  const std::string default_font = impl_->font_manager.GetDefaultFont();
+  if (!default_font.empty()) {
+    const std::string path = impl_->font_manager.GetPath(default_font);
+    if (!path.empty()) {
+      impl_->typeface = tgfx::Typeface::MakeFromPath(path);
+      if (impl_->typeface == nullptr) {
+        LOG(WARNING) << "tgfx could not load typeface: " << path;
+      }
+    }
+  } else {
+    LOG(WARNING) << "No fonts found in thirdparty/fonts; text will be blank.";
   }
-  impl_ = impl;
-  width_ = width;
-  height_ = height;
-  initialized_ = true;
   return true;
 #else
   (void)width;
@@ -859,9 +122,63 @@ bool TgfxRenderer::Init(int width, int height, void* native_handle) {
 
 void TgfxRenderer::BeginFrame(const Color& clear_color) {
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (impl_ != nullptr) {
-    static_cast<GlRendererImpl*>(impl_)->BeginFrame(clear_color);
+  if (!impl_->EnsureDevice()) {
+    return;
   }
+  // Query the true framebuffer (physical) and window (logical) sizes so DPI
+  // scaling is handled by a canvas scale: layout coordinates stay logical.
+  int fb_w = 0;
+  int fb_h = 0;
+  glfwGetFramebufferSize(impl_->window, &fb_w, &fb_h);
+  int win_w = impl_->width;
+  int win_h = impl_->height;
+  int queried_w = 0;
+  int queried_h = 0;
+  glfwGetWindowSize(impl_->window, &queried_w, &queried_h);
+  if (queried_w > 0 && queried_h > 0) {
+    win_w = queried_w;
+    win_h = queried_h;
+    impl_->width = win_w;
+    impl_->height = win_h;
+  }
+  if (fb_w <= 0 || fb_h <= 0) {
+    fb_w = win_w;
+    fb_h = win_h;
+  }
+
+  // (Re)create the surface on the default framebuffer (id 0) whenever the
+  // framebuffer size changes. Bottom-left origin matches GL; tgfx flips the
+  // canvas internally so drawing uses y-down logical coordinates.
+  if (impl_->surface == nullptr || fb_w != impl_->fb_width ||
+      fb_h != impl_->fb_height) {
+    impl_->fb_width = fb_w;
+    impl_->fb_height = fb_h;
+    tgfx::GLFrameBufferInfo frame_buffer;  // id=0 (default fb), GL_RGBA8.
+    tgfx::BackendRenderTarget render_target(frame_buffer, fb_w, fb_h);
+    impl_->surface = tgfx::Surface::MakeFrom(
+        impl_->context, render_target, tgfx::ImageOrigin::BottomLeft);
+    if (impl_->surface == nullptr) {
+      LOG(ERROR) << "tgfx Surface::MakeFrom(default framebuffer) failed";
+      return;
+    }
+  }
+
+  impl_->canvas = impl_->surface->getCanvas();
+  if (impl_->canvas == nullptr) {
+    return;
+  }
+  // Map logical layout coordinates onto the physical framebuffer.
+  const float sx = win_w > 0 ? static_cast<float>(fb_w) /
+                                   static_cast<float>(win_w)
+                             : 1.0F;
+  const float sy = win_h > 0 ? static_cast<float>(fb_h) /
+                                   static_cast<float>(win_h)
+                             : 1.0F;
+  impl_->canvas->save();
+  impl_->canvas->scale(sx, sy);
+  impl_->canvas->clear(
+      tgfx::Color::FromRGBA(clear_color.r, clear_color.g, clear_color.b,
+                            clear_color.a));
 #else
   (void)clear_color;
 #endif
@@ -869,41 +186,67 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
 
 void TgfxRenderer::EndFrame() {
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (impl_ != nullptr) {
-    static_cast<GlRendererImpl*>(impl_)->EndFrame();
+  if (impl_->canvas != nullptr) {
+    impl_->canvas->restore();
   }
+  impl_->canvas = nullptr;
+  // Submit recorded draws to the GL context; GLFW then swaps buffers.
+  if (impl_->context != nullptr) {
+    impl_->context->flushAndSubmit();
+  }
+  // Drop the surface so a resize is picked up next frame.
+  impl_->surface.reset();
 #endif
 }
 
 void TgfxRenderer::Execute(const RenderCommand& command) {
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (impl_ == nullptr) {
+  if (impl_->canvas == nullptr) {
     return;
   }
-  auto* impl = static_cast<GlRendererImpl*>(impl_);
+  auto paint_for = [](const Color& c) {
+    tgfx::Paint p;
+    p.setColor(tgfx::Color::FromRGBA(c.r, c.g, c.b, c.a));
+    return p;
+  };
   switch (command.type) {
-    case RenderCommandType::kDrawRect:
-      impl->DrawRect(command.rect, command.color);
+    case RenderCommandType::kDrawRect: {
+      const auto rect = tgfx::Rect::MakeXYWH(command.rect.x, command.rect.y,
+                                             command.rect.width,
+                                             command.rect.height);
+      impl_->canvas->drawRect(rect, paint_for(command.color));
       break;
-    case RenderCommandType::kDrawRoundedRect:
-      impl->DrawRoundedRect(command.rect, command.color,
-                            command.corner_radius);
+    }
+    case RenderCommandType::kDrawRoundedRect: {
+      const auto rect = tgfx::Rect::MakeXYWH(command.rect.x, command.rect.y,
+                                             command.rect.width,
+                                             command.rect.height);
+      const float radius = command.corner_radius;
+      impl_->canvas->drawRRect(
+          tgfx::RRect::MakeRectXY(rect, radius, radius),
+          paint_for(command.color));
       break;
-    case RenderCommandType::kDrawText:
-      impl->DrawText(command.text, command.point, command.color,
-                     command.font_size, command.font_name);
+    }
+    case RenderCommandType::kDrawText: {
+      tgfx::Font font(impl_->typeface, command.font_size);
+      impl_->canvas->drawSimpleText(command.text, command.point.x,
+                                    command.point.y, font,
+                                    paint_for(command.color));
       break;
+    }
     case RenderCommandType::kSave:
-      impl->Save();
+      impl_->canvas->save();
       break;
     case RenderCommandType::kRestore:
-      impl->Restore();
+      impl_->canvas->restore();
       break;
     case RenderCommandType::kTranslate:
-      impl->Translate(command.translate_x, command.translate_y);
+      impl_->canvas->translate(command.translate_x, command.translate_y);
       break;
     case RenderCommandType::kClipRect:
-      impl->ClipRect(command.rect);
+      impl_->canvas->clipRect(tgfx::Rect::MakeXYWH(
+          command.rect.x, command.rect.y, command.rect.width,
+          command.rect.height));
       break;
     default:
       break;
@@ -914,18 +257,12 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
 }
 
 void TgfxRenderer::Resize(int width, int height) {
-  width_ = width;
-  height_ = height;
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (impl_ != nullptr) {
-    static_cast<GlRendererImpl*>(impl_)->Resize(width, height);
-  }
-#endif
+  impl_->width = width;
+  impl_->height = height;
 }
 
-int TgfxRenderer::GetWidth() const noexcept { return width_; }
+int TgfxRenderer::GetWidth() const noexcept { return impl_->width; }
 
-int TgfxRenderer::GetHeight() const noexcept { return height_; }
+int TgfxRenderer::GetHeight() const noexcept { return impl_->height; }
 
 }  // namespace neoflux
-
