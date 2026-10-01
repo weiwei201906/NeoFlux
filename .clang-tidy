@@ -28,6 +28,7 @@ Checks: >
   -misc-use-internal-linkage,
   -misc-include-cleaner,
   -misc-const-correctness,
+  -misc-no-recursion,
   modernize-*,
   -modernize-use-trailing-return-type,
   -modernize-use-nodiscard,

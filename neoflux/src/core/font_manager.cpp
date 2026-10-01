@@ -29,8 +29,9 @@ bool IsFontFile(const std::filesystem::path& path) {
 // Converts a string to lowercase for case-insensitive font name lookup.
 std::string ToLower(std::string_view s) {
   std::string result(s);
-  std::transform(result.begin(), result.end(), result.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::ranges::transform(result, result.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
   return result;
 }
 
@@ -68,7 +69,7 @@ std::string FontManager::GetPath(std::string_view font_name) const {
 }
 
 bool FontManager::HasFont(std::string_view font_name) const {
-  return fonts_.find(ToLower(font_name)) != fonts_.end();
+  return fonts_.contains(ToLower(font_name));
 }
 
 std::string FontManager::GetDefaultFont() const { return default_font_; }

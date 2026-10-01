@@ -100,7 +100,8 @@ TEST(ContainerTest, LayoutWrapsChild) {
   auto text = std::make_shared<Text>("Hello");
   text->SetFontSize(16.0F);
   container->SetChild(text);
-  container->SetPadding({5.0F, 5.0F, 5.0F, 5.0F});
+  container->SetPadding(
+      {.left = 5.0F, .top = 5.0F, .right = 5.0F, .bottom = 5.0F});
 
   container->PerformLayout(800.0F, 600.0F);
 

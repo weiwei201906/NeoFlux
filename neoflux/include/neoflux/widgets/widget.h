@@ -265,7 +265,7 @@ class State {
   [[nodiscard]] BuildContext* GetContext() const noexcept;
 
   // Schedules a rebuild of the widget subtree.
-  void SetState(std::function<void()> callback);
+  void SetState(const std::function<void()>& callback);
 
   // Called when this state is first created.
   virtual void InitState();

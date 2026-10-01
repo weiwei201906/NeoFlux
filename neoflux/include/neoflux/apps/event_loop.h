@@ -45,7 +45,7 @@ class EventLoop : public NonCopyable {
   ~EventLoop();
 
   // Runs the event loop until Stop() is called or the window closes.
-  void Run(FrameCallback frame_callback);
+  void Run(const FrameCallback& frame_callback);
 
   // Requests the event loop to stop after the current frame.
   void Stop() noexcept;

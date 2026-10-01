@@ -11,19 +11,19 @@
 
 #include "neoflux/widgets/widget.h"
 
+#include <glog/logging.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <string_view>
-
-#include <glog/logging.h>
-
-#include "taitank.h"
 
 #include "neoflux/apps/application.h"
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
+#include "taitank.h"
 
 namespace neoflux {
 
@@ -114,7 +114,7 @@ void Widget::OnPointerEnter() {}
 
 void Widget::OnPointerExit() {}
 
-std::shared_ptr<Widget> Widget::HitTest(
+std::shared_ptr<Widget> Widget::HitTest(  // NOLINT(misc-no-recursion): bounded tree traversal
     const Point& parent_pos) {
   // parent_pos is relative to this widget's parent. bounds_ is also relative
   // to the parent, so we can compare directly.
@@ -136,11 +136,11 @@ std::shared_ptr<Widget> Widget::HitTest(
   const Point local_pos{.x = parent_pos.x - bounds_.x,
                         .y = parent_pos.y - bounds_.y,};
   // Test children in reverse order (top-most / last painted first).
-  for (auto it = children_.rbegin(); it != children_.rend(); ++it) {
-    if (*it == nullptr) {
+  for (auto& it : std::views::reverse(children_)) {
+    if (it == nullptr) {
       continue;
     }
-    std::shared_ptr<Widget> hit = (*it)->HitTest(local_pos);
+    std::shared_ptr<Widget> hit = it->HitTest(local_pos);
     if (hit != nullptr) {
       return hit;
     }
@@ -270,8 +270,8 @@ void Widget::SyncTaitankChildren() {
     taitank::RemoveChild(taitank_node_, first);
   }
   for (std::size_t i = 0; i < children_.size(); ++i) {
-    if (children_[i] != nullptr) {
-      auto* child_node = children_[i]->GetTaitankNode();
+    if (children_[i] != nullptr) {  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop
+      auto* child_node = children_[i]->GetTaitankNode();  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop
       if (child_node != nullptr) {
         taitank::InsertChild(taitank_node_, child_node,
                              static_cast<uint32_t>(i));
@@ -280,7 +280,7 @@ void Widget::SyncTaitankChildren() {
   }
 }
 
-void Widget::ReadLayoutRecursive() {
+void Widget::ReadLayoutRecursive() {  // NOLINT(misc-no-recursion): bounded tree traversal
   if (taitank_node_ != nullptr) {
     bounds_.x = taitank::GetLeft(taitank_node_);
     bounds_.y = taitank::GetTop(taitank_node_);
@@ -376,7 +376,7 @@ BuildContext* State<W>::GetContext() const noexcept {
 }
 
 template <typename W>
-void State<W>::SetState(std::function<void()> callback) {
+void State<W>::SetState(const std::function<void()>& callback) {
   if (callback) {
     callback();
   }

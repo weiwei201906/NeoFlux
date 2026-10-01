@@ -59,7 +59,7 @@ bool Application::Init(int argc, char** argv, int window_width,
       FLAGS_logtostderr = true;
     } else if (arg == "--nologtostderr" || arg == "-nologtostderr") {
       FLAGS_logtostderr = false;
-    } else if (arg.substr(0, 10) == "--log_dir=" || arg.substr(0, 9) == "-log_dir=") {
+    } else if (arg.starts_with("--log_dir=") || arg.starts_with("-log_dir=")) {
       const auto equal_pos = arg.find('=');
       if (equal_pos != std::string_view::npos) {
         FLAGS_log_dir = std::string(arg.substr(equal_pos + 1));
@@ -275,7 +275,7 @@ bool Application::BuildWidgetRecursive(Widget& widget, BuildContext& context) { 
     rebuilt = true;
   }
 
-  for (auto& child : widget.GetChildren()) {
+  for (const auto& child : widget.GetChildren()) {
     if (child != nullptr) {
       rebuilt |= BuildWidgetRecursive(*child, context);
     }

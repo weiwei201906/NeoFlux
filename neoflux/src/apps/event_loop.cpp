@@ -31,7 +31,7 @@ EventLoop::~EventLoop() { Stop(); }
 
 EventLoop* EventLoop::Current() noexcept { return current_loop_; }
 
-void EventLoop::Run(FrameCallback frame_callback) {
+void EventLoop::Run(const FrameCallback& frame_callback) {
   if (running_.exchange(true)) {
     LOG(WARNING) << "EventLoop::Run called while already running";
     return;
@@ -95,7 +95,7 @@ void EventLoop::Schedule(Task<void> task) {
   auto shared_task = std::make_shared<Task<void>>(std::move(task));
   void* key = shared_task->Handle().address();
   {
-    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    std::scoped_lock lock(coroutine_mutex_);
     active_tasks_.emplace(key, shared_task);
     pending_coroutines_.push_back(std::move(shared_task));
   }
@@ -104,7 +104,7 @@ void EventLoop::Schedule(Task<void> task) {
 
 void EventLoop::ScheduleYield(std::coroutine_handle<> continuation) {
   {
-    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    std::scoped_lock lock(coroutine_mutex_);
     yield_handles_.push_back(continuation);
   }
   WakeUp();
@@ -114,7 +114,7 @@ void EventLoop::ScheduleSleep(std::chrono::steady_clock::duration duration,
                               std::coroutine_handle<> continuation) {
   const auto wake_time = std::chrono::steady_clock::now() + duration;
   {
-    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    std::scoped_lock lock(coroutine_mutex_);
     timer_queue_.emplace(wake_time, continuation);
   }
   WakeUp();
@@ -144,7 +144,7 @@ void EventLoop::RunReadyCoroutines() {
   // Phase 1: promote yield-pending handles back to pending so they resume
   // this frame. These are coroutines that did co_await Yield().
   {
-    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    std::scoped_lock lock(coroutine_mutex_);
     for (const auto& handle : yield_handles_) {
       auto it = active_tasks_.find(handle.address());
       if (it != active_tasks_.end()) {
@@ -157,7 +157,7 @@ void EventLoop::RunReadyCoroutines() {
   // Phase 2: move pending coroutines out and resume them.
   std::vector<std::shared_ptr<Task<void>>> ready;
   {
-    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    std::scoped_lock lock(coroutine_mutex_);
     ready.swap(pending_coroutines_);
   }
   for (const auto& task : ready) {
@@ -171,7 +171,7 @@ void EventLoop::RunReadyCoroutines() {
   // and |ready| going out of scope, the refcount drops and the frame is
   // destroyed if no timer/yield handle still references it.
   {
-    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    std::scoped_lock lock(coroutine_mutex_);
     for (const auto& task : ready) {
       if (task != nullptr && task->Done()) {
         active_tasks_.erase(task->Handle().address());
@@ -184,7 +184,7 @@ void EventLoop::RunReadyCoroutines() {
   const auto now = std::chrono::steady_clock::now();
   std::vector<std::coroutine_handle<>> expired;
   {
-    std::lock_guard<std::mutex> lock(coroutine_mutex_);
+    std::scoped_lock lock(coroutine_mutex_);
     auto it = timer_queue_.begin();
     while (it != timer_queue_.end() && it->first <= now) {
       expired.push_back(it->second);
@@ -194,7 +194,7 @@ void EventLoop::RunReadyCoroutines() {
   for (const auto& handle : expired) {
     std::shared_ptr<Task<void>> task;
     {
-      std::lock_guard<std::mutex> lock(coroutine_mutex_);
+      std::scoped_lock lock(coroutine_mutex_);
       auto it = active_tasks_.find(handle.address());
       if (it != active_tasks_.end()) {
         task = it->second;
@@ -203,7 +203,7 @@ void EventLoop::RunReadyCoroutines() {
     if (task != nullptr && !task->Done()) {
       task->Resume();
       if (task->Done()) {
-        std::lock_guard<std::mutex> lock(coroutine_mutex_);
+        std::scoped_lock lock(coroutine_mutex_);
         active_tasks_.erase(handle.address());
       }
     }

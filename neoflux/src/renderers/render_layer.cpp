@@ -46,7 +46,14 @@ RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, mo
       renderer_(nullptr),
       glfw_bridge_(nullptr) {}
 
-RenderLayer::~RenderLayer() { Stop(); }
+RenderLayer::~RenderLayer() {
+  // Destructors must not throw; Stop() joins threads and waits on futures,
+  // which can theoretically throw. Swallow exceptions during teardown.
+  try {
+    Stop();
+  } catch (...) {
+  }
+}
 
 bool RenderLayer::Start(int width, int height, std::string_view title,
                         void* /*platform_surface*/) {
@@ -165,7 +172,7 @@ void RenderLayer::Stop() {
 
   // Wake the render thread so it can exit the wait loop.
   {
-    std::lock_guard<std::mutex> lock(frame_mutex_);
+    std::scoped_lock lock(frame_mutex_);
     frame_ready_ = true;
   }
   frame_cv_.notify_one();
@@ -205,7 +212,7 @@ std::size_t RenderLayer::Submit(const RenderCommand* commands,
   // Wake the render thread: a new frame (or partial frame) is available.
   if (submitted > 0) {
     {
-      std::lock_guard<std::mutex> lock(frame_mutex_);
+      std::scoped_lock lock(frame_mutex_);
       frame_ready_ = true;
     }
     frame_cv_.notify_one();

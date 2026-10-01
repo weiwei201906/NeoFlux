@@ -31,7 +31,7 @@ float EstimateTextWidth(std::string_view text, float font_size) {
   constexpr float kLatinWidthRatio = 0.55F;
   float width = 0.0F;
   for (std::size_t i = 0; i < text.size();) {
-    const auto byte = static_cast<unsigned char>(text[i]);
+    const auto byte = static_cast<unsigned char>(text[i]);  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop condition
     std::size_t char_len = 1;
     if ((byte & 0x80U) == 0U) {
       char_len = 1;  // ASCII
@@ -115,10 +115,12 @@ Size Text::OnMeasure(float width, int width_mode, float height,
 
 void Text::Paint(RenderContext& context) {
   const float text_width = EstimateTextWidth(text_, font_size_);
-  const float text_x =
-      (alignment_ == HAlign::kCenter)
-          ? (bounds_.width - text_width) / 2.0F
-          : (alignment_ == HAlign::kRight ? bounds_.width - text_width : 0.0F);
+  float text_x = 0.0F;
+  if (alignment_ == HAlign::kCenter) {
+    text_x = (bounds_.width - text_width) / 2.0F;
+  } else if (alignment_ == HAlign::kRight) {
+    text_x = bounds_.width - text_width;
+  }
   // Baseline at font_size from top (approximate descent).
   context.DrawText(text_, {.x = text_x, .y = font_size_}, text_color_,
                    font_size_, font_name_);
