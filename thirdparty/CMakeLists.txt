@@ -179,9 +179,12 @@ set_target_properties(neoflux_skcms PROPERTIES
     CXX_STANDARD_REQUIRED ON)
 
 # Make the already-created tgfx target find our headers and link skcms.
+# NOTE: tgfx/CMakeLists.txt already called target_link_libraries(tgfx ...)
+# with the PLAIN signature (line ~777), so we must use the plain form here
+# too; CMake forbids mixing plain and keyword signatures on one target.
 target_include_directories(tgfx PRIVATE
     ${NEOFLUX_VENDORED_DIR}/concurrentqueue
     ${NEOFLUX_VENDORED_DIR}/skcms)
-target_link_libraries(tgfx PRIVATE neoflux_concurrentqueue neoflux_skcms)
+target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms)
 
 message(STATUS "NeoFlux third-party dependencies configured")
