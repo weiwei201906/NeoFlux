@@ -53,7 +53,7 @@ All flags are parsed from `argc/argv` passed to `Application::Init`.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--render_backend` | `string` | `"vulkan"` | Graphics backend: `vulkan`, `gl`, or `cpu`. `vulkan` and `cpu` fall back to `gl` with a warning if unavailable. |
+| `--render_backend` | `string` | `"gl"` | Graphics backend. Only `gl` is available in this build; `vulkan`, `cpu`, and any unknown value are a hard startup error (no silent fallback). |
 | `--target_fps` | `int32` | `60` | Frame rate cap for the event loop. |
 | `--render_queue_capacity` | `uint64` | `2048` | SPSC ring-queue slots. Rounded up to a power of two; usable slots = capacity - 1. |
 | `--verbose_logging` | `bool` | `false` | Enable verbose (debug) logging. |
@@ -67,10 +67,11 @@ All flags are parsed from `argc/argv` passed to `Application::Init`.
 ```
 
 ```bash
-./my_app --render_backend=vulkan --render_queue_capacity=4096 --log_dir=./logs
+./my_app --render_backend=gl --render_queue_capacity=4096 --log_dir=./logs
 ```
 
-::: warning Backend fallback
-If the selected `--render_backend` cannot be created (no Vulkan device, etc.),
-NeoFlux logs a warning and falls back to OpenGL rather than aborting.
+::: warning No silent backend fallback
+If the selected `--render_backend` cannot be created (e.g. `vulkan` in a
+GL-only build, or any unknown value), NeoFlux logs an error and refuses to
+start rather than silently falling back to GL. Pass `--render_backend=gl`.
 :::

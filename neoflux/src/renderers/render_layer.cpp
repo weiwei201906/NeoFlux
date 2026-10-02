@@ -174,11 +174,7 @@ void RenderLayer::Stop() {
   LOG(INFO) << "RenderLayer stopping";
 
   // Wake the render thread so it can exit the wait loop.
-  {
-    std::scoped_lock lock(frame_mutex_);
-    frame_ready_ = true;
-  }
-  frame_cv_.notify_one();
+  Wake();
 
   if (render_thread_ != nullptr && render_thread_->joinable()) {
     render_thread_->join();
@@ -214,13 +210,26 @@ std::size_t RenderLayer::Submit(const RenderCommand* commands,
 
   // Wake the render thread: a new frame (or partial frame) is available.
   if (submitted > 0) {
-    {
-      std::scoped_lock lock(frame_mutex_);
-      frame_ready_ = true;
-    }
-    frame_cv_.notify_one();
+    Wake();
   }
   return submitted;
+}
+
+void RenderLayer::Wake() {
+  {
+    std::scoped_lock lock(frame_mutex_);
+    frame_ready_ = true;
+  }
+  frame_cv_.notify_one();
+}
+
+void RenderLayer::SetRenderPump(std::function<void()> pump) {
+  {
+    std::scoped_lock lock(frame_mutex_);
+    render_pump_ = std::move(pump);
+  }
+  // If a pump was just installed, wake the loop so it takes effect promptly.
+  frame_cv_.notify_one();
 }
 
 bool RenderLayer::IsRunning() const noexcept { return running_.load(); }
@@ -283,14 +292,25 @@ void RenderLayer::RenderLoop() {
   constexpr Color kClearColor{.r = 245, .g = 245, .b = 245, .a = 255};
 
   while (running_.load()) {
-    // Wait for a frame to be submitted (or stop signal). Uses a condition
-    // variable instead of busy-polling to avoid wasting CPU cycles.
+    // Wait for work: a submitted frame, an external frame signal (e.g. mpv,
+    // woken via Wake()), or the stop signal. There is intentionally NO fixed
+    // timeout: the render thread sleeps until notified, which eliminates the
+    // previous fixed 16ms idle poll.
+    std::function<void()> pump;
     {
       std::unique_lock<std::mutex> lock(frame_mutex_);
-      frame_cv_.wait_for(lock, std::chrono::milliseconds(16), [this] {
+      frame_cv_.wait(lock, [this] {
         return frame_ready_ || !running_.load();
       });
       frame_ready_ = false;
+      pump = render_pump_;  // copy under the lock; invoke outside it
+    }
+
+    // Pull any newly-decoded external frame (e.g. mpv -> GL texture) while the
+    // GL context is current, BEFORE executing queued draw commands, so the
+    // composited texture contents are up to date for this frame.
+    if (pump != nullptr) {
+      pump();
     }
 
     // Drain all available commands for this frame.

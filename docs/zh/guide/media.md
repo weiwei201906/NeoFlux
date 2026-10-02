@@ -9,30 +9,73 @@ mpv 不另开窗口，而是由 NeoFlux 已有的 OpenGL 上下文驱动渲染�
 未开启时媒体 API 不参与编译，框架其余部分照常工作。
 :::
 
-## 如何融入两层模型
+## 线程模型
+
+视频播放横跨三条线程。所有 GL 工作都在渲染线程完成；mpv 只负责“有新帧了”
+这个信号，绝不直接往渲染队列里塞命令（SPSC 架构保持不变）。
 
 ```
-+------------------ 应用线程 ------------------+
-|  MediaPlayer widget                           |
-|    mpv_command(mpv, "loadfile", path)         |
-|    播放 / 暂停 / 拖动                          |
-+----------------------------------------------+
-                     |
-                     |  mpv 渲染上下文“需要更新”回调
-                     v
-+------------------ 渲染线程（持有 GL 上下文）---+
-|  mpv_render_context_render() -> 写入 GL FBO     |
-|  得到的帧成为一张 GL 纹理                       |
-|  Texture widget 像普通命令一样绘制它            |
-+------------------------------------------------+
++-- 应用 / UI 线程（EventLoop）--------------------------------+
+|  widget 树与 widget 生命周期。                                |
+|  应用亲和调用：SetSource / Play / Pause / Stop / Seek /       |
+|  SetVolume / SetStateCallback / SetFrameCallback /           |
+|  SetWakeCallback。                                            |
+|                                                               |
+|  MediaWidget::Paint()  —— 不碰 GL ——                         |
+|    读取原子发布的 texture_id/w/h，向 SPSC 队列                 |
+|    发出一条 DrawTexture 命令。                                |
++---------------------------------------------------------------+
+            ^ MarkFrameDirty()（触发重绘）      \
+            |                                    \
++-- mpv 内部线程 ----------------------------------------------+
+|  OnRenderUpdate():                                            |
+|    更新计数、置 new_frame_=true、notify，再调用              |
+|    SetWakeCallback()。绝不阻塞、绝不碰 GL。                   |
++---------------------------------------------------------------+
+            | layer->Wake()
+            v
++-- 渲染线程（持有 GL 上下文）----------------------------------+
+|  每次被唤醒先跑渲染泵：                                       |
+|    先 InitRender() 一次，再 UpdateTexture() ->                 |
+|      mpv_render_context_update / mpv_render_context_render    |
+|      渲染进缓存的 FBO 纹理（FBO 与纹理复用，纹理存储仅在      |
+|      尺寸变化时重新分配）。把 texture_id/w/h 发布到原子变量。  |
+|  然后排空 SPSC 队列并执行命令（含视频的 DrawTexture）。       |
++---------------------------------------------------------------+
 ```
 
-1. **mpv 渲染上下文**绑定到渲染线程已持有的同一个 OpenGL 上下文（桌面端即
-   GLFW/WGL 上下文）。
-2. mpv 异步解码文件，在有新帧时回调“需要更新”，该回调请求渲染线程重绘。
-3. 渲染线程调用 `mpv_render_context_render()` 把解码帧画到离屏 GL framebuffer/纹理，
-   NeoFlux 随后为该纹理发出普通的“画纹理”渲染命令，视频因此能像其它 widget 一样
-   合成（背景、文字叠加、裁剪都生效）。
+### 唤醒链路
+
+1. mpv 在内部线程解码出一帧，回调 `OnRenderUpdate`。该回调只做三件小事：
+   累加观测计数、置 `new_frame_` 标志、调用已注册的 wake 回调。
+2. wake 回调（由 `MediaWidget` 在首次 build 时安装）做两个非阻塞动作：
+   `RenderLayer::Wake()` 唤醒渲染线程去上传新帧，`Application::MarkFrameDirty()`
+   唤醒应用线程去重绘。
+3. 渲染线程被 `Wake()` 唤醒后执行渲染泵：`UpdateTexture()` 调用
+   `mpv_render_context_render()` 画进缓存的 FBO 并发布新纹理 id，随后排空
+   SPSC 队列、合成该纹理。
+
+因此渲染线程只在“应用提交命令”或“mpv 报新帧”时才醒来，不再固定轮询。
+
+### 方法亲和约定
+
+| 线程 | 方法 |
+|------|------|
+| 应用 / UI | `SetSource`、`GetSource`、`Play`、`Pause`、`Stop`、`Seek`、`SetVolume`、`SetStateCallback`、`SetFrameCallback`、`SetWakeCallback` |
+| 渲染（GL 上下文 current） | `InitRender`、`UpdateTexture` |
+| 任意线程 | `GetState`、`GetVideoWidth`、`GetVideoHeight`、`GetPosition`、`GetDuration`、`GetRenderUpdateCount` |
+
+回调：
+
+- `StateCallback` 在“泵送 mpv 事件”的那条线程触发——生产环境是渲染线程
+  （经由 `UpdateTexture`），但 `Play()`/`Pause()`/`Stop()` 也可能在应用线程同步派发。
+  不要阻塞、不要碰 GL。
+- `FrameCallback` 在渲染线程触发，位于 `UpdateTexture()` 末尾、GL 上下文 current。
+- `WakeCallback` 在 mpv 内部线程触发。必须非阻塞、不得碰 GL。
+
+不要在回调内部再去更换回调（`SetStateCallback`/`SetFrameCallback`/
+`SetWakeCallback`）。`GetSource()`/`SetSource()` 是应用线程亲和的：不要在应用线程
+可能调用 `SetSource()` 的同时从渲染线程读 source 字符串。
 
 由于所有 mpv 渲染都在持有 GL 上下文的渲染线程上发生，无需迁移上下文。
 
@@ -59,14 +102,14 @@ player.Play();
 ## 示例测试片段
 
 仓库附带 `tests/data/sample.mp4`，是一段短小、自包含的视频，供媒体测试与演示使用。
-让 `MediaPlayer` 指向它即可端到端验证播放，无需下载外部素材：
+让 `MediaWidget`（或 `MediaPlayer`）指向它即可端到端验证播放，无需下载外部素材：
 
 ```powershell
-.\build\bin\<media_demo>.exe --logtostderr --verbose_logging
+.\build\bin\neoflux_app.exe --logtostderr --verbose_logging
 ```
 
 ::: tip 用 --logtostderr
-mpv 会打印大量诊断信息。加 `--logtostderr` 才能在终端看到（示例默认是 GUI
+mpv 会打印大量诊断信息。加 `--logtostderr` 才能在终端看到（应用默认是 GUI
 子系统、无控制台）。
 :::
 
@@ -75,9 +118,3 @@ mpv 会打印大量诊断信息。加 `--logtostderr` 才能在终端看到（�
 - 构建期可用的 libmpv（`mpv/client.h`、`mpv/render_gl.h`）。
 - 桌面 GL 路径（`--render_backend=gl`），因为渲染上下文包裹 OpenGL 上下文。
 - 你的 mpv 构建所带 ffmpeg/libav 能解码所用封装/编码格式。
-
-## 本工作树中未能核对的内容
-
-`docs/bilingual` 工作树当前并不包含 `MediaPlayer` 源码或 `NEOFLUX_HAS_MPV` 的
-CMake 接线。本页记录的是项目规划中的桌面媒体架构；发布产品构建前，请对照主检出里的
-媒体源码确认确切的类名与 CMake 选项。

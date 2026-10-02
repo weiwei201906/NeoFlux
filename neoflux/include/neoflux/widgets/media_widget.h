@@ -52,7 +52,13 @@ class MediaWidget : public Widget {
   [[nodiscard]] Size OnMeasure(float width, int width_mode, float height,
                                int height_mode) override;
 
-  // Paints the video texture (if available) or a placeholder surface.
+  // On the first build, captures the owning Application/RenderLayer and wires
+  // the mpv frame signal to the render thread. Returns nullptr (leaf widget).
+  [[nodiscard]] std::shared_ptr<Widget> Build(BuildContext& context) override;
+
+  // Paints the video texture (if available) or a placeholder surface. Runs on
+  // the App/UI thread; reads an atomically-published texture id and never calls
+  // GL directly.
   void Paint(RenderContext& context) override;
 
   // Toggles play/pause on click.

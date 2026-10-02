@@ -59,8 +59,8 @@ NeoFlux 把一个 UI 应用拆成两个独立线程层，二者仅通过一条�
 - **帧状态机** —— 只有 `kBeginFrame` 与 `kEndFrame` 之间的命令才会被执行，
   避免渲染线程在应用还在提交命令时就呈现半帧画面。
 - **后端** —— `TgfxRenderer` 封装 `tgfx`。关闭 `NEOFLUX_USE_TGFX` 时回退到内置
-  OpenGL 渲染器（shader + VBO + FreeType 字形图集）。`--render_backend` 可选
-  `vulkan`、`gl`、`cpu`，未实现的选项打警告后使用 GL。
+  OpenGL 渲染器（shader + VBO + FreeType 字形图集）。`--render_backend` 默认为
+  `gl`（本构建唯一可用后端）；`vulkan`、`cpu` 及未知值都是启动期硬错误，而非静默回退到 GL。
 
 ## 命令如何跨线程
 

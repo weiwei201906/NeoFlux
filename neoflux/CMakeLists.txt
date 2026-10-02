@@ -17,6 +17,7 @@ add_library(neoflux STATIC
   src/core/font_manager.cpp
   src/core/types.cpp
   src/core/animation.cpp
+  src/core/version.cpp
   src/widgets/widget.cpp
   src/widgets/container.cpp
   src/widgets/text.cpp
@@ -170,6 +171,12 @@ if(NEOFLUX_MPV_FOUND)
 endif()
 
 target_compile_features(neoflux PUBLIC cxx_std_20)
+
+# Bake the (git-derived) project version into the binary as a string literal,
+# exposed via neoflux::Version() in neoflux/version.h. Use the full tag string
+# (including any prerelease suffix such as "-alpha"); PROJECT_VERSION holds only
+# the numeric components CMake accepts.
+target_compile_definitions(neoflux PUBLIC NEOFLUX_VERSION_STRING="${NEOFLUX_VERSION}")
 
 # Strict warnings for neoflux code only (not third-party deps).
 # -Wno-conversion/-Wno-sign-conversion: render code mixes int coords with

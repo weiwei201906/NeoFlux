@@ -5,48 +5,52 @@ configuration and [glog](https://github.com/google/glog) for logging. Every
 flag below is optional and passed on the command line:
 
 ```powershell
-.\build\bin\hello_neoflux.exe --render_backend=gl --target_fps=120 --logtostderr
+.\build\bin\neoflux_app.exe --render_backend=gl --target_fps=120 --logtostderr
 ```
 
 ## Full flag reference
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--render_backend` | `string` | `"vulkan"` | Selects the tgfx render backend. Accepted values: `vulkan`, `gl`, `cpu`. |
+| `--render_backend` | `string` | `"gl"` | Selects the tgfx render backend. Only `gl` is available in this build; `vulkan`, `cpu`, and any unknown value are a hard startup error (no silent fallback). |
 | `--target_fps` | `int32` | `60` | Target frames-per-second for the application event loop. |
-| `--render_queue_capacity` | `uint64` | `2048` | Capacity of the SPSC render-command ring queue. Rounded up to a power of two; one slot is reserved, so usable commands = `capacity - 1`. |
+| `--render_queue_capacity` | `uint64` | `2048` | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
 | `--verbose_logging` | `bool` | `false` | Enables `VLOG(1)` output and mirrors INFO logs to stderr. |
 | `--logtostderr` | `bool` | `false` | When set, writes all logs to stderr instead of files. |
 | `--log_dir` | `string` | `"./logs"` | Directory for `.log` files (created automatically). Only used when `--logtostderr` is off. |
 
 ### `--render_backend`
 
-Defined in `src/render/render_layer.cpp`. Three values are accepted:
+Defined in `neoflux/src/renderers/render_layer.cpp`. The default is `"gl"`.
+There is **no silent fallback**: requesting an unavailable backend is a hard
+startup failure — `RenderLayer::Start()` logs an error and returns `false`, so
+the application refuses to launch rather than quietly rendering through the
+wrong backend.
 
 | Value | Behavior |
 |-------|----------|
-| `vulkan` (default) | Reserved. Not yet implemented — logs a warning and falls back to OpenGL. |
-| `gl` | OpenGL backend (the currently working desktop path, via GLFW/WGL). |
-| `cpu` | Software rasterizer. Not yet implemented — logs a warning and falls back to OpenGL. |
-
-Any unrecognised value also logs a warning and uses the OpenGL path.
+| `gl` (default) | The working desktop path: tgfx OpenGL on WGL, driven through the GLFW bridge. |
+| `vulkan` | Refused unless tgfx was built with `TGFX_USE_VULKAN=ON` AND the host has a Vulkan device/driver. In a GL-only build this is a hard startup error. |
+| `cpu` | Refused. tgfx has no software rasterizer, so there is no CPU backend to fall back to. |
+| anything else | Refused as unknown. |
 
 ::: tip
-Even though the default string is `"vulkan"`, on today's desktop builds every
-option effectively renders through GL. Pass `--render_backend=gl` to make
-the intent explicit.
+On today's desktop builds only `gl` exists. Pass it explicitly
+(`--render_backend=gl`) to make the intent clear; do not assume the other values
+silently work.
 :::
 
 ### `--target_fps`
 
-Sets `EventLoop::SetTargetFps()`. The loop sleeps between frames to respect
-the cap; input events and `MarkFrameDirty()` wake it early. Default `60`.
+Sets `EventLoop::SetTargetFps()`. The loop sleeps between frames to respect the
+cap; input events and `MarkFrameDirty()` wake it early. Default `60`.
 
 ### `--render_queue_capacity`
 
 Configures the `SpscRingQueue<RenderCommand>` constructed by `RenderLayer`.
-The value is rounded up to the next power of two internally. Because one slot
-is reserved to distinguish full from empty, a requested `2048` holds at most
+The requested value is rounded up to the next power of two internally
+(`std::bit_ceil`) so index wrapping can use a bitwise AND. Because one slot is
+reserved to distinguish full from empty, a requested `2048` holds at most
 `2047` in-flight commands. If the producer catches up to the consumer, excess
 commands for that frame are dropped (rate-limited warning).
 
@@ -87,18 +91,17 @@ VLOG(1) << "Detailed per-frame debug info";  // shown with --verbose_logging
 ```
 
 ::: tip Recommended development invocation
-Because examples are built as GUI-subsystem binaries with no console, run
-with:
+Because the app is built as a GUI-subsystem binary with no console, run with:
 
 ```powershell
-.\build\bin\hello_neoflux.exe --logtostderr --verbose_logging
+.\build\bin\neoflux_app.exe --logtostderr --verbose_logging
 ```
 :::
 
 ## Full example
 
 ```powershell
-.\build\bin\hello_neoflux.exe `
+.\build\bin\neoflux_app.exe `
   --target_fps=144 `
   --render_backend=gl `
   --render_queue_capacity=4096 `
@@ -106,5 +109,5 @@ with:
   --verbose_logging
 ```
 
-This targets 144 FPS, forces the GL backend, enlarges the command queue to
+This targets 144 FPS, uses the GL backend, enlarges the command queue to
 4096, and streams verbose logs to the terminal.

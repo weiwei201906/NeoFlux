@@ -94,6 +94,15 @@ class MediaPlayer {
   // Registers a callback invoked when a new frame texture is available.
   virtual void SetFrameCallback(FrameCallback callback) = 0;
 
+  // Registers a non-blocking callback invoked on the decoder's internal thread
+  // the moment a new frame is decoded. Backends that decode synchronously or
+  // do not need external frame signalling may ignore it (default no-op). The
+  // callback must not block and must not touch GL; its only purpose is to wake
+  // the render thread.
+  virtual void SetWakeCallback(std::function<void()> callback) {
+    (void)callback;
+  }
+
   // Must be called from the render thread with a current GL context.
   // Initializes the render API (e.g. mpv_render_context).
   virtual void InitRender() = 0;

@@ -11,32 +11,84 @@ and requires libmpv development files at build time. Without it, the media
 APIs are not compiled in and the rest of the framework works unchanged.
 :::
 
-## How it fits the two-layer model
+## Threading model
+
+Video playback spans three threads. The GL work always happens on the render
+thread; mpv only ever *signals* that a frame is ready, it never pushes render
+commands (the SPSC queue is preserved).
 
 ```
-+------------------ Application thread ------------------+
-|  MediaPlayer widget                                     |
-|    mpv_command(mpv, "loadfile", path)                   |
-|    play / pause / seek                                  |
-+--------------------------------------------------------+
-                     |
-                     |  mpv render context "need update" callback
-                     v
-+------------------ Render thread (owns GL context) -----+
-|  mpv_render_context_render()  -> writes into a GL FBO    |
-|  the resulting frame becomes a GL texture              |
-|  that a Texture widget draws like any other command     |
-+--------------------------------------------------------+
++-- App / UI thread (EventLoop) -------------------------------+
+|  Widget tree, widget lifecycle.                               |
+|  App-affine calls: SetSource / Play / Pause / Stop / Seek /   |
+|  SetVolume / SetStateCallback / SetFrameCallback /            |
+|  SetWakeCallback.                                             |
+|                                                               |
+|  MediaWidget::Paint()  -- NO GL --                           |
+|    reads the atomically-published texture_id/w/h and emits a  |
+|    DrawTexture command onto the SPSC queue.                   |
++---------------------------------------------------------------+
+            ^ MarkFrameDirty() (repaint)        \
+            |                                    \
++-- mpv internal thread ---------------------------------------+
+|  OnRenderUpdate():                                             |
+|    bump update_count_, set new_frame_=true, notify,           |
+|    then call SetWakeCallback().                               |
+|    NEVER blocks, NEVER touches GL.                            |
++---------------------------------------------------------------+
+            | layer->Wake()
+            v
++-- Render thread (owns the GL context) -------------------------+
+|  On each wake, first run the render pump:                     |
+|    InitRender() once, then UpdateTexture() ->                  |
+|      mpv_render_context_update / mpv_render_context_render    |
+|      into a cached FBO-backed texture (FBO and texture are    |
+|      reused; texture storage is (re)allocated only on size     |
+|      change). Publish texture_id/w/h to atomics.              |
+|  Then drain the SPSC queue and execute commands               |
+|  (including the DrawTexture for the video).                    |
++---------------------------------------------------------------+
 ```
 
-1. The **mpv render context** is created against the same OpenGL context the
-   render thread already owns (the GLFW/WGL context on desktop).
-2. mpv decodes the file asynchronously and calls an "update" callback when a
-   new frame is ready. That callback asks the render thread to redraw.
-3. On the render thread, `mpv_render_context_render()` draws the decoded frame
-   into an off-screen GL framebuffer/texture. NeoFlux then emits an ordinary
-   "draw texture" render command for that texture, so video composites exactly
-   like any other widget (backgrounds, text overlays, clipping).
+### Wake chain
+
+1. mpv decodes a frame on its internal thread and invokes
+   `OnRenderUpdate`. That callback only bumps the observability counter, raises
+   a `new_frame_` flag, and calls the installed wake callback.
+2. The wake callback (installed by `MediaWidget` on first build) does two
+   non-blocking things: `RenderLayer::Wake()` wakes the render thread to upload
+   the new frame, and `Application::MarkFrameDirty()` wakes the App thread to
+   repaint.
+3. The render thread, woken by `Wake()`, runs the pump: `UpdateTexture()` calls
+   `mpv_render_context_render()` into the cached FBO and publishes the new
+   texture id. It then drains the SPSC queue and composites that texture.
+
+The render thread therefore sleeps until either the App submits commands or mpv
+signals a new frame; there is no fixed per-frame poll.
+
+### Method affinity contract
+
+| Thread | Methods |
+|--------|---------|
+| App / UI | `SetSource`, `GetSource`, `Play`, `Pause`, `Stop`, `Seek`, `SetVolume`, `SetStateCallback`, `SetFrameCallback`, `SetWakeCallback` |
+| Render (GL context current) | `InitRender`, `UpdateTexture` |
+| Any thread | `GetState`, `GetVideoWidth`, `GetVideoHeight`, `GetPosition`, `GetDuration`, `GetRenderUpdateCount` |
+
+Callbacks:
+
+- `StateCallback` fires on whichever thread pumped mpv events — the render
+  thread in production (via `UpdateTexture`), but it may also be dispatched
+  synchronously on the App thread from `Play()`/`Pause()`/`Stop()`. Never block
+  or touch GL.
+- `FrameCallback` fires on the render thread, synchronously at the end of
+  `UpdateTexture()`, with the GL context current.
+- `WakeCallback` fires on the mpv internal thread. It must be non-blocking and
+  must not touch GL.
+
+Do **not** swap a callback (`SetStateCallback`/`SetFrameCallback`/
+`SetWakeCallback`) from inside a callback. `GetSource()`/`SetSource()` are
+App-thread affine; do not read the source string from the render thread while
+the App thread may be calling `SetSource()`.
 
 Because all mpv rendering happens on the render thread where the GL context is
 current, no context migration is needed.
@@ -64,16 +116,16 @@ Control uses mpv commands under the hood:
 ## Sample test clip
 
 The repo ships `tests/data/sample.mp4` as a short, self-contained clip used by
-the media tests and demos. Point a `MediaPlayer` at it to exercise playback end
-to end without downloading external assets:
+the media tests and demos. Point a `MediaWidget` (or `MediaPlayer`) at it to
+exercise playback end to end without downloading external assets:
 
 ```powershell
-.\build\bin\<media_demo>.exe --logtostderr --verbose_logging
+.\build\bin\neoflux_app.exe --logtostderr --verbose_logging
 ```
 
 ::: tip Use --logtostderr
 mpv prints a lot of diagnostic output. Running with `--logtostderr` makes it
-visible in the terminal (examples are otherwise GUI-subsystem with no console).
+visible in the terminal (the app is otherwise GUI-subsystem with no console).
 :::
 
 ## Requirements
@@ -83,11 +135,3 @@ visible in the terminal (examples are otherwise GUI-subsystem with no console).
   an OpenGL context.
 - A decode path for the container/codecs your files use (system ffmpeg/libav
   bundled with your mpv build).
-
-## What could not be verified in this checkout
-
-The `docs/bilingual` worktree does not currently contain the `MediaPlayer`
-sources or the `NEOFLUX_HAS_MPV` CMake wiring. This page documents the intended
-desktop media architecture described for the project; confirm the exact class
-names and CMake option against the media sources in the main checkout before
-shipping a product build.
