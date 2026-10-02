@@ -25,9 +25,17 @@
 
 #include <neoflux/widgets/button.h>
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <mutex>
+#include <thread>
 
+#include <neoflux/apps/event_loop.h>
+#include <neoflux/core/task.h>
 #include <neoflux/core/types.h>
 #include <neoflux/renderers/render_context.h>
 #include <neoflux/renderers/render_command.h>
@@ -144,6 +152,135 @@ TEST(ButtonE2ETest, PressMoveOutThenUpNoClick) {
   button->OnPointerUp(kOutside);
 
   EXPECT_EQ(clicks, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Background EventLoop harness.
+//
+// EventLoop exposes no generic PostTask. To run a closure on the loop thread we
+// express it as a trivially-returning Task<void> coroutine; EventLoop::Schedule()
+// resumes it on the next frame tick, where EventLoop::Current() is valid and
+// Button::OnPointerDown can arm its long-press Delay coroutine. The loop runs
+// on a worker thread; TearDown stops and joins it.
+// ---------------------------------------------------------------------------
+
+// One-shot coroutine: run |body| on the loop thread and complete.
+Task<void> RunOnceOnLoop(std::function<void()> body) {
+  body();
+  co_return;
+}
+
+// Schedules |body| to execute once on the loop thread (thread-safe).
+void PostToLoop(EventLoop& loop, std::function<void()> body) {
+  loop.Schedule(RunOnceOnLoop(std::move(body)));
+}
+
+class EventLoopThreadFixture : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    // Spin until the loop reports running so Schedule() reaches a live loop.
+    while (!loop_.IsRunning()) {
+      std::this_thread::yield();
+    }
+  }
+
+  void TearDown() override {
+    loop_.Stop();
+    if (thread_.joinable()) {
+      thread_.join();
+    }
+  }
+
+  // Posts a barrier task and blocks (with timeout) until it has executed on
+  // the loop thread. Guarantees all previously posted work is drained.
+  void WaitIdle() {
+    std::mutex m;
+    std::condition_variable cv;
+    bool done = false;
+    PostToLoop(loop_, [&] {
+      {
+        const std::scoped_lock<std::mutex> lock(m);
+        done = true;
+      }
+      cv.notify_all();
+    });
+    std::unique_lock<std::mutex> lock(m);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(5), [&] {
+      return done;
+    }));
+  }
+
+  EventLoop loop_{};
+  std::thread thread_{[this] { loop_.Run([] {}); }};
+};
+
+// ---------------------------------------------------------------------------
+// Long-press fires after the 500ms hold. OnPointerDown runs on the loop thread
+// so CanAnimate() is true and Delay() launches the coroutine. We wait for the
+// OnLongPress callback with a condition variable (not a bare sleep) to confirm
+// the real timer chain works end to end.
+// ---------------------------------------------------------------------------
+
+TEST_F(EventLoopThreadFixture, LongPressFiresCallback) {
+  auto button = std::make_shared<Button>("OK");
+  button->SetBounds(kButtonBounds);
+
+  std::atomic<bool> long_press_fired{false};
+  std::mutex cv_mutex;
+  std::condition_variable cv;
+  button->SetOnLongPress([&] {
+    long_press_fired.store(true);
+    cv.notify_all();
+  });
+
+  // Drive the press on the loop thread where EventLoop::Current() is valid.
+  PostToLoop(loop_, [button] { button->OnPointerDown(kInside); });
+
+  // Wait for the long-press callback (holds 500ms; allow generous timeout).
+  {
+    std::unique_lock<std::mutex> lock(cv_mutex);
+    EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&] {
+      return long_press_fired.load();
+    }));
+  }
+  EXPECT_TRUE(long_press_fired.load());
+
+  // Release on the loop thread to reset pressed state before teardown.
+  PostToLoop(loop_, [button] { button->OnPointerUp(kInside); });
+  WaitIdle();
+}
+
+// Releasing before 500ms cancels the long-press: the callback must never fire.
+TEST_F(EventLoopThreadFixture, LongPressCancelledOnEarlyRelease) {
+  auto button = std::make_shared<Button>("OK");
+  button->SetBounds(kButtonBounds);
+
+  std::atomic<bool> long_press_fired{false};
+  std::mutex cv_mutex;
+  std::condition_variable cv;
+  button->SetOnLongPress([&] {
+    long_press_fired.store(true);
+    cv.notify_all();
+  });
+
+  // Press then immediately release on the loop thread (well under 500ms).
+  PostToLoop(loop_, [button] {
+    button->OnPointerDown(kInside);
+    button->OnPointerUp(kInside);
+  });
+
+  // The 500ms timer still expires; the coroutine wakes, re-checks is_pressed_
+  // (now false) and must NOT invoke the callback. Wait long enough for the
+  // timer to elapse and confirm it never fired.
+  {
+    std::unique_lock<std::mutex> lock(cv_mutex);
+    EXPECT_FALSE(cv.wait_for(lock, std::chrono::milliseconds(1200), [&] {
+      return long_press_fired.load();
+    }));
+  }
+  EXPECT_FALSE(long_press_fired.load());
+
+  WaitIdle();
 }
 
 }  // namespace
