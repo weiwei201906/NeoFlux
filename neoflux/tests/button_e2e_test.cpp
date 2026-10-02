@@ -26,6 +26,7 @@
 #include <neoflux/widgets/button.h>
 
 #include <cstdint>
+#include <memory>
 
 #include <neoflux/core/types.h>
 #include <neoflux/renderers/render_context.h>
@@ -43,6 +44,9 @@ constexpr Rect kButtonBounds{.x = 0.0F,
                              .y = 0.0F,
                              .width = 100.0F,
                              .height = 40.0F};
+// A point strictly inside kButtonBounds, and one well outside it.
+constexpr Point kInside{.x = 50.0F, .y = 20.0F};
+constexpr Point kOutside{.x = 150.0F, .y = 200.0F};
 
 // Asserts every channel of |actual| equals |expected|.
 void ExpectColor(const Color& expected, const Color& actual) {
@@ -95,6 +99,51 @@ TEST(ButtonE2ETest, HoverExitClearsHoverState) {
   // Exit: body reverts to the background color.
   button.OnPointerExit();
   ExpectColor(kIdleColor, FirstDrawRectColor(button));
+}
+
+TEST(ButtonE2ETest, HoverEnterIsIdempotent) {
+  Button button("OK");
+  button.SetBounds(kButtonBounds);
+
+  // Re-entering while already hovered must not crash or flip state.
+  button.OnPointerEnter();
+  button.OnPointerEnter();
+  ExpectColor(kHoverColor, FirstDrawRectColor(button));
+}
+
+// ---------------------------------------------------------------------------
+// Click release paths. These run on the test thread without a running loop, so
+// AnimationRuntime::CanAnimate() is false and the long-press coroutine is a
+// no-op; this isolates HandlePress/HandleRelease behavior.
+// ---------------------------------------------------------------------------
+
+TEST(ButtonE2ETest, ClickFiresOnReleaseInside) {
+  auto button = std::make_shared<Button>("OK");
+  button->SetBounds(kButtonBounds);
+
+  int clicks = 0;
+  button->SetOnPressed([&] { ++clicks; });
+
+  // Press inside is consumed, release inside fires the callback exactly once.
+  button->OnPointerEnter();
+  EXPECT_TRUE(button->OnPointerDown(kInside));
+  button->OnPointerUp(kInside);
+
+  EXPECT_EQ(clicks, 1);
+}
+
+TEST(ButtonE2ETest, PressMoveOutThenUpNoClick) {
+  auto button = std::make_shared<Button>("OK");
+  button->SetBounds(kButtonBounds);
+
+  int clicks = 0;
+  button->SetOnPressed([&] { ++clicks; });
+
+  // Down inside, then release outside the bounds: must NOT fire on_pressed_.
+  EXPECT_TRUE(button->OnPointerDown(kInside));
+  button->OnPointerUp(kOutside);
+
+  EXPECT_EQ(clicks, 0);
 }
 
 }  // namespace
