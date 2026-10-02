@@ -27,9 +27,11 @@
 #include "tgfx/core/Canvas.h"
 #include "tgfx/core/Color.h"
 #include "tgfx/core/Font.h"
+#include "tgfx/core/Image.h"
 #include "tgfx/core/Paint.h"
 #include "tgfx/core/RRect.h"
 #include "tgfx/core/Rect.h"
+#include "tgfx/core/SamplingOptions.h"
 #include "tgfx/core/Surface.h"
 #include "tgfx/core/Typeface.h"
 #include "tgfx/gpu/Backend.h"
@@ -252,6 +254,30 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
           command.rect.x, command.rect.y, command.rect.width,
           command.rect.height));
       break;
+    case RenderCommandType::kDrawTexture: {
+      // Wrap an externally-produced GL texture (e.g. mpv render context) as a
+      // tgfx BackendTexture and draw it into the destination rect. MakeFrom
+      // does NOT take ownership of the GL texture; the producer (mpv) manages
+      // its lifetime. The texture id stays the same across frames; only its
+      // contents are updated by mpv, so re-creating the Image each frame is
+      // cheap (just a handle, no GPU upload).
+      tgfx::GLTextureInfo gl_info{};
+      gl_info.id = command.texture_id;
+      gl_info.target = 0x0DE1U;   // GL_TEXTURE_2D
+      gl_info.format = 0x8058U;   // GL_RGBA8
+      const auto src_w = static_cast<int>(command.rect.width);
+      const auto src_h = static_cast<int>(command.rect.height);
+      tgfx::BackendTexture backend(gl_info, src_w, src_h);
+      auto image = tgfx::Image::MakeFrom(impl_->context, backend);
+      if (image != nullptr) {
+        auto dest = tgfx::Rect::MakeXYWH(command.rect.x, command.rect.y,
+                                          command.rect.width,
+                                          command.rect.height);
+        impl_->canvas->drawImageRect(image, dest,
+                                     tgfx::SamplingOptions());
+      }
+      break;
+    }
     default:
       break;
   }
