@@ -67,6 +67,11 @@ add_subdirectory(freetype)
 #
 # Vendored as a git repository under thirdparty/tgfx/ with its own submodules
 # already synced (shaderc, glslang, etc.).
+#
+# NOTE: tgfx's CMakeLists unconditionally checks for shaderc/third_party/glslang
+# at configure time and runs git-sync-deps (network) if missing. We use the
+# OpenGL backend which does NOT need shaderc, so we drop an empty placeholder
+# directory to skip the network sync on CI.
 # ---------------------------------------------------------------------------
 set(TGFX_USE_OPENGL ON CACHE BOOL "" FORCE)
 set(TGFX_USE_D3D12 OFF CACHE BOOL "" FORCE)
@@ -78,6 +83,10 @@ set(TGFX_BUILD_SVG OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_PDF OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_LAYERS OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
+# Placeholder to skip tgfx's unconditional shaderc glslang network sync.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
+endif()
 add_subdirectory(tgfx)
 
 message(STATUS "NeoFlux third-party dependencies configured")

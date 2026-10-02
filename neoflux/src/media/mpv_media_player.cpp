@@ -268,9 +268,9 @@ bool MpvMediaPlayer::Impl::CreateMpvHandle() {
   // Route mpv's internal log through glog. terminal=no means mpv writes nothing
   // to stderr directly; instead records are delivered as MPV_EVENT_LOG_MESSAGE
   // (consumed in PollEvents). This MUST be after mpv_initialize: it is a command,
-  // not an option. "v" = verbose, enough to see file open, codec negotiation, and
-  // decode/upload, without drowning in trace spam.
-  mpv_request_log_messages(mpv, "v");
+  // not an option. "warn" only surfaces real problems; verbose filter-graph
+  // teardown chatter is suppressed.
+  mpv_request_log_messages(mpv, "warn");
 
   return true;
 }
