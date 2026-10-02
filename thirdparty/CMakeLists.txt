@@ -239,6 +239,13 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(tgfx PRIVATE -fpermissive)
 endif ()
 
+# tgfx's public headers are not -Werror-clean (old-style casts in
+# ColorSpace.h, shadowing params in Point.h/Rect.h). neoflux compiles with
+# -Werror and includes those headers transitively. Expose tgfx's include dir
+# to consumers as SYSTEM so warnings in vendored headers are suppressed.
+target_include_directories(tgfx SYSTEM INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tgfx/include)
+
 # Strip optional raster image codecs. On desktop tgfx turns PNG/JPEG/WebP
 # decode+encode ON by default (and freetype force-enables PNG_DECODE), and
 # expects libpng/zlib/libjpeg-turbo/libwebp as depsync prebuilts. A fresh CI
