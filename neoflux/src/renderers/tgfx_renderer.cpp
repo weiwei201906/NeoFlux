@@ -98,9 +98,11 @@ bool TgfxRenderer::Init(int width, int height, void* native_handle) {
   impl_->window = static_cast<GLFWwindow*>(native_handle);
   impl_->width = width;
   impl_->height = height;
-  impl_->font_manager.ScanDirectory("thirdparty/fonts");
-  impl_->font_manager.ScanDirectory("../thirdparty/fonts");
-  impl_->font_manager.ScanDirectory("../../thirdparty/fonts");
+  // Fonts live in the project's assets/fonts/ (not thirdparty/). Probe the
+  // working-directory relative locations the binary can be launched from.
+  impl_->font_manager.ScanDirectory("assets/fonts");
+  impl_->font_manager.ScanDirectory("../assets/fonts");
+  impl_->font_manager.ScanDirectory("../../assets/fonts");
   const std::string default_font = impl_->font_manager.GetDefaultFont();
   if (!default_font.empty()) {
     const std::string path = impl_->font_manager.GetPath(default_font);

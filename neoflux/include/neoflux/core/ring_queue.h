@@ -24,12 +24,14 @@
 #include <utility>
 #include <vector>
 
+#include "neoflux/core/config.h"
+
 namespace neoflux {
 
 namespace detail {
 
-// L1 cache line size on most architectures.
-inline constexpr std::size_t kCacheLineSize = 64;
+// Re-export for legacy callers; the source of truth is neoflux::config.
+inline constexpr std::size_t kCacheLineSize = config::kCacheLineSize;
 
 }  // namespace detail
 
