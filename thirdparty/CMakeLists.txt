@@ -73,16 +73,42 @@ add_subdirectory(freetype)
 # OpenGL backend which does NOT need shaderc, so we drop an empty placeholder
 # directory to skip the network sync on CI.
 # ---------------------------------------------------------------------------
-set(TGFX_USE_OPENGL ON CACHE BOOL "" FORCE)
-set(TGFX_USE_D3D12 OFF CACHE BOOL "" FORCE)
-set(TGFX_USE_METAL OFF CACHE BOOL "" FORCE)
-set(TGFX_USE_VULKAN OFF CACHE BOOL "" FORCE)
-set(TGFX_USE_WEBGPU OFF CACHE BOOL "" FORCE)
+# tgfx backend selection (compile-time). Pick exactly one:
+#   -DNEOFLUX_BACKEND=gl       (default, desktop + mobile OpenGL/EGL)
+#   -DNEOFLUX_BACKEND=vulkan   (requires Vulkan-capable host + shaderc)
+#   -DNEOFLUX_BACKEND=d3d12    (Windows only)
+#   -DNEOFLUX_BACKEND=metal    (macOS only)
+# ---------------------------------------------------------------------------
+set(NEOFLUX_BACKEND "gl" CACHE STRING "tgfx rendering backend")
+set_property(CACHE NEOFLUX_BACKEND PROPERTY STRINGS gl vulkan d3d12 metal)
+
+set(TGFX_USE_OPENGL OFF)
+set(TGFX_USE_D3D12 OFF)
+set(TGFX_USE_METAL OFF)
+set(TGFX_USE_VULKAN OFF)
+set(TGFX_USE_WEBGPU OFF)
+
+if(NEOFLUX_BACKEND STREQUAL "gl")
+  set(TGFX_USE_OPENGL ON)
+elseif(NEOFLUX_BACKEND STREQUAL "vulkan")
+  set(TGFX_USE_VULKAN ON)
+elseif(NEOFLUX_BACKEND STREQUAL "d3d12")
+  set(TGFX_USE_D3D12 ON)
+elseif(NEOFLUX_BACKEND STREQUAL "metal")
+  set(TGFX_USE_METAL ON)
+else()
+  message(FATAL_ERROR "Unknown NEOFLUX_BACKEND='${NEOFLUX_BACKEND}'. Choose: gl, vulkan, d3d12, metal.")
+endif()
+
 set(TGFX_USE_FREETYPE ON CACHE BOOL "" FORCE)
 set(TGFX_BUILD_SVG OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_PDF OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_LAYERS OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
+
+# Propagate the chosen backend to our sources.
+add_compile_definitions(NEOFLUX_BACKEND_${NEOFLUX_BACKEND})
+
 # Placeholder to skip tgfx's unconditional shaderc glslang network sync.
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")

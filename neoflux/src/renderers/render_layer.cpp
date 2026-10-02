@@ -66,9 +66,25 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   window_width_ = width;
   window_height_ = height;
 
+#if defined(NEOFLUX_BACKEND_gl)
   LOG(INFO) << "RenderLayer starting: " << width << "x" << height
             << " backend=gl (tgfx OpenGL)";
   LOG(INFO) << "Using tgfx OpenGL backend";
+#elif defined(NEOFLUX_BACKEND_vulkan)
+  LOG(INFO) << "RenderLayer starting: " << width << "x" << height
+            << " backend=vulkan (tgfx Vulkan)";
+  LOG(INFO) << "Using tgfx Vulkan backend";
+#elif defined(NEOFLUX_BACKEND_d3d12)
+  LOG(INFO) << "RenderLayer starting: " << width << "x" << height
+            << " backend=d3d12 (tgfx D3D12)";
+  LOG(INFO) << "Using tgfx D3D12 backend";
+#elif defined(NEOFLUX_BACKEND_metal)
+  LOG(INFO) << "RenderLayer starting: " << width << "x" << height
+            << " backend=metal (tgfx Metal)";
+  LOG(INFO) << "Using tgfx Metal backend";
+#else
+  LOG(INFO) << "RenderLayer starting: " << width << "x" << height;
+#endif
 
   renderer_ = std::make_unique<TgfxRenderer>();
 
