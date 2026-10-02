@@ -44,6 +44,7 @@ add_library(neoflux STATIC
   src/widgets/media_widget.cpp
   src/media/mpv_media_player.cpp
   src/media/media_player_factory.cpp
+  src/native/gl/gl_functions.cpp
 )
 
 # Platform-specific bridge implementations.
@@ -59,6 +60,7 @@ target_include_directories(neoflux
     $<INSTALL_INTERFACE:include>
   PRIVATE
     ${CMAKE_SOURCE_DIR}/thirdparty
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # OpenGL is required for both the GLFW bridge and the OpenGL fallback renderer.

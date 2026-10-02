@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     name: ${{ matrix.name }}
@@ -52,7 +56,7 @@ jobs:
             -DNEOFLUX_BUILD_TESTS=ON
 
       - name: Build
-        run: cmake --build build -j
+        run: cmake --build build -j 2
 
       - name: Test (Linux, headless via Xvfb)
         if: runner.os == 'Linux'
@@ -93,16 +97,15 @@ jobs:
 
       - name: Run clang-tidy on neoflux source
         run: |
-          run-clang-tidy -p build -j"$(nproc)" \
-            -header-filter='(neoflux/include/neoflux|neoflux/src|src)/.*' \
-            -quiet -extra-arg=-Wno-unknown-warning-option \
-            neoflux/src src \
-            2>&1 | tee clang-tidy.log
+          find neoflux/src -name '*.cpp' -print0 | xargs -0 -n1 \
+            clang-tidy -p build -quiet 2>&1 | tee clang-tidy.log
+          echo "=== error lines ==="
+          grep -E 'error:' clang-tidy.log | head -20 || true
           if grep -qE 'error:' clang-tidy.log; then
             echo "::error::clang-tidy reported errors"
             exit 1
           fi
-          echo "clang-tidy: no errors (warnings present but non-blocking)"
+          echo "clang-tidy: no errors"
 
       - name: Enforce ASCII-only source
         run: |

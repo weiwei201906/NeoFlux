@@ -47,6 +47,13 @@
 #include <windows.h>
 #endif
 
+// APIENTRY is defined by <windows.h> (WINAPI = __stdcall on x86). On Linux/macOS
+// it is undefined, but GL function pointers are cdecl there, so an empty macro
+// is correct. Define it here so the MpvGlLoader typedefs compile off-Windows.
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+
 namespace neoflux {
 
 namespace {
