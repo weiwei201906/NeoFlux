@@ -138,4 +138,50 @@ endfunction()
 endif()
 add_subdirectory(tgfx)
 
+# ---------------------------------------------------------------------------
+# Vendored tgfx third-party deps that tgfx does NOT git-track.
+#
+# tgfx normally populates thirdparty/tgfx/third_party/{concurrentqueue,skcms}
+# (and compiles them) via gclient + depsync at configure time. On a fresh CI
+# clone (no depsync, offline) those directories are empty, so tgfx fails with
+#   fatal error: concurrentqueue.h: No such file or directory
+#   fatal error: skcms.h: No such file or directory
+#
+# We control tiny copies under thirdparty/ here:
+#   - concurrentqueue is header-only (cameron314).
+#   - skcms is a small self-contained color-management lib; we build it from
+#     source into a static archive and link it into tgfx so the tgfx-vendor
+#     link resolves (tgfx unconditionally calls skcms_* from ColorSpace.cpp,
+#     ColorSpaceXformSteps.cpp, FTScalerContext.cpp, CopyPixels.cpp, ...).
+#
+# tgfx already adds its own (empty) third_party/{skcms,concurrentqueue} dirs as
+# PRIVATE include paths; appending our real dirs makes the missing headers
+# resolve without touching the tgfx submodule tree.
+# ---------------------------------------------------------------------------
+set(NEOFLUX_VENDORED_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
+# concurrentqueue: header-only.
+add_library(neoflux_concurrentqueue INTERFACE)
+target_include_directories(neoflux_concurrentqueue INTERFACE
+    ${NEOFLUX_VENDORED_DIR}/concurrentqueue)
+
+# skcms: compile the implementation + its three CPU-dispatch translation units
+# (baseline / hsw / skx). skcms.cc references all three run_program symbols.
+add_library(neoflux_skcms STATIC
+    ${NEOFLUX_VENDORED_DIR}/skcms/skcms.cc
+    ${NEOFLUX_VENDORED_DIR}/skcms/src/skcms_TransformBaseline.cc
+    ${NEOFLUX_VENDORED_DIR}/skcms/src/skcms_TransformHsw.cc
+    ${NEOFLUX_VENDORED_DIR}/skcms/src/skcms_TransformSkx.cc)
+target_include_directories(neoflux_skcms PUBLIC
+    ${NEOFLUX_VENDORED_DIR}/skcms)
+set_target_properties(neoflux_skcms PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON)
+
+# Make the already-created tgfx target find our headers and link skcms.
+target_include_directories(tgfx PRIVATE
+    ${NEOFLUX_VENDORED_DIR}/concurrentqueue
+    ${NEOFLUX_VENDORED_DIR}/skcms)
+target_link_libraries(tgfx PRIVATE neoflux_concurrentqueue neoflux_skcms)
+
 message(STATUS "NeoFlux third-party dependencies configured")
