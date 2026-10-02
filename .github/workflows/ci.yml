@@ -91,6 +91,13 @@ jobs:
             -DNEOFLUX_BUILD_TESTS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
+      - name: Debug clang-tidy env
+        run: |
+          which clang-tidy && clang-tidy --version
+          which run-clang-tidy
+          ls -la build/compile_commands.json
+          head -5 build/compile_commands.json
+
       - name: Run clang-tidy on neoflux source
         run: |
           run-clang-tidy -p build -j"$(nproc)" -quiet \
