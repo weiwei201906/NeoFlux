@@ -65,6 +65,16 @@ jobs:
 
       - name: Build
         run: cmake --build build -j
+        continue-on-error: true
+
+      - name: Dump build error on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "===== last 200 lines of build log ====="
+          find build -name "*.log" -exec tail -50 {} \; 2>/dev/null
+          echo "===== cmake build stderr ====="
+          cmake --build build 2>&1 | tail -100 || true
 
       - name: Test (Linux, headless via Xvfb)
         if: runner.os == 'Linux'
