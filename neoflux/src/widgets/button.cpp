@@ -118,7 +118,10 @@ bool Button::HandlePress(const Point& local_pos) {
 }
 
 void Button::HandleRelease(const Point& local_pos) {
-  if (is_pressed_ && ContainsPoint(local_pos) && on_pressed_) {
+  // Suppress the click if a long-press already fired: long-press is a distinct
+  // action, so releasing afterwards must not also dispatch on_pressed_.
+  if (is_pressed_ && !long_press_fired_ && ContainsPoint(local_pos) &&
+      on_pressed_) {
     on_pressed_();
   }
   is_pressed_ = false;
