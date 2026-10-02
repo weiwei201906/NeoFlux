@@ -5,14 +5,48 @@ configuration and [glog](https://github.com/google/glog) for logging. Every
 flag below is optional and passed on the command line:
 
 ```powershell
-.\build\bin\neoflux_app.exe --render_backend=gl --target_fps=120 --logtostderr
+.\build\bin\neoflux_app.exe --target_fps=120 --logtostderr
 ```
+
+## Render backend (compile-time)
+
+The tgfx render backend is selected at **CMake configure time**, not at
+runtime. There is no gflag for it: rebuilding with a different
+`-DNEOFLUX_BACKEND=...` is the only way to switch.
+
+| Value | Platform | Notes |
+|-------|----------|-------|
+| `gl` (default) | Desktop + mobile | OpenGL via WGL / CGL / GLX on desktop and EGL on mobile. The only fully-tested backend. |
+| `vulkan` | Desktop | Requires the Vulkan SDK and a Vulkan-capable driver; tgfx is built with shaderc. |
+| `d3d12` | Windows only | Requires the Windows SDK D3D12 headers. |
+| `metal` | macOS only | Requires the Apple Metal framework. |
+
+Configure and build with the backend you want:
+
+```bash
+cmake -B build -DNEOFLUX_BACKEND=vulkan
+cmake --build build
+```
+
+The chosen backend is propagated into C++ as a `NEOFLUX_BACKEND_*`
+preprocessor define and baked into the binary.
+
+::: tip OpenGL is the only fully-tested backend
+Vulkan, D3D12, and Metal require additional system dependencies (shaderc,
+Vulkan SDK, Windows SDK D3D12 headers, Apple Metal framework, etc.) and are
+not yet exercised in CI. Use `gl` unless you have a specific reason to
+experiment.
+:::
+
+::: warning This is a compile-time choice
+There is no runtime flag to switch backends. If you want to try Vulkan after
+an OpenGL build, re-run CMake with `-DNEOFLUX_BACKEND=vulkan` and rebuild.
+:::
 
 ## Full flag reference
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--render_backend` | `string` | `"gl"` | Selects the tgfx render backend. Only `gl` is available in this build; `vulkan`, `cpu`, and any unknown value are a hard startup error (no silent fallback). |
 | `--target_fps` | `int32` | `60` (from `config::kDefaultTargetFps`) | Target frames-per-second for the application event loop. |
 | `--render_queue_capacity` | `uint64` | `2048` (from `config::kDefaultRenderQueueCapacity`) | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
 | `--render_queue_drop_log_max` | `int32` | `10` | Maximum number of "render command queue full, dropped commands" warnings emitted per process. After this many drops, subsequent overflows are counted silently. Raise this only when diagnosing back-pressure. |
@@ -20,27 +54,6 @@ flag below is optional and passed on the command line:
 | `--logtostderr` | `bool` | `false` | When set, writes all logs to stderr instead of files. |
 | `--log_dir` | `string` | `"./logs"` | Directory for `.log` files (created automatically). Only used when `--logtostderr` is off. |
 | `--media_source` | `string` | `"./assets/media/sample.mp4"` | Path or URL for the demo `MediaWidget` on the `/media` route. |
-
-### `--render_backend`
-
-Defined in `neoflux/src/renderers/render_layer.cpp`. The default is `"gl"`.
-There is **no silent fallback**: requesting an unavailable backend is a hard
-startup failure — `RenderLayer::Start()` logs an error and returns `false`, so
-the application refuses to launch rather than quietly rendering through the
-wrong backend.
-
-| Value | Behavior |
-|-------|----------|
-| `gl` (default) | The working desktop path: tgfx OpenGL on WGL, driven through the GLFW bridge. |
-| `vulkan` | Refused unless tgfx was built with `TGFX_USE_VULKAN=ON` AND the host has a Vulkan device/driver. In a GL-only build this is a hard startup error. |
-| `cpu` | Refused. tgfx has no software rasterizer, so there is no CPU backend to fall back to. |
-| anything else | Refused as unknown. |
-
-::: tip
-On today's desktop builds only `gl` exists. Pass it explicitly
-(`--render_backend=gl`) to make the intent clear; do not assume the other values
-silently work.
-:::
 
 ### `--target_fps`
 
@@ -121,14 +134,13 @@ Because the app is built as a GUI-subsystem binary with no console, run with:
 ```powershell
 .\build\bin\neoflux_app.exe `
   --target_fps=144 `
-  --render_backend=gl `
   --render_queue_capacity=4096 `
   --logtostderr `
   --verbose_logging
 ```
 
-This targets 144 FPS, uses the GL backend, enlarges the command queue to
-4096, and streams verbose logs to the terminal.
+This targets 144 FPS, enlarges the command queue to 4096, and streams verbose
+logs to the terminal.
 
 ## Compile-time constants (`core/config.h`)
 

@@ -4,14 +4,45 @@ NeoFlux 使用 [gflags](https://github.com/gflags/gflags) 做运行时配置，�
 [glog](https://github.com/google/glog) 记录日志。下列参数均为可选，在命令行传入：
 
 ```powershell
-.\build\bin\neoflux_app.exe --render_backend=gl --target_fps=120 --logtostderr
+.\build\bin\neoflux_app.exe --target_fps=120 --logtostderr
 ```
+
+## 渲染后端（编译期）
+
+tgfx 渲染后端在 **CMake 配置期** 选定，而非运行期。它没有对应的 gflag：
+要切换后端，只能用不同的 `-DNEOFLUX_BACKEND=...` 重新编译。
+
+| 取值 | 平台 | 说明 |
+|------|------|------|
+| `gl`（默认） | 桌面 + 移动端 | 桌面通过 WGL / CGL / GLX，移动端通过 EGL 走 OpenGL。唯一经过完整测试的后端。 |
+| `vulkan` | 桌面 | 需要 Vulkan SDK 和支持 Vulkan 的驱动；tgfx 以 shaderc 构建。 |
+| `d3d12` | 仅 Windows | 需要 Windows SDK 的 D3D12 头文件。 |
+| `metal` | 仅 macOS | 需要 Apple Metal 框架。 |
+
+用想要的后端配置并编译：
+
+```bash
+cmake -B build -DNEOFLUX_BACKEND=vulkan
+cmake --build build
+```
+
+所选后端会以 `NEOFLUX_BACKEND_*` 预定义宏的形式传入 C++，并编入二进制。
+
+::: tip OpenGL 是唯一经过完整测试的后端
+Vulkan、D3D12、Metal 还需要额外的系统依赖（shaderc、Vulkan SDK、Windows
+SDK 的 D3D12 头文件、Apple Metal 框架等），且尚未在 CI 中跑过。除非你有
+明确的实验需求，否则使用 `gl`。
+:::
+
+::: warning 这是编译期选择
+没有运行时参数可以切换后端。如果想在 OpenGL 构建之后试试 Vulkan，需要重新
+用 `-DNEOFLUX_BACKEND=vulkan` 跑 CMake 并重新编译。
+:::
 
 ## 完整参数表
 
 | 参数 | 类型 | 默认值 | 含义 |
 |------|------|--------|------|
-| `--render_backend` | `string` | `"gl"` | 选择 tgfx 渲染后端。本构建仅 `gl` 可用；`vulkan`、`cpu` 及任何未知值都是启动期硬错误（不静默回退）。 |
 | `--target_fps` | `int32` | `60`（来自 `config::kDefaultTargetFps`） | 应用事件循环的目标帧率。 |
 | `--render_queue_capacity` | `uint64` | `2048`（来自 `config::kDefaultRenderQueueCapacity`） | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
 | `--render_queue_drop_log_max` | `int32` | `10` | 每个进程最多打印多少次"渲染队列已满、丢弃命令"警告。超过后静默统计，不再刷屏。仅在诊断背压时调大。 |
@@ -19,24 +50,6 @@ NeoFlux 使用 [gflags](https://github.com/gflags/gflags) 做运行时配置，�
 | `--logtostderr` | `bool` | `false` | 开启后所有日志写到 stderr 而非文件。 |
 | `--log_dir` | `string` | `"./logs"` | `.log` 文件目录（自动创建），仅在未开启 `--logtostderr` 时生效。 |
 | `--media_source` | `string` | `"./assets/media/sample.mp4"` | `/media` 路由中演示 `MediaWidget` 的视频路径或 URL。 |
-
-### `--render_backend`
-
-定义于 `neoflux/src/renderers/render_layer.cpp`，默认值为 `"gl"`。**不存在静默
-回退**：请求不可用的后端会让 `RenderLayer::Start()` 记录错误并返回 `false`，
-应用直接拒绝启动，而不是悄悄换成错误的后端渲染。
-
-| 取值 | 行为 |
-|------|------|
-| `gl`（默认） | 当前可用的桌面路径：tgfx OpenGL（WGL），经 GLFW 桥驱动。 |
-| `vulkan` | 仅当 tgfx 以 `TGFX_USE_VULKAN=ON` 构建且本机存在 Vulkan 设备/驱动时可用；GL-only 构建下属于启动硬错误。 |
-| `cpu` | 拒绝。tgfx 没有软件光栅化器，不存在 CPU 后端可回退。 |
-| 其它任何值 | 视为未知值，拒绝启动。 |
-
-::: tip
-当前桌面构建只有 `gl`。显式传 `--render_backend=gl` 表明意图；不要以为其它取值
-会悄悄生效。
-:::
 
 ### `--target_fps`
 
@@ -107,13 +120,12 @@ VLOG(1) << "Detailed per-frame debug info";  // 配 --verbose_logging 显示
 ```powershell
 .\build\bin\neoflux_app.exe `
   --target_fps=144 `
-  --render_backend=gl `
   --render_queue_capacity=4096 `
   --logtostderr `
   --verbose_logging
 ```
 
-即目标 144 FPS、使用 GL 后端、队列扩到 4096，并把详细日志输出到终端。
+即目标 144 FPS、队列扩到 4096，并把详细日志输出到终端。
 
 ## 编译时常量（`core/config.h`）
 
