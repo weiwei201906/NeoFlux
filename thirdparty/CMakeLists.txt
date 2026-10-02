@@ -226,4 +226,24 @@ target_include_directories(tgfx PRIVATE
     ${NEOFLUX_VENDORED_DIR}/pathkit)
 target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms neoflux_hwy neoflux_pathkit)
 
+# Strip optional raster image codecs. On desktop tgfx turns PNG/JPEG/WebP
+# decode+encode ON by default (and freetype force-enables PNG_DECODE), and
+# expects libpng/zlib/libjpeg-turbo/libwebp as depsync prebuilts. A fresh CI
+# clone has none of them, and the GL backend does not need image file I/O to
+# build. Drop the codec sources and remove their compile macros from the
+# already-created tgfx target; ImageCodec.cpp's #ifdef dispatch then compiles
+# to no-op paths (decoding unsupported at runtime, which is fine for CI build).
+# Only pdf/DeflateStream.cpp uses zlib directly and it is built only when
+# TGFX_BUILD_PDF is on (off here).
+get_target_property(_tgfx_defs tgfx COMPILE_DEFINITIONS)
+if (_tgfx_defs)
+    list(FILTER _tgfx_defs EXCLUDE REGEX "TGFX_USE_(PNG|JPEG|WEBP)")
+    set_target_properties(tgfx PROPERTIES COMPILE_DEFINITIONS "${_tgfx_defs}")
+endif ()
+get_target_property(_tgfx_srcs tgfx SOURCES)
+if (_tgfx_srcs)
+    list(FILTER _tgfx_srcs EXCLUDE REGEX "codecs[\\/](png|jpeg|webp)[\\/]")
+    set_target_properties(tgfx PROPERTIES SOURCES "${_tgfx_srcs}")
+endif ()
+
 message(STATUS "NeoFlux third-party dependencies configured")
