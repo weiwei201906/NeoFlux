@@ -56,9 +56,6 @@ node_modules/
 
 docs/.vitepress/dist/
 
-# mpv prebuilt bundle is tracked via Git LFS (see .gitattributes);
-# un-ignore its binaries so LFS can pick them up.
-!thirdparty/mpv-bundle/*.dll
-!thirdparty/mpv-bundle/*.lib
-!thirdparty/mpv-bundle/*.dll.a
-!thirdparty/mpv-bundle/*.pdb
+# mpv prebuilt bundle is downloaded at configure time (see
+# cmake/DownloadMPV.cmake / scripts/download_mpv.ps1); never commit binaries.
+thirdparty/mpv-bundle/

@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (Ubuntu 22.04)
+            os: ubuntu-22.04
+            cmake-generator: "Unix Makefiles"
+          - name: Windows (MSVC)
+            os: windows-2022
+            cmake-generator: "Ninja"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build git \
+            libmpv-dev libgl1-mesa-dev libxinerama-dev \
+            libxrandr-dev libxcursor-dev libxi-dev libglu1-mesa-dev \
+            xvfb clang-tidy
+
+      - name: Install Windows deps
+        if: runner.os == 'Windows'
+        run: |
+          choco install ninja -y
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNEOFLUX_BUILD_TESTS=ON \
+            -DNEOFLUX_USE_TGFX=OFF
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test (Linux, headless via Xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd build
+          ctest --output-on-failure
+
+  clang-tidy:
+    name: clang-tidy (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            libmpv-dev libgl1-mesa-dev \
+            libxinerama-dev libxrandr-dev libxcursor-dev libxi-dev \
+            clang-tidy python3-pip
+
+      - name: Configure (generate compile_commands.json)
+        run: |
+          cmake -S . -B build -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNEOFLUX_BUILD_TESTS=ON \
+            -DNEOFLUX_USE_TGFX=OFF \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy on neoflux/src
+        run: |
+          find neoflux/src -name '*.cpp' -print0 | xargs -0 -n1 \
+            clang-tidy -p build --quiet 2>&1 | tee clang-tidy.log
+          # Fail on any warning.
+          if grep -q "warning:" clang-tidy.log; then
+            echo "::error::clang-tidy reported warnings"
+            exit 1
+          fi

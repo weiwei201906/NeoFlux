@@ -1,4 +1,0 @@
-thirdparty/mpv-bundle/*.dll filter=lfs diff=lfs merge=lfs -text
-thirdparty/mpv-bundle/*.lib filter=lfs diff=lfs merge=lfs -text
-thirdparty/mpv-bundle/*.dll.a filter=lfs diff=lfs merge=lfs -text
-thirdparty/mpv-bundle/*.pdb filter=lfs diff=lfs merge=lfs -text
