@@ -50,6 +50,18 @@ jobs:
           cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DNEOFLUX_BUILD_TESTS=ON
+        continue-on-error: true
+
+      - name: Dump configure error log on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "===== CMakeOutput.log ====="
+          cat build/CMakeFiles/CMakeOutput.log 2>/dev/null | tail -100
+          echo "===== CMakeError.log ====="
+          cat build/CMakeFiles/CMakeError.log 2>/dev/null | tail -100
+          echo "===== last stderr from configure ====="
+          ls build/CMakeFiles/ 2>/dev/null
 
       - name: Build
         run: cmake --build build -j
