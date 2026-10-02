@@ -230,6 +230,12 @@ target_include_directories(tgfx PRIVATE
     ${NEOFLUX_VENDORED_DIR}/pathkit)
 target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms neoflux_hwy neoflux_pathkit freetype)
 
+# tgfx's Windows GL backend (WGLDevice/WGLGPU) calls wgl* entry points that
+# live in opengl32.dll; link it on Windows so the final app/test binaries link.
+if (WIN32)
+    target_link_libraries(tgfx opengl32 gdi32)
+endif ()
+
 # MinGW GCC 14 is stricter than Linux GCC 11 on tgfx's FTPath.cpp freetype
 # outline casts (unsigned char*/unsigned short* vs freetype's char*/short*):
 #   error: invalid conversion from 'unsigned char*' to 'char*' [-fpermissive]
