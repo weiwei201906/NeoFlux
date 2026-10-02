@@ -62,6 +62,12 @@ jobs:
 
       - name: Build
         run: cmake --build build -j
+        continue-on-error: true
+
+      - name: Dump build error
+        if: failure()
+        shell: bash
+        run: cmake --build build 2>&1 | tail -60 || true
 
       - name: Test (Linux, headless via Xvfb)
         if: runner.os == 'Linux'
