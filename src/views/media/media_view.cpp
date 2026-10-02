@@ -17,6 +17,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "neoflux/apps/application.h"
 #include "neoflux/widgets/button.h"
 #include "neoflux/widgets/container.h"
 #include "neoflux/widgets/media_widget.h"
@@ -54,7 +55,7 @@ std::shared_ptr<neoflux::Widget> BuildMediaView(
   back_btn->SetBackgroundColor(kAccent)
       .SetTextColor(kTextLight)
       .SetFontSize(14.0F)
-      .SetOnPressed([&context]() { context.PopRoute(); });
+      .SetOnPressed([app = context.GetApplication()]() { app->PopRoute(); });
 
   auto title = std::make_shared<neoflux::Text>("Media Player");
   title->SetFontSize(18.0F).SetTextColor(kTextLight);

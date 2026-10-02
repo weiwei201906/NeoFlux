@@ -6,6 +6,7 @@
 
 #include "home_view.h"
 
+#include "neoflux/apps/application.h"
 #include "neoflux/widgets/button.h"
 #include "neoflux/widgets/container.h"
 #include "neoflux/widgets/sized_box.h"
@@ -31,7 +32,7 @@ std::shared_ptr<neoflux::Widget> BuildHomeView(
   media_btn->SetBackgroundColor({.r = 80, .g = 140, .b = 255, .a = 255})
       .SetTextColor({.r = 255, .g = 255, .b = 255, .a = 255})
       .SetFontSize(16.0F)
-      .SetOnPressed([&context]() { context.PushRoute("/media"); });
+      .SetOnPressed([app = context.GetApplication()]() { app->PushRoute("/media"); });
 
   root->AddChild(title);
   root->AddChild(subtitle);
