@@ -195,15 +195,12 @@ void MediaWidget::Paint(RenderContext& context) {
 }
 
 bool MediaWidget::OnPointerDown(const Point& /*local_pos*/) {
-  if (impl_->player == nullptr) {
-    return false;
-  }
-  if (impl_->player->GetState() == MediaState::kPlaying) {
-    impl_->player->Pause();
-  } else {
-    impl_->player->Play();
-  }
-  return true;
+  // Do NOT consume pointer events here. Tap-to-toggle play/pause is handled by
+  // the transport buttons in the parent view; consuming events here would
+  // swallow clicks on overlapping widgets (e.g. when the video surface is
+  // large and the user clicks near the edge). Return false so the event falls
+  // through to whatever widget actually owns that point.
+  return false;
 }
 
 MediaWidget& MediaWidget::SetSource(std::string_view source) {
