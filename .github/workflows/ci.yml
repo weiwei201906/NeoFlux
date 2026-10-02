@@ -59,7 +59,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd build
-          ctest --output-on-failure
+          xvfb-run -a ctest --output-on-failure
 
       - name: Test (Windows)
         if: runner.os == 'Windows'
@@ -96,7 +96,7 @@ jobs:
       - name: Run clang-tidy on neoflux/src
         run: |
           find neoflux/src -name '*.cpp' -print0 | xargs -0 -n1 \
-            clang-tidy -p build --quiet 2>&1 | tee clang-tidy.log
+            clang-tidy -p build --quiet --extra-arg=-Wno-unknown-warning-option 2>&1 | tee clang-tidy.log
           # Fail on any warning.
           if grep -q "warning:" clang-tidy.log; then
             echo "::error::clang-tidy reported warnings"
