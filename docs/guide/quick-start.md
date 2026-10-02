@@ -10,9 +10,13 @@ with the MSVC toolchain and the Ninja build generator.
 - **Ninja** build tool (bundled with Visual Studio, or installed separately)
 - A C++20-compatible compiler (MSVC 19.3x+)
 
-Third-party dependencies (`gflags`, `glog`, `Taitank`, `GLFW`, `FreeType`,
-and optionally `tgfx`) are pulled in through CMake `add_subdirectory(thirdparty)`
-— you do not need to install them by hand.
+Third-party dependencies are vendored under `thirdparty/` as git submodules
+(`gflags`, `glog`, `Taitank`, `GLFW`, `FreeType`, `tgfx`) -- you do not need
+to install them by hand. On a fresh clone, run:
+
+```powershell
+git submodule update --init --recursive
+```
 
 ::: tip OpenGL on Windows
 The desktop build creates its context through GLFW/WGL, so any modern GPU
@@ -37,9 +41,10 @@ Build artifacts land under `build\bin\`:
 
 | Path                          | Content                      |
 |-------------------------------|------------------------------|
-| `build\bin\hello_neoflux.exe` | Hello World demo             |
+| `build\bin\neoflux_app.exe`   | The scaffolded quick-start app (home + media routes) |
+| `build\bin\media_player_demo.exe` | Standalone media player demo |
 | `build\bin\counter.exe`       | Counter demo                 |
-| `build\bin\flex_demo.exe`     | Flex layout showcase        |
+| `build\bin\flex_demo.exe`     | Flex layout showcase         |
 | `build\bin\font_demo.exe`     | Font rendering demo          |
 | `build\bin\scroll_demo.exe`   | ScrollView demo              |
 | `build\bin\loading_demo.exe`  | Coroutine state-machine demo |
@@ -63,16 +68,15 @@ you want to see output.
 
 ## Run the example
 
-From the repository root (so the relative `thirdparty/fonts` and `./logs`
+From the repository root (so the relative `assets/fonts` and `./logs`
 paths resolve):
 
 ```powershell
-.\build\bin\hello_neoflux.exe
+.\build\bin\neoflux_app.exe --logtostderr
 ```
 
-A window titled *NeoFlux - Hello World* opens. You will see a title, a live
-counter, and buttons: one increments the counter, the other pushes a second
-route you can pop back from.
+A window titled *NeoFlux* opens. You will see a home screen with buttons to
+navigate to different demos. Click **Media Player** to open the video player.
 
 ## Runtime flags (gflags)
 
@@ -108,11 +112,11 @@ Every NeoFlux program follows the same shape: register routes, create an
 
 ```cpp
 #include <neoflux/app/application.h>
-#include <neoflux/widget/button.h>
-#include <neoflux/widget/container.h>
-#include <neoflux/widget/route_registry.h>
-#include <neoflux/widget/text.h>
-#include <neoflux/widget/widget.h>
+#include <neoflux/widgets/button.h>
+#include <neoflux/widgets/container.h>
+#include <neoflux/widgets/route_registry.h>
+#include <neoflux/widgets/text.h>
+#include <neoflux/widgets/widget.h>
 
 using namespace neoflux;
 

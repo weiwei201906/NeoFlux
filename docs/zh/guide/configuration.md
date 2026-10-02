@@ -12,12 +12,13 @@ NeoFlux 使用 [gflags](https://github.com/gflags/gflags) 做运行时配置，�
 | 参数 | 类型 | 默认值 | 含义 |
 |------|------|--------|------|
 | `--render_backend` | `string` | `"gl"` | 选择 tgfx 渲染后端。本构建仅 `gl` 可用；`vulkan`、`cpu` 及任何未知值都是启动期硬错误（不静默回退）。 |
-| `--target_fps` | `int32` | `60` | 应用事件循环的目标帧率。 |
-| `--render_queue_capacity` | `uint64` | `2048` | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
+| `--target_fps` | `int32` | `60`（来自 `config::kDefaultTargetFps`） | 应用事件循环的目标帧率。 |
+| `--render_queue_capacity` | `uint64` | `2048`（来自 `config::kDefaultRenderQueueCapacity`） | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
 | `--render_queue_drop_log_max` | `int32` | `10` | 每个进程最多打印多少次"渲染队列已满、丢弃命令"警告。超过后静默统计，不再刷屏。仅在诊断背压时调大。 |
 | `--verbose_logging` | `bool` | `false` | 开启 `VLOG(1)` 并把 INFO 日志镜像到 stderr。 |
 | `--logtostderr` | `bool` | `false` | 开启后所有日志写到 stderr 而非文件。 |
 | `--log_dir` | `string` | `"./logs"` | `.log` 文件目录（自动创建），仅在未开启 `--logtostderr` 时生效。 |
+| `--media_source` | `string` | `"./assets/media/sample.mp4"` | `/media` 路由中演示 `MediaWidget` 的视频路径或 URL。 |
 
 ### `--render_backend`
 
@@ -113,3 +114,21 @@ VLOG(1) << "Detailed per-frame debug info";  // 配 --verbose_logging 显示
 ```
 
 即目标 144 FPS、使用 GL 后端、队列扩到 4096，并把详细日志输出到终端。
+
+## 编译时常量（`core/config.h`）
+
+部分值是**编译期**的（编入二进制，不能运行时改）。它们定义在
+`neoflux/include/neoflux/core/config.h` 中，为 `inline constexpr`：
+
+| 常量 | 默认值 | 含义 |
+|------|--------|------|
+| `config::kCacheLineSize` | `64` | CPU 缓存行字节数。用于 SPSC 队列头尾分占不同缓存行（避免伪共享）。Apple M 系列/新 AMD 可用 `-DNEOFLUX_CACHE_LINE_SIZE=128` 覆盖。 |
+| `config::kDefaultRenderQueueCapacity` | `2048` | `--render_queue_capacity` 的默认值。 |
+| `config::kDefaultTargetFps` | `60` | `--target_fps` 的默认值。 |
+| `config::kLongPressThresholdMs` | `500` | `Button` 长按检测阈值（毫秒）。 |
+| `config::kFlingStopThreshold` | `0.02` | 惯性滑动停止阈值（屏幕高度/秒）。 |
+
+::: tip gflag 默认值跟随 config.h
+gflag 定义使用这些常量作为默认值。改 `config.h` 里的 `kDefaultTargetFps`
+为 30 并重新编译，`--target_fps` 的默认值自动变成 30，无需修改 flag 定义。
+:::

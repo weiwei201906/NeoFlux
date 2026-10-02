@@ -123,7 +123,7 @@ mpv 会打印大量诊断信息。加 `--logtostderr` 才能在终端看到（�
 
 脚手架应用内置了 `/media` 路由，演示完整流程：窗口中间一块 `MediaWidget`、
 一个播放/暂停切换按钮、一个返回按钮。播放源取自 `--media_source`
-（默认 `./sample.mp4`）。
+（默认 `./assets/media/sample.mp4`）。
 
 ```powershell
 # 指向任意 mpv 支持的文件或 URL：
@@ -153,3 +153,25 @@ play_btn->SetOnPressed([media, play_btn]() {
 每帧变成 GL 纹理由渲染线程合成，UI 线程的 `Paint()` 只发一条
 `DrawTexture` 命令。你在它上面用普通按钮/滑块自己搭控制 UI；widget 默认
 只处理点按切换播放暂停。
+
+## GL 资源生命周期与销毁
+
+mpv render context、GL texture、FBO 都在**渲染线程**创建（那里有当前
+OpenGL context）。它们必须在同一线程销毁——在没有当前 GL context 的线程
+上删 GL 对象会直接崩溃。
+
+`MediaWidget` 析构时自动处理：
+
+1. `SetRenderPump(nullptr)` — 停止渲染线程拉取新帧。
+2. `player->Stop()` — 停止播放。
+3. `RenderLayer::RunOnRenderThread([]{ player->TeardownRender(); })` —
+   在渲染线程同步执行 `TeardownRender()`（持有 GL context），阻塞直到完成。
+   这会释放 mpv render context、GL texture 和 FBO。
+4. 随后 `player` 的 `unique_ptr` 在 UI 线程析构，只执行 `mpv_terminate_destroy()`
+   （非 GL 的 mpv 核心销毁）。
+
+::: warning 不要在 UI 线程直接 delete MediaPlayer
+如果你直接持有 `MediaPlayer`（而非通过 `MediaWidget`），必须在析构前
+在渲染线程调用 `TeardownRender()`（通过 `RunOnRenderThread`）。否则析构
+函数会在没有当前 OpenGL context 的线程上尝试释放 GL 对象，导致崩溃。
+:::

@@ -13,12 +13,13 @@ flag below is optional and passed on the command line:
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
 | `--render_backend` | `string` | `"gl"` | Selects the tgfx render backend. Only `gl` is available in this build; `vulkan`, `cpu`, and any unknown value are a hard startup error (no silent fallback). |
-| `--target_fps` | `int32` | `60` | Target frames-per-second for the application event loop. |
-| `--render_queue_capacity` | `uint64` | `2048` | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
+| `--target_fps` | `int32` | `60` (from `config::kDefaultTargetFps`) | Target frames-per-second for the application event loop. |
+| `--render_queue_capacity` | `uint64` | `2048` (from `config::kDefaultRenderQueueCapacity`) | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
 | `--render_queue_drop_log_max` | `int32` | `10` | Maximum number of "render command queue full, dropped commands" warnings emitted per process. After this many drops, subsequent overflows are counted silently. Raise this only when diagnosing back-pressure. |
 | `--verbose_logging` | `bool` | `false` | Enables `VLOG(1)` output and mirrors INFO logs to stderr. |
 | `--logtostderr` | `bool` | `false` | When set, writes all logs to stderr instead of files. |
 | `--log_dir` | `string` | `"./logs"` | Directory for `.log` files (created automatically). Only used when `--logtostderr` is off. |
+| `--media_source` | `string` | `"./assets/media/sample.mp4"` | Path or URL for the demo `MediaWidget` on the `/media` route. |
 
 ### `--render_backend`
 
@@ -70,9 +71,11 @@ counted silently. Default `10`. Set to `0` to silence drop warnings entirely.
 ### `--media_source`
 
 Path or URL passed to the built-in demo `MediaWidget` on the `/media` route.
-Default `./sample.mp4`. This flag exists solely so the quick-start app can
-point at a test video without rebuilding; real applications construct their
-own `MediaWidget` and call `SetSource()` directly.
+Default `./assets/media/sample.mp4`. This flag exists solely so the quick-start
+app can point at a test video without rebuilding; real applications construct
+their own `MediaWidget` and call `SetSource()` directly. If the path does not
+exist on disk (and is not a URL like `http://`/`rtsp://`), NeoFlux logs a
+WARNING at startup.
 
 ### `--verbose_logging`
 
@@ -126,3 +129,22 @@ Because the app is built as a GUI-subsystem binary with no console, run with:
 
 This targets 144 FPS, uses the GL backend, enlarges the command queue to
 4096, and streams verbose logs to the terminal.
+
+## Compile-time constants (`core/config.h`)
+
+Some values are **compile-time** (baked into the binary, not runtime flags).
+They live in `neoflux/include/neoflux/core/config.h` as `inline constexpr`:
+
+| Constant | Default | Meaning |
+|----------|---------|---------|
+| `config::kCacheLineSize` | `64` | Cache line size in bytes. Used to pad SPSC queue head/tail to separate cache lines (prevents false sharing). Override with `-DNEOFLUX_CACHE_LINE_SIZE=128` for Apple M-series / newer AMD. |
+| `config::kDefaultRenderQueueCapacity` | `2048` | Default for `--render_queue_capacity`. |
+| `config::kDefaultTargetFps` | `60` | Default for `--target_fps`. |
+| `config::kLongPressThresholdMs` | `500` | Long-press detection threshold for `Button` (ms). |
+| `config::kFlingStopThreshold` | `0.02` | Minimum fling velocity (screen heights/sec) below which inertia stops. |
+
+::: tip gflag defaults follow config.h
+The gflag definitions use these constants as their defaults. Change
+`kDefaultTargetFps` in `config.h` to `30`, rebuild, and `--target_fps` now
+defaults to `30` without touching the flag definition.
+:::

@@ -140,7 +140,8 @@ visible in the terminal (the app is otherwise GUI-subsystem with no console).
 
 The scaffolded app ships a `/media` route that demonstrates the whole flow:
 a `MediaWidget` filling the middle of the window, a play/pause toggle, and a
-back button. The source is taken from `--media_source` (default `./sample.mp4`).
+back button. The source is taken from `--media_source` (default
+`./assets/media/sample.mp4`).
 
 ```powershell
 # Point the demo at any mpv-supported file or URL:
@@ -171,3 +172,28 @@ mpv on its own thread, each frame becomes a GL texture composited by the
 render thread, and `Paint()` on the UI thread just emits one `DrawTexture`
 command. You build your own transport UI out of ordinary buttons/sliders on
 top of it; the widget itself only handles tap-to-toggle by default.
+
+## GL resource lifecycle and teardown
+
+The mpv render context, the GL texture, and the FBO are all created on the
+**render thread** (where the OpenGL context is current). They MUST be freed on
+the same thread -- deleting a GL object on a thread without a current context
+causes a hard crash.
+
+`MediaWidget` handles this automatically in its destructor:
+
+1. `SetRenderPump(nullptr)` -- stops the render thread from pulling new frames.
+2. `player->Stop()` -- stops playback.
+3. `RenderLayer::RunOnRenderThread([]{ player->TeardownRender(); })` --
+   synchronously executes `TeardownRender()` on the render thread (which owns
+   the GL context), blocks until it returns. This frees the mpv render context,
+   GL texture, and FBO.
+4. The `player` `unique_ptr` then destructs on the App thread, which only runs
+   `mpv_terminate_destroy()` (non-GL mpv core teardown).
+
+::: warning Do not call `delete` on a MediaPlayer from the App thread
+If you own a `MediaPlayer` directly (not via `MediaWidget`), you must call
+`TeardownRender()` on the render thread (via `RunOnRenderThread` or equivalent)
+BEFORE destroying the player. Otherwise the destructor will try to free GL
+objects on a thread with no current OpenGL context.
+:::
