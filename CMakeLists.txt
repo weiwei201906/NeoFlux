@@ -17,8 +17,40 @@
 
 cmake_minimum_required(VERSION 3.20)
 
+# ---------------------------------------------------------------------------
+# Version: derive from the latest git tag (e.g. v0.3.1-alpha -> 0.3.1-alpha).
+# Falls back to "0.0.0" when git is unavailable or has no tags, so configure
+# never hard-fails on a shallow/exported checkout.
+#
+# CMake's project(VERSION) only accepts numeric components
+# (major[.minor[.patch[.tweak]]]), so the full tag (which may carry a prerelease
+# suffix such as "-alpha") is kept in NEOFLUX_VERSION for NEOFLUX_VERSION_STRING,
+# while NEOFLUX_VERSION_NUMERIC is the sanitized form fed to project().
+# ---------------------------------------------------------------------------
+set(NEOFLUX_VERSION "0.0.0")
+find_package(Git QUIET)
+if(GIT_FOUND)
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" describe --tags --abbrev=0
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    OUTPUT_VARIABLE NEOFLUX_GIT_TAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE NEOFLUX_GIT_RESULT)
+  if(NEOFLUX_GIT_RESULT EQUAL 0 AND NOT NEOFLUX_GIT_TAG STREQUAL "")
+    string(REGEX REPLACE "^v" "" NEOFLUX_VERSION "${NEOFLUX_GIT_TAG}")
+  endif()
+endif()
+# Keep only the leading numeric dotted components for project() (CMake rejects
+# prerelease suffixes such as "-alpha").
+string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" NEOFLUX_VERSION_NUMERIC "${NEOFLUX_VERSION}")
+if(NEOFLUX_VERSION_NUMERIC STREQUAL "")
+  set(NEOFLUX_VERSION_NUMERIC "0.0.0")
+endif()
+message(STATUS "NeoFlux version: ${NEOFLUX_VERSION} (from git describe --tags --abbrev=0)")
+
 project(neoflux
-  VERSION 0.1.0
+  VERSION "${NEOFLUX_VERSION_NUMERIC}"
   DESCRIPTION "Cross-platform C++20 UI framework with Flutter-like widget model"
   LANGUAGES CXX
 )

@@ -23,6 +23,7 @@
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
 #include "neoflux/renderers/render_layer.h"
+#include "neoflux/version.h"
 #include "neoflux/widgets/route_registry.h"
 #include "neoflux/widgets/widget.h"
 
@@ -42,7 +43,7 @@ namespace neoflux {
 
 Application::Application() = default;
 
-Application::~Application() {
+Application::~Application() {  // NOLINT(bugprone-exception-escape): all Stop() exceptions are caught below
   try {
     Stop();
   } catch (...) {
@@ -117,7 +118,7 @@ bool Application::Init(int argc, char** argv, int window_width,
     FLAGS_v = 1;
   }
 
-  LOG(INFO) << "NeoFlux Application initializing";
+  LOG(INFO) << "NeoFlux Application initializing (v" << neoflux::Version() << ")";
   LOG(INFO) << "Window: " << window_width << "x" << window_height;
   if (!FLAGS_logtostderr) {
     LOG(INFO) << "Logging to directory: " << FLAGS_log_dir;
