@@ -43,6 +43,12 @@
 #include <windows.h>
 #endif
 
+// Off Windows, APIENTRY is undefined but GL function pointers are cdecl, so an
+// empty macro is correct. Define it here so the GlApi typedefs compile on Linux.
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+
 namespace neoflux {
 namespace gl {
 
