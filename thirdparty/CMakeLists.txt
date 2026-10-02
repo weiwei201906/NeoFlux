@@ -182,13 +182,48 @@ set_target_properties(neoflux_skcms PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON)
 
-# Make the already-created tgfx target find our headers and link skcms.
+# Google Highway (hwy): tgfx's SIMD core (BoxFilterDownsampleSIMD, MatrixSIMD,
+# RectSIMD, VecSIMD, TileSortCompareFuncSIMD) unconditionally includes
+# hwy/foreach_target.h and hwy/highway.h. tgfx normally gets hwy as a depsync
+# prebuilt; offline CI has nothing. Vendor the hwy/ headers and compile the core
+# dispatch runtime (CPU detection + per-target registration). We deliberately
+# do NOT glob hwy/tests|hwy/examples.
+add_library(neoflux_hwy STATIC
+    ${NEOFLUX_VENDORED_DIR}/highway/hwy/targets.cc
+    ${NEOFLUX_VENDORED_DIR}/highway/hwy/per_target.cc
+    ${NEOFLUX_VENDORED_DIR}/highway/hwy/abort.cc
+    ${NEOFLUX_VENDORED_DIR}/highway/hwy/timer.cc
+    ${NEOFLUX_VENDORED_DIR}/highway/hwy/print.cc
+    ${NEOFLUX_VENDORED_DIR}/highway/hwy/aligned_allocator.cc)
+target_include_directories(neoflux_hwy PUBLIC
+    ${NEOFLUX_VENDORED_DIR}/highway)
+set_target_properties(neoflux_hwy PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON)
+
+# pathkit: tgfx's PathRef.h / PathTriangulator.cpp unconditionally include
+# "pathkit.h" and call pk::SkPath::toTriangles / toAATriangles. pathkit is a
+# self-contained slice of Skia pathops (no standalone upstream repo; normally a
+# depsync prebuilt). Vendor it and compile src/**/*.cpp into a static lib.
+file(GLOB_RECURSE NEOFLUX_PATHKIT_SOURCES
+    ${NEOFLUX_VENDORED_DIR}/pathkit/src/*.cpp)
+add_library(neoflux_pathkit STATIC ${NEOFLUX_PATHKIT_SOURCES})
+target_include_directories(neoflux_pathkit PUBLIC
+    ${NEOFLUX_VENDORED_DIR}/pathkit)
+set_target_properties(neoflux_pathkit PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON)
+
+# Make the already-created tgfx target find our headers and link the vendored
+# static libs.
 # NOTE: tgfx/CMakeLists.txt already called target_link_libraries(tgfx ...)
 # with the PLAIN signature (line ~777), so we must use the plain form here
 # too; CMake forbids mixing plain and keyword signatures on one target.
 target_include_directories(tgfx PRIVATE
     ${NEOFLUX_VENDORED_DIR}/concurrentqueue
-    ${NEOFLUX_VENDORED_DIR}/skcms)
-target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms)
+    ${NEOFLUX_VENDORED_DIR}/skcms
+    ${NEOFLUX_VENDORED_DIR}/highway
+    ${NEOFLUX_VENDORED_DIR}/pathkit)
+target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms neoflux_hwy neoflux_pathkit)
 
 message(STATUS "NeoFlux third-party dependencies configured")
