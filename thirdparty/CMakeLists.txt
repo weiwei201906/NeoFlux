@@ -87,6 +87,23 @@ set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
 endif()
+# tgfx includes third_party/vendor_tools/vendor.cmake which defines
+# add_vendor_target / find_vendor_libraries. That file is only present when
+# sync_tgfx_vendor.sh has been run locally; on CI it is absent. The OpenGL
+# backend does not use tgfx's vendored third-party targets (we build freetype
+# ourselves above), so we drop a stub that defines no-op functions.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools/vendor.cmake")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools")
+  file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools/vendor.cmake"
+"# Stub vendor.cmake for CI: OpenGL backend does not need tgfx's vendor system.
+function(add_vendor_target)
+endfunction()
+function(find_vendor_libraries)
+  set(\${ARGV1} \"\" PARENT_SCOPE)
+  set(\${ARGV3} \"\" PARENT_SCOPE)
+endfunction()
+")
+endif()
 add_subdirectory(tgfx)
 
 message(STATUS "NeoFlux third-party dependencies configured")
