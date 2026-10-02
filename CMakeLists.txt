@@ -83,7 +83,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(NEOFLUX_BUILD_TESTS    "Build framework unit tests"      OFF)
 option(NEOFLUX_BUILD_EXAMPLES "Build example applications"       OFF)
 option(NEOFLUX_ENABLE_CLANG_TIDY "Enable clang-tidy as a build step (requires correct sysroot config)" OFF)
-option(NEOFLUX_USE_TGFX       "Use tgfx rendering backend (requires MSVC on Windows)" OFF)
 
 # ---------------------------------------------------------------------------
 # Third-party dependencies
@@ -148,6 +147,29 @@ target_link_libraries(neoflux_app
 )
 
 target_compile_features(neoflux_app PRIVATE cxx_std_20)
+
+# ---------------------------------------------------------------------------
+# Copy runtime assets (fonts, media) next to the executable at build time.
+# FontManager scans <cwd>/assets/fonts; this makes a fresh build find fonts
+# whether you run from build/ or build/bin/.
+# ---------------------------------------------------------------------------
+add_custom_command(TARGET neoflux_app POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          ${CMAKE_CURRENT_SOURCE_DIR}/assets
+          $<TARGET_FILE_DIR:neoflux_app>/assets
+  COMMENT "Copying runtime assets (fonts) next to neoflux_app"
+)
+
+# On Windows, the loader resolves libmpv-2.dll from the executable directory.
+# Copy it next to neoflux_app when the prebuilt bundle exists.
+if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/mpv-bundle/libmpv-2.dll")
+  add_custom_command(TARGET neoflux_app POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/thirdparty/mpv-bundle/libmpv-2.dll"
+            "$<TARGET_FILE_DIR:neoflux_app>/libmpv-2.dll"
+    COMMENT "Copying libmpv-2.dll next to neoflux_app"
+  )
+endif()
 
 # ---------------------------------------------------------------------------
 # Example applications (opt-in via -DNEOFLUX_BUILD_EXAMPLES=ON).

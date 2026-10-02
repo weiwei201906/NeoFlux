@@ -113,24 +113,19 @@ FetchContent_MakeAvailable(freetype)
 # ---------------------------------------------------------------------------
 option(NEOFLUX_USE_TGFX "Use tgfx as the rendering backend (requires MSVC on Windows)" OFF)
 
-if(NEOFLUX_USE_TGFX)
-  FetchContent_Declare(
-    tgfx
-    GIT_REPOSITORY https://github.com/Tencent/tgfx.git
-    GIT_TAG        main
-    GIT_SHALLOW    TRUE
-  )
-  set(TGFX_USE_OPENGL ON CACHE BOOL "" FORCE)
-  set(TGFX_USE_D3D12 OFF CACHE BOOL "" FORCE)
-  set(TGFX_USE_METAL OFF CACHE BOOL "" FORCE)
-  set(TGFX_USE_VULKAN OFF CACHE BOOL "" FORCE)
-  set(TGFX_USE_WEBGPU OFF CACHE BOOL "" FORCE)
-  set(TGFX_USE_FREETYPE ON CACHE BOOL "" FORCE)
-  set(TGFX_BUILD_SVG OFF CACHE BOOL "" FORCE)
-  set(TGFX_BUILD_PDF OFF CACHE BOOL "" FORCE)
-  set(TGFX_BUILD_LAYERS OFF CACHE BOOL "" FORCE)
-  set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(tgfx)
-endif()
+# tgfx is the required 2D rasterization library. It is vendored as a git
+# repository under thirdparty/tgfx/ (with its own submodules already synced),
+# so we add it directly instead of fetching from the network.
+set(TGFX_USE_OPENGL ON CACHE BOOL "" FORCE)
+set(TGFX_USE_D3D12 OFF CACHE BOOL "" FORCE)
+set(TGFX_USE_METAL OFF CACHE BOOL "" FORCE)
+set(TGFX_USE_VULKAN OFF CACHE BOOL "" FORCE)
+set(TGFX_USE_WEBGPU OFF CACHE BOOL "" FORCE)
+set(TGFX_USE_FREETYPE ON CACHE BOOL "" FORCE)
+set(TGFX_BUILD_SVG OFF CACHE BOOL "" FORCE)
+set(TGFX_BUILD_PDF OFF CACHE BOOL "" FORCE)
+set(TGFX_BUILD_LAYERS OFF CACHE BOOL "" FORCE)
+set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tgfx ${CMAKE_BINARY_DIR}/tgfx-build)
 
 message(STATUS "NeoFlux third-party dependencies configured")

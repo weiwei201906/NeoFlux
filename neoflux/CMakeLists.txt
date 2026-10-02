@@ -137,11 +137,9 @@ target_link_libraries(neoflux
     OpenGL::GL
 )
 
-# tgfx is an optional rendering backend. When enabled, tgfx performs all
-# rendering; when disabled, a built-in OpenGL renderer (shader + VBO +
-# FreeType for UTF-8 text) is used. GLFW remains only a window/context
-# bridge in both cases.
-if(NEOFLUX_USE_TGFX AND TARGET tgfx)
+# tgfx is the required rendering backend: it performs all 2D rasterization,
+# text layout, and GPU dispatch. GLFW remains only a window/context bridge.
+if(TARGET tgfx)
   target_link_libraries(neoflux PRIVATE tgfx)
   target_compile_definitions(neoflux PRIVATE NEOFLUX_HAVE_TGFX=1)
   target_include_directories(neoflux PRIVATE
