@@ -165,13 +165,17 @@ add_library(neoflux_concurrentqueue INTERFACE)
 target_include_directories(neoflux_concurrentqueue INTERFACE
     ${NEOFLUX_VENDORED_DIR}/concurrentqueue)
 
-# skcms: compile the implementation + its three CPU-dispatch translation units
-# (baseline / hsw / skx). skcms.cc references all three run_program symbols.
+# skcms: compile the implementation + the BASELINE CPU-dispatch unit only.
+# The Hsw (Haswell/AVX2+F16C) and Skx (Skylake-X/AVX-512) units use intrinsics
+# that require per-TU -mavx2/-mf16c/-mavx512 flags, which differ across GCC/Clang/
+# MSVC and CI runners. We build the portable baseline (scalar + SSE2, on by
+# default for x86-64) and define SKCMS_DISABLE_{HSW,SKX} so skcms.cc's runtime
+# dispatch never references the hsw/skx symbols.
 add_library(neoflux_skcms STATIC
     ${NEOFLUX_VENDORED_DIR}/skcms/skcms.cc
-    ${NEOFLUX_VENDORED_DIR}/skcms/src/skcms_TransformBaseline.cc
-    ${NEOFLUX_VENDORED_DIR}/skcms/src/skcms_TransformHsw.cc
-    ${NEOFLUX_VENDORED_DIR}/skcms/src/skcms_TransformSkx.cc)
+    ${NEOFLUX_VENDORED_DIR}/skcms/src/skcms_TransformBaseline.cc)
+target_compile_definitions(neoflux_skcms PRIVATE
+    SKCMS_DISABLE_HSW SKCMS_DISABLE_SKX)
 target_include_directories(neoflux_skcms PUBLIC
     ${NEOFLUX_VENDORED_DIR}/skcms)
 set_target_properties(neoflux_skcms PROPERTIES
