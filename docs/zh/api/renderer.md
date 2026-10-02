@@ -50,7 +50,7 @@ class GlfwBridge : public NonCopyable;
 
 | 标志 | 类型 | 默认值 | 含义 |
 |------|------|--------|------|
-| `--render_backend` | `string` | `"vulkan"` | 图形后端：`vulkan`、`gl` 或 `cpu`。不可用时 `vulkan` 与 `cpu` 回退到 `gl` 并给出警告。 |
+| `--render_backend` | `string` | `"gl"` | 图形后端。本构建仅 `gl` 可用；`vulkan`、`cpu` 及任何未知值都是启动期硬错误（不静默回退）。 |
 | `--target_fps` | `int32` | `60` | 事件循环帧率上限。 |
 | `--render_queue_capacity` | `uint64` | `2048` | SPSC 环形队列槽数，向上取整为 2 的幂；可用槽位 = 容量 - 1。 |
 | `--verbose_logging` | `bool` | `false` | 启用详细（调试）日志。 |
@@ -64,10 +64,9 @@ class GlfwBridge : public NonCopyable;
 ```
 
 ```bash
-./my_app --render_backend=vulkan --render_queue_capacity=4096 --log_dir=./logs
+./my_app --render_backend=gl --render_queue_capacity=4096 --log_dir=./logs
 ```
 
-::: warning 后端回退
-若所选 `--render_backend` 无法创建（无 Vulkan 设备等），NeoFlux 会记录警告并回退到
-OpenGL，而不是直接退出。
+::: warning 不静默回退后端
+若所选 `--render_backend` 无法创建（例如 GL-only 构建下选了 `vulkan`，或传入未知值），NeoFlux 会记录错误并拒绝启动，而不会静默回退到 GL。请传 `--render_backend=gl`。
 :::

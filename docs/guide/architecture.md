@@ -69,8 +69,9 @@ This thread exclusively owns the GL context.
   frame while the application is still submitting commands.
 - **Backend** — `TgfxRenderer` wraps `tgfx`. When `NEOFLUX_USE_TGFX` is off,
   the same class falls back to a built-in OpenGL renderer (shader + VBO +
-  FreeType glyph atlas). The `--render_backend` flag selects `vulkan`, `gl`,
-  or `cpu`; unimplemented options log a warning and use GL.
+  FreeType glyph atlas). The `--render_backend` flag defaults to `gl` (the only
+  backend available in this build); `vulkan`, `cpu`, and unknown values are a
+  hard startup error rather than a silent GL fallback.
 
 ## How commands cross threads
 
