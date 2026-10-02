@@ -37,7 +37,7 @@ jobs:
             libxrandr-dev libxcursor-dev libxi-dev libglu1-mesa-dev \
             libwayland-bin wayland-protocols libwayland-dev \
             libxkbcommon-dev \
-            xvfb clang-tidy
+            xvfb
 
       - name: Install Windows deps
         if: runner.os == 'Windows'
@@ -50,31 +50,9 @@ jobs:
           cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DNEOFLUX_BUILD_TESTS=ON
-        continue-on-error: true
-
-      - name: Dump configure error log on failure
-        if: failure()
-        shell: bash
-        run: |
-          echo "===== CMakeOutput.log ====="
-          cat build/CMakeFiles/CMakeOutput.log 2>/dev/null | tail -100
-          echo "===== CMakeError.log ====="
-          cat build/CMakeFiles/CMakeError.log 2>/dev/null | tail -100
-          echo "===== last stderr from configure ====="
-          ls build/CMakeFiles/ 2>/dev/null
 
       - name: Build
         run: cmake --build build -j
-        continue-on-error: true
-
-      - name: Dump build error on failure
-        if: failure()
-        shell: bash
-        run: |
-          echo "===== last 200 lines of build log ====="
-          find build -name "*.log" -exec tail -50 {} \; 2>/dev/null
-          echo "===== cmake build stderr ====="
-          cmake --build build 2>&1 | tail -100 || true
 
       - name: Test (Linux, headless via Xvfb)
         if: runner.os == 'Linux'
@@ -91,7 +69,6 @@ jobs:
   clang-tidy:
     name: clang-tidy (Linux)
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,28 +90,17 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DNEOFLUX_BUILD_TESTS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        continue-on-error: true
-
-      - name: Dump configure error on failure
-        if: failure()
-        run: |
-          echo "===== CMakeOutput.log tail ====="
-          tail -80 build/CMakeFiles/CMakeOutput.log 2>/dev/null
-          echo "===== CMakeError.log tail ====="
-          tail -80 build/CMakeFiles/CMakeError.log 2>/dev/null
 
       - name: Run clang-tidy on neoflux source
         run: |
           # run-clang-tidy reads compile_commands.json. We explicitly pass our
-          # own source files so thirdparty TUs (glog, glfw, tgfx, taitank,
-          # freetype) are never analyzed. The header filter restricts warnings
-          # to our own headers as well.
+          # own source files so thirdparty TUs are never analyzed.
           run-clang-tidy -p build -j"$(nproc)" \
             -header-filter='(neoflux/include/neoflux|neoflux/src|src)/.*' \
             -quiet --extra-arg=-Wno-unknown-warning-option \
             neoflux/src src \
             2>&1 | tee clang-tidy.log
-          # Fail only on errors (not warnings -- warnings are tracked separately).
+          # Fail only on errors (not warnings).
           if grep -qE 'error:' clang-tidy.log; then
             echo "::error::clang-tidy reported errors"
             exit 1
@@ -143,8 +109,6 @@ jobs:
 
       - name: Enforce ASCII-only source
         run: |
-          # Framework source and user app must stay pure ASCII (no non-ASCII
-          # characters in comments, strings, or log output). Docs are exempt.
           violations=$(grep -rPn '[^\x00-\x7F]' \
             --include='*.h' --include='*.cpp' --include='*.hpp' \
             neoflux/include neoflux/src src 2>/dev/null || true)
