@@ -181,10 +181,8 @@ target_compile_definitions(neoflux PUBLIC NEOFLUX_VERSION_STRING="${NEOFLUX_VERS
 # size_t indices; unavoidable without excessive casts.
 # -Wno-error=attributes: glog headers emit dllimport attribute warnings on
 # Windows; warning is still shown, just not fatal.
-# NOTE: -Werror is intentionally NOT used here -- CI treats warnings as
-# non-fatal; contributors should run clang-tidy locally to enforce cleanliness.
 target_compile_options(neoflux PRIVATE
-  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Wno-conversion -Wno-sign-conversion>
+  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror -Wno-conversion -Wno-sign-conversion -Wno-error=attributes>
 )
 
 # Platform-specific definitions
