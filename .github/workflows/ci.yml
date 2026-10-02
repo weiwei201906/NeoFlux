@@ -35,8 +35,8 @@ jobs:
             build-essential cmake ninja-build git \
             libmpv-dev libgl1-mesa-dev libxinerama-dev \
             libxrandr-dev libxcursor-dev libxi-dev libglu1-mesa-dev \
-            wayland-scanner wayland-protocols libwayland-dev \
-            xkbcommon-dev \
+            libwayland-bin wayland-protocols libwayland-dev \
+            libxkbcommon-dev \
             xvfb clang-tidy
 
       - name: Install Windows deps
@@ -82,7 +82,7 @@ jobs:
             build-essential cmake ninja-build \
             libmpv-dev libgl1-mesa-dev \
             libxinerama-dev libxrandr-dev libxcursor-dev libxi-dev \
-            wayland-scanner wayland-protocols libwayland-dev xkbcommon-dev \
+            libwayland-bin wayland-protocols libwayland-dev libxkbcommon-dev \
             clang-tidy python3-pip
 
       - name: Configure (generate compile_commands.json)
