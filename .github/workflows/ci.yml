@@ -95,10 +95,20 @@ jobs:
             -DNEOFLUX_BUILD_TESTS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
+      - name: Run clang-tidy on one file (diagnostic)
+        run: |
+          first=$(find neoflux/src -name '*.cpp' | head -1)
+          echo "=== Testing: $first ==="
+          clang-tidy -p build "$first" 2>&1 | head -80 || true
+          echo "=== compile_commands entry ==="
+          python3 -c "import json; d=json.load(open('build/compile_commands.json')); [print(x['command'][:300]) for x in d if x['file'].endswith('$first')]"
+
       - name: Run clang-tidy on neoflux source
         run: |
           find neoflux/src -name '*.cpp' -print0 | xargs -0 -n1 \
             clang-tidy -p build -quiet 2>&1 | tee clang-tidy.log
+          echo "=== first 100 lines ==="
+          head -100 clang-tidy.log
           echo "=== error lines ==="
           grep -E 'error:' clang-tidy.log | head -20 || true
           if grep -qE 'error:' clang-tidy.log; then
