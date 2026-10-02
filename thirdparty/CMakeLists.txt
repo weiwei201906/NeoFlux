@@ -122,13 +122,17 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools/vendor.
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools")
   file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools/vendor.cmake"
 "# No-op vendor.cmake stub for OpenGL-only CI builds.
-function(add_vendor_target)
+function(add_vendor_target targetName)
+  # Create an empty interface library so add_dependencies(tgfx tgfx-vendor) works.
+  if(NOT TARGET \${targetName})
+    add_library(\${targetName} INTERFACE)
+  endif()
 endfunction()
-function(find_vendor_libraries)
-  set(\${ARGV1} \"\" PARENT_SCOPE)
-  set(\${ARGV3} \"\" PARENT_SCOPE)
+function(find_vendor_libraries target)
+  set(\${ARGV2} \"\" PARENT_SCOPE)
+  set(\${ARGV4} \"\" PARENT_SCOPE)
 endfunction()
-function(merge_libraries_into)
+function(merge_libraries_into target)
 endfunction()
 ")
 endif()
