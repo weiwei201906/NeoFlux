@@ -283,5 +283,43 @@ TEST_F(EventLoopThreadFixture, LongPressCancelledOnEarlyRelease) {
   WaitIdle();
 }
 
+// Long-press is a distinct action: once it fires, releasing inside the button
+// must NOT also dispatch on_pressed_ (this guards the HandleRelease long_press
+// guard).
+TEST_F(EventLoopThreadFixture, LongPressSuppressesClick) {
+  auto button = std::make_shared<Button>("OK");
+  button->SetBounds(kButtonBounds);
+
+  std::atomic<bool> pressed{false};
+  std::atomic<bool> long_press_fired{false};
+  std::mutex cv_mutex;
+  std::condition_variable cv;
+  button->SetOnPressed([&] {
+    pressed.store(true);
+    cv.notify_all();
+  });
+  button->SetOnLongPress([&] {
+    long_press_fired.store(true);
+    cv.notify_all();
+  });
+
+  // Press on the loop thread and hold through the 500ms long-press.
+  PostToLoop(loop_, [button] { button->OnPointerDown(kInside); });
+
+  {
+    std::unique_lock<std::mutex> lock(cv_mutex);
+    EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&] {
+      return long_press_fired.load();
+    }));
+  }
+  EXPECT_TRUE(long_press_fired.load());
+
+  // Release inside: after the fix this must NOT fire on_pressed_.
+  PostToLoop(loop_, [button] { button->OnPointerUp(kInside); });
+  WaitIdle();
+
+  EXPECT_FALSE(pressed.load());
+}
+
 }  // namespace
 }  // namespace neoflux
