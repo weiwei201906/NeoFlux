@@ -46,7 +46,10 @@ if(NEOFLUX_MPV_FOUND)
   # so the DLL is already next to the executable when gtest_discover_tests runs
   # the test binary during the build (the POST_BUILD copy below runs too late
   # for that first launch and would fail with STATUS_DLL_NOT_FOUND).
-  file(COPY "${MPV_DLL}" DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+  # On Linux, mpv is a system library resolved via ld.so, nothing to copy.
+  if(WIN32)
+    file(COPY "${MPV_DLL}" DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+  endif()
 
   add_executable(mpv_media_player_test mpv_media_player_test.cpp)
   target_link_libraries(mpv_media_player_test
@@ -66,9 +69,11 @@ if(NEOFLUX_MPV_FOUND)
   gtest_discover_tests(mpv_media_player_test)
 
   # The Windows loader resolves libmpv-2.dll from the executable directory.
-  add_custom_command(TARGET mpv_media_player_test POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${MPV_DLL}" "$<TARGET_FILE_DIR:mpv_media_player_test>"
-    COMMENT "Copying libmpv-2.dll next to the mpv test executable"
-  )
+  if(WIN32)
+    add_custom_command(TARGET mpv_media_player_test POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${MPV_DLL}" "$<TARGET_FILE_DIR:mpv_media_player_test>"
+      COMMENT "Copying libmpv-2.dll next to the mpv test executable"
+    )
+  endif()
 endif()
