@@ -50,6 +50,15 @@ jobs:
           cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DNEOFLUX_BUILD_TESTS=ON
+        continue-on-error: true
+
+      - name: Dump configure error
+        if: failure()
+        shell: bash
+        run: |
+          ls thirdparty/tgfx/third_party/vendor_tools/ 2>/dev/null || echo "vendor_tools missing"
+          cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
+            -DCMAKE_BUILD_TYPE=Release -DNEOFLUX_BUILD_TESTS=ON 2>&1 | tail -30 || true
 
       - name: Build
         run: cmake --build build -j
