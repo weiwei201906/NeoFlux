@@ -8,11 +8,23 @@
 //
 // Pimpl: MpvMediaPlayer::Impl (defined here) owns all mpv/GL state, so neither
 // mpv nor OpenGL headers leak into the public mpv_media_player.h.
+//
+// Threading: see the "THREADING MODEL" block in mpv_media_player.h. In short:
+//   - App/UI thread  : Set/GetSource, Play, Pause, Stop, Seek, SetVolume,
+//                      SetStateCallback, SetFrameCallback, SetWakeCallback.
+//   - Render thread  : InitRender, UpdateTexture (GL context current).
+//   - mpv internal   : OnRenderUpdate (frame-available signal, no GL).
+// All callback std::function objects are guarded by |mutex|; a callback is
+// always invoked via a lock-protected local copy so a concurrent swap cannot
+// destroy the target mid-call. |state| is an atomic so GetState() needs no
+// lock and never races the writers.
 // =============================================================================
 
 #include "neoflux/media/mpv_media_player.h"
 
 #include <atomic>
+#include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <utility>
 
@@ -112,6 +124,17 @@ void* GetProcAddress(void* /*ctx*/, const char* name) {
 struct MpvMediaPlayer::Impl {
   Impl() = default;
   ~Impl() {
+    // Detach the mpv update callback and clear all user callbacks first, so
+    // no OnRenderUpdate / callback fires while we tear down mpv and GL.
+    if (render_ctx != nullptr) {
+      mpv_render_context_set_update_callback(render_ctx, nullptr, nullptr);
+    }
+    {
+      std::scoped_lock lock(mutex);
+      wake_callback = nullptr;
+      state_callback = nullptr;
+      frame_callback = nullptr;
+    }
     if (render_ctx != nullptr) {
       mpv_render_context_free(render_ctx);
       render_ctx = nullptr;
@@ -120,15 +143,21 @@ struct MpvMediaPlayer::Impl {
       mpv_terminate_destroy(mpv);
       mpv = nullptr;
     }
-    if (texture_id != 0) {
-      // Texture deletion must happen on the render thread with a current GL
-      // context. We leak it here intentionally; the render layer owns GL
-      // resource lifetime. In practice this runs during app shutdown when the
-      // GL context is still current.
-      auto& gl = GetGlLoader();
-      if (gl.DeleteTextures != nullptr) {
-        gl.DeleteTextures(1, &texture_id);
-      }
+    // GL teardown: texture_id / fbo_id were created on the render thread. At
+    // app shutdown the player is destroyed as the render layer winds down;
+    // attempting the deletion here frees the names whenever a GL context is
+    // current, and is a harmless no-op once the context has already been torn
+    // down (the driver reclaims the names with the context). This is explicit
+    // resource cleanup -- NOT an intentional leak. (The previous comment that
+    // claimed we leaked "on purpose" contradicted the fact that the code does
+    // in fact delete.)
+    auto& gl = GetGlLoader();
+    if (fbo_id != 0 && gl.DeleteFramebuffers != nullptr) {
+      gl.DeleteFramebuffers(1, &fbo_id);
+      fbo_id = 0;
+    }
+    if (texture_id != 0 && gl.DeleteTextures != nullptr) {
+      gl.DeleteTextures(1, &texture_id);
       texture_id = 0;
     }
   }
@@ -142,7 +171,16 @@ struct MpvMediaPlayer::Impl {
   // success.
   bool CreateMpvHandle();
 
-  // mpv event handler. Polls events and updates state/properties.
+  // Sends a command to mpv (e.g. "loadfile", "pause").
+  void Command(const char* args[]);
+
+  // Atomically publishes |new_state| and invokes the state callback (if any)
+  // via a lock-protected local copy, so a concurrent SetStateCallback swap
+  // cannot destroy the std::function mid-call.
+  void EmitState(MediaState new_state);
+
+  // mpv event handler. Polls events and updates state/properties. Runs on
+  // whichever thread calls UpdateTexture() (the render thread in production).
   void PollEvents();
 
   // Sets an mpv property as double.
@@ -151,22 +189,39 @@ struct MpvMediaPlayer::Impl {
   // Gets an mpv property as double. Returns 0 on failure.
   [[nodiscard]] double GetPropertyDouble(const char* name) const;
 
-  // Sends a command to mpv (e.g. "loadfile", "pause").
-  void Command(const char* args[]);
-
   mpv_handle* mpv = nullptr;
   mpv_render_context* render_ctx = nullptr;
+  // Cached GL objects. The FBO is created once and reused every frame; the
+  // texture storage (TexImage2D) is (re)allocated only when the size changes.
   std::uint32_t texture_id = 0;
+  std::uint32_t fbo_id = 0;
+  // Dimensions of the currently-allocated texture storage (0 = unallocated).
+  int allocated_w = 0;
+  int allocated_h = 0;
   int video_width = 0;
   int video_height = 0;
   double volume = 1.0;
-  MediaState state = MediaState::kIdle;
+  // Atomic so GetState() (any thread) never races the writers (PollEvents on
+  // the render thread; Play/Pause/Stop on the App thread).
+  std::atomic<MediaState> state{MediaState::kIdle};
   std::string source;
   StateCallback state_callback;
   FrameCallback frame_callback;
+  // Non-blocking wake installed by the framework; invoked on the mpv internal
+  // thread when a new frame is decoded. Guarded by |mutex|.
+  std::function<void()> wake_callback;
+  // Protects |source| and the three std::function callbacks. It is held only
+  // for short copies; callbacks are never invoked while held.
   std::mutex mutex;
   bool render_initialized = false;
-  // Incremented by OnMpvRenderUpdate on an arbitrary mpv-internal thread each
+
+  // --- Frame-available signalling (mpv internal thread -> render thread) ---
+  // OnRenderUpdate raises |new_frame_| under |frame_mutex_| and notifies
+  // |frame_cv_|. The render thread consumes the flag in UpdateTexture().
+  std::mutex frame_mutex_;
+  std::condition_variable frame_cv_;
+  std::atomic<bool> new_frame_{false};
+  // Incremented by OnRenderUpdate on an arbitrary mpv-internal thread each
   // time a new frame update is signalled. Read from the render thread (or a
   // test) via GetRenderUpdateCount(). Relaxed ordering is sufficient: this is
   // a monotonically increasing observability counter, not used to order data.
@@ -222,6 +277,20 @@ void MpvMediaPlayer::Impl::Command(const char* args[]) {
   mpv_command_async(mpv, 0, args);
 }
 
+void MpvMediaPlayer::Impl::EmitState(MediaState new_state) {
+  state.store(new_state);
+  // Copy the callback under the lock, then release before invoking so a
+  // concurrent SetStateCallback swap cannot destroy the target mid-call.
+  StateCallback cb;
+  {
+    std::scoped_lock lock(mutex);
+    cb = state_callback;
+  }
+  if (cb != nullptr) {
+    cb(new_state);
+  }
+}
+
 void MpvMediaPlayer::Impl::PollEvents() {
   if (mpv == nullptr) {
     return;
@@ -233,20 +302,14 @@ void MpvMediaPlayer::Impl::PollEvents() {
     }
     switch (event->event_id) {
       case MPV_EVENT_FILE_LOADED:
-        state = MediaState::kPlaying;
         SetPropertyDouble("pause", 0.0);
-        if (state_callback != nullptr) {
-          state_callback(state);
-        }
+        EmitState(MediaState::kPlaying);
         break;
       case MPV_EVENT_END_FILE:
-        state = MediaState::kEnded;
-        if (state_callback != nullptr) {
-          state_callback(state);
-        }
+        EmitState(MediaState::kEnded);
         break;
       case MPV_EVENT_IDLE:
-        state = MediaState::kIdle;
+        state.store(MediaState::kIdle);
         break;
       default:
         break;
@@ -260,7 +323,7 @@ void MpvMediaPlayer::Impl::PollEvents() {
 
 MpvMediaPlayer::MpvMediaPlayer() : impl_(std::make_unique<Impl>()) {
   if (!impl_->CreateMpvHandle()) {
-    impl_->state = MediaState::kError;
+    impl_->state.store(MediaState::kError);
   }
 }
 
@@ -272,20 +335,29 @@ void MpvMediaPlayer::SetSource(std::string_view source) {
 }
 
 std::string_view MpvMediaPlayer::GetSource() const noexcept {
+  // App/UI-thread affine: |source| is only mutated by SetSource() on the same
+  // thread, so no lock is needed and the returned view cannot dangle. Do NOT
+  // call this concurrently with SetSource() from another thread.
   return impl_->source;
 }
 
 void MpvMediaPlayer::Play() {
-  if (impl_->mpv == nullptr || impl_->source.empty()) {
+  if (impl_->mpv == nullptr) {
     return;
   }
-  std::scoped_lock lock(impl_->mutex);
-  const char* cmd[] = {"loadfile", impl_->source.c_str(), nullptr};
-  mpv_command_async(impl_->mpv, 0, cmd);
-  impl_->state = MediaState::kLoading;
-  if (impl_->state_callback != nullptr) {
-    impl_->state_callback(impl_->state);
+  // Copy the source under the lock, then issue the command without holding the
+  // lock (mpv_command_async must not contend user callbacks).
+  std::string source_copy;
+  {
+    std::scoped_lock lock(impl_->mutex);
+    source_copy = impl_->source;
   }
+  if (source_copy.empty()) {
+    return;
+  }
+  const char* cmd[] = {"loadfile", source_copy.c_str(), nullptr};
+  mpv_command_async(impl_->mpv, 0, cmd);
+  impl_->EmitState(MediaState::kLoading);
 }
 
 void MpvMediaPlayer::Pause() {
@@ -293,10 +365,7 @@ void MpvMediaPlayer::Pause() {
     return;
   }
   impl_->SetPropertyDouble("pause", 1.0);
-  impl_->state = MediaState::kPaused;
-  if (impl_->state_callback != nullptr) {
-    impl_->state_callback(impl_->state);
-  }
+  impl_->EmitState(MediaState::kPaused);
 }
 
 void MpvMediaPlayer::Stop() {
@@ -305,10 +374,7 @@ void MpvMediaPlayer::Stop() {
   }
   const char* cmd[] = {"stop", nullptr};
   mpv_command_async(impl_->mpv, 0, cmd);
-  impl_->state = MediaState::kIdle;
-  if (impl_->state_callback != nullptr) {
-    impl_->state_callback(impl_->state);
-  }
+  impl_->EmitState(MediaState::kIdle);
 }
 
 void MpvMediaPlayer::Seek(double position_seconds) {
@@ -339,7 +405,7 @@ double MpvMediaPlayer::GetDuration() const noexcept {
 }
 
 MediaState MpvMediaPlayer::GetState() const noexcept {
-  return impl_->state;
+  return impl_->state.load();
 }
 
 int MpvMediaPlayer::GetVideoWidth() const noexcept {
@@ -356,15 +422,33 @@ std::uint32_t MpvMediaPlayer::GetRenderUpdateCount() const noexcept {
 
 // Static trampoline for the mpv C update callback. Registered with
 // mpv_render_context_set_update_callback in InitRender(); ctx is the
-// MpvMediaPlayer* (this). It runs on an arbitrary mpv-internal thread, so it
-// must do as little as possible: only bump the atomic observability counter.
-// The actual frame pickup happens in UpdateTexture() on the render thread.
-// Being a static member lets it reach the private impl_ without a friend, and
-// exposes no mpv/GL types in the header.
+// MpvMediaPlayer* (this). It runs on an arbitrary mpv-internal thread and must
+// do as little as possible: bump the observability counter, raise the
+// new-frame flag, and invoke the non-blocking wake callback. It MUST NOT touch
+// GL and MUST NOT block. The actual frame pickup (GL) happens in UpdateTexture
+// on the render thread.
 void MpvMediaPlayer::OnRenderUpdate(void* ctx) {
   auto* self = static_cast<MpvMediaPlayer*>(ctx);
-  if (self != nullptr) {
-    self->impl_->update_count_.fetch_add(1, std::memory_order_relaxed);
+  if (self == nullptr) {
+    return;
+  }
+  Impl& impl = *self->impl_;
+  impl.update_count_.fetch_add(1, std::memory_order_relaxed);
+  {
+    std::scoped_lock lock(impl.frame_mutex_);
+    impl.new_frame_.store(true, std::memory_order_relaxed);
+  }
+  impl.frame_cv_.notify_one();
+
+  // Invoke the wake callback via a lock-protected local copy. It must be
+  // non-blocking and must not touch GL.
+  std::function<void()> wake;
+  {
+    std::scoped_lock lock(impl.mutex);
+    wake = impl.wake_callback;
+  }
+  if (wake != nullptr) {
+    wake();
   }
 }
 
@@ -376,6 +460,11 @@ void MpvMediaPlayer::SetStateCallback(StateCallback callback) {
 void MpvMediaPlayer::SetFrameCallback(FrameCallback callback) {
   std::scoped_lock lock(impl_->mutex);
   impl_->frame_callback = std::move(callback);
+}
+
+void MpvMediaPlayer::SetWakeCallback(std::function<void()> callback) {
+  std::scoped_lock lock(impl_->mutex);
+  impl_->wake_callback = std::move(callback);
 }
 
 void MpvMediaPlayer::InitRender() {
@@ -430,23 +519,11 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
   // Check if a new frame is available.
   const std::uint64_t flags = mpv_render_context_update(self.render_ctx);
   if ((flags & MPV_RENDER_UPDATE_FRAME) == 0U) {
+    // Woken (or polled) but mpv has no new frame. Clear the pending flag so
+    // the caller can go back to sleeping; reuse the existing texture.
+    self.new_frame_.store(false, std::memory_order_relaxed);
     return self.texture_id;
   }
-
-  // Create the texture on first use.
-  if (self.texture_id == 0) {
-    gl.GenTextures(1, &self.texture_id);
-    gl.BindTexture(kGlTexture2d, self.texture_id);
-    gl.TexParameteri(kGlTexture2d, kGlTextureMinFilter, kGlLinear);
-    gl.TexParameteri(kGlTexture2d, kGlTextureMagFilter, kGlLinear);
-    gl.TexParameteri(kGlTexture2d, kGlTextureWrapS, kGlClampToEdge);
-    gl.TexParameteri(kGlTexture2d, kGlTextureWrapT, kGlClampToEdge);
-  }
-
-  // Render the current mpv frame into an FBO backed by our texture.
-  std::uint32_t fbo = 0;
-  gl.GenFramebuffers(1, &fbo);
-  gl.BindFramebuffer(kGlFramebuffer, fbo);
 
   // Query video dimensions. mpv reports these as int64; read into int64_t
   // locals (MPV_FORMAT_INT64 writes 8 bytes) then narrow to int for GL.
@@ -463,15 +540,40 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
   self.video_width = width;
   self.video_height = height;
 
-  // Allocate texture storage.
-  gl.BindTexture(kGlTexture2d, self.texture_id);
-  gl.TexImage2D(kGlTexture2d, 0, kGlRgba, width, height, 0, kGlRgba,
-                kGlUnsignedByte, nullptr);
+  // Create the texture once on first use.
+  if (self.texture_id == 0) {
+    gl.GenTextures(1, &self.texture_id);
+    gl.BindTexture(kGlTexture2d, self.texture_id);
+    gl.TexParameteri(kGlTexture2d, kGlTextureMinFilter, kGlLinear);
+    gl.TexParameteri(kGlTexture2d, kGlTextureMagFilter, kGlLinear);
+    gl.TexParameteri(kGlTexture2d, kGlTextureWrapS, kGlClampToEdge);
+    gl.TexParameteri(kGlTexture2d, kGlTextureWrapT, kGlClampToEdge);
+  }
+
+  // Create the FBO once; it is cached and reused for every frame.
+  if (self.fbo_id == 0) {
+    gl.GenFramebuffers(1, &self.fbo_id);
+  }
+
+  // (Re)allocate texture storage ONLY when the size changes. Reusing the
+  // existing storage on steady-size frames avoids a per-frame TexImage2D
+  // allocation churn.
+  if (self.allocated_w != width || self.allocated_h != height) {
+    gl.BindTexture(kGlTexture2d, self.texture_id);
+    gl.TexImage2D(kGlTexture2d, 0, kGlRgba, width, height, 0, kGlRgba,
+                  kGlUnsignedByte, nullptr);
+    self.allocated_w = width;
+    self.allocated_h = height;
+  }
+
+  // Bind the cached FBO and attach the texture, then render the current mpv
+  // frame into it.
+  gl.BindFramebuffer(kGlFramebuffer, self.fbo_id);
   gl.FramebufferTexture2D(kGlFramebuffer, kGlColorAttachment0, kGlTexture2d,
                           self.texture_id, 0);
 
   mpv_opengl_fbo fbo_params{};
-  fbo_params.fbo = static_cast<int>(fbo);
+  fbo_params.fbo = static_cast<int>(self.fbo_id);
   fbo_params.w = width;
   fbo_params.h = height;
   fbo_params.internal_format = 0;
@@ -481,13 +583,26 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
       {.type = MPV_RENDER_PARAM_INVALID, .data = nullptr},
   };
 
-  mpv_render_context_render(self.render_ctx, render_params);
+  const int render_ret =
+      mpv_render_context_render(self.render_ctx, render_params);
+  if (render_ret < 0) {
+    LOG(ERROR) << "MpvMediaPlayer: mpv_render_context_render failed: "
+               << mpv_error_string(render_ret);
+  }
 
   gl.BindFramebuffer(kGlFramebuffer, 0);
-  gl.DeleteFramebuffers(1, &fbo);
 
-  if (self.frame_callback != nullptr) {
-    self.frame_callback(self.texture_id, width, height);
+  // The new frame has been composited; consume the pending signal.
+  self.new_frame_.store(false, std::memory_order_relaxed);
+
+  // Invoke the frame callback via a lock-protected local copy.
+  FrameCallback frame_cb;
+  {
+    std::scoped_lock lock(self.mutex);
+    frame_cb = self.frame_callback;
+  }
+  if (frame_cb != nullptr) {
+    frame_cb(self.texture_id, width, height);
   }
 
   return self.texture_id;
@@ -499,11 +614,14 @@ std::uint32_t MpvMediaPlayer::UpdateTexture() {
 
 #include <glog/logging.h>
 
+#include <atomic>
+#include <functional>
+
 namespace neoflux {
 
 // Minimal stub Impl so the pimpl skeleton still compiles without libmpv.
 struct MpvMediaPlayer::Impl {
-  MediaState state = MediaState::kError;
+  std::atomic<MediaState> state{MediaState::kError};
 };
 
 MpvMediaPlayer::MpvMediaPlayer() : impl_(std::make_unique<Impl>()) {
@@ -522,12 +640,15 @@ void MpvMediaPlayer::SetVolume(double volume) { (void)volume; }
 double MpvMediaPlayer::GetVolume() const noexcept { return 0.0; }
 double MpvMediaPlayer::GetPosition() const noexcept { return 0.0; }
 double MpvMediaPlayer::GetDuration() const noexcept { return 0.0; }
-MediaState MpvMediaPlayer::GetState() const noexcept { return impl_->state; }
+MediaState MpvMediaPlayer::GetState() const noexcept { return impl_->state.load(); }
 int MpvMediaPlayer::GetVideoWidth() const noexcept { return 0; }
 int MpvMediaPlayer::GetVideoHeight() const noexcept { return 0; }
 std::uint32_t MpvMediaPlayer::GetRenderUpdateCount() const noexcept { return 0; }
 void MpvMediaPlayer::SetStateCallback(StateCallback callback) { (void)callback; }
 void MpvMediaPlayer::SetFrameCallback(FrameCallback callback) { (void)callback; }
+void MpvMediaPlayer::SetWakeCallback(std::function<void()> callback) {
+  (void)callback;
+}
 void MpvMediaPlayer::InitRender() {}
 std::uint32_t MpvMediaPlayer::UpdateTexture() { return 0; }
 
