@@ -50,6 +50,16 @@ jobs:
           cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DNEOFLUX_BUILD_TESTS=ON
+        continue-on-error: true
+
+      - name: Dump configure error
+        if: failure()
+        shell: bash
+        run: |
+          tail -100 build/CMakeFiles/CMakeError.log 2>/dev/null
+          echo "=== try re-run to see stderr ==="
+          cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
+            -DCMAKE_BUILD_TYPE=Release -DNEOFLUX_BUILD_TESTS=ON 2>&1 | tail -50 || true
 
       - name: Build
         run: cmake --build build -j
