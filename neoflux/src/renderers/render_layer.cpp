@@ -28,14 +28,6 @@ DEFINE_uint64(render_queue_capacity, neoflux::config::kDefaultRenderQueueCapacit
               "One slot is reserved for full/empty distinction, so the "
               "maximum storable commands are (capacity - 1).");
 
-DEFINE_string(render_backend, "gl",
-              "Rendering backend to use. Options: 'gl' (tgfx OpenGL/WGL, the "
-              "only backend compiled into this build), 'vulkan' (tgfx Vulkan; "
-              "only valid on a Vulkan-capable system with tgfx built "
-              "TGFX_USE_VULKAN=ON), 'cpu' (no tgfx software rasterizer exists). "
-              "An unavailable backend is a hard startup error, never a silent "
-              "fallback to GL.");
-
 DEFINE_int32(render_queue_drop_log_max, 10,
              "Maximum number of times a 'render command queue full, dropped "
              "commands' warning is emitted per process. After this many "
@@ -75,31 +67,8 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   window_height_ = height;
 
   LOG(INFO) << "RenderLayer starting: " << width << "x" << height
-            << " backend=" << FLAGS_render_backend;
-
-  // Honest backend selection. This tgfx build is GL-only (TGFX_USE_OPENGL=ON;
-  // VULKAN/D3D12/METAL=OFF) and this Windows box exposes no Vulkan device.
-  // A request we cannot honor is a loud startup failure -- NOT a silent
-  // fallback to GL with a warning log.
-  if (FLAGS_render_backend == "vulkan") {
-    LOG(ERROR) << "--render_backend=vulkan requested, but tgfx was built with "
-                  "TGFX_USE_VULKAN=OFF (GL-only) and this system has no Vulkan "
-                  "device/driver. Refusing to silently fall back to GL. Rebuild "
-                  "tgfx with Vulkan enabled on a Vulkan-capable host, or run "
-                  "with --render_backend=gl.";
-    return false;
-  }
-  if (FLAGS_render_backend == "cpu") {
-    LOG(ERROR) << "--render_backend=cpu requested, but tgfx has no CPU "
-                  "software rasterizer. The only available backend is 'gl'.";
-    return false;
-  }
-  if (FLAGS_render_backend != "gl") {
-    LOG(ERROR) << "Unknown --render_backend '" << FLAGS_render_backend
-               << "'. Valid values: gl, vulkan, cpu.";
-    return false;
-  }
-  LOG(INFO) << "Using tgfx OpenGL (WGL) backend";
+            << " backend=gl (tgfx OpenGL)";
+  LOG(INFO) << "Using tgfx OpenGL backend";
 
   renderer_ = std::make_unique<TgfxRenderer>();
 
