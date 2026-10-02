@@ -43,6 +43,11 @@ namespace neoflux {
 class MediaWidget : public Widget {
  public:
   MediaWidget();
+  // App/UI thread. Runs during navigation_stack_ teardown, BEFORE the render
+  // thread is joined. It synchronously offloads the mpv render-context and GL
+  // texture/FBO destruction to the render thread (which owns the GL context) and
+  // blocks until that completes; only then does it let the player unique_ptr
+  // tear down the non-GL mpv core. Do not call it after RenderLayer::Stop().
   ~MediaWidget() override;
 
   // Returns the human-readable widget name for debugging.

@@ -20,6 +20,7 @@
 #include <mutex>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/ring_queue.h"
@@ -67,6 +68,18 @@ class RenderLayer : public NonCopyable {
   // earlier one. Set once at wiring time. Pass nullptr to clear.
   void SetRenderPump(std::function<void()> pump);
 
+  // Runs |task| on the render thread (OpenGL context current) and BLOCKS the
+  // calling thread until it has executed. The task is serialized with the render
+  // pump and draw commands: it runs at the end of a render-loop iteration,
+  // AFTER any in-flight pump and AFTER all queued draw commands for that
+  // iteration have executed, so it is safe to delete GL objects (textures/FBOs/
+  // render contexts) that pending draw commands might still reference. Used by
+  // external GL producers (e.g. mpv) to tear down their GL resources on the
+  // thread that owns the GL context. Must NOT be called from the render thread
+  // itself (would deadlock). If the render thread is not running the task is
+  // dropped (the GL context has already been destroyed and reclaimed the names).
+  void RunOnRenderThread(std::function<void()> task);
+
   // Returns true if the render thread is running.
   [[nodiscard]] bool IsRunning() const noexcept;
 
@@ -99,6 +112,11 @@ class RenderLayer : public NonCopyable {
   // the top of each wake. Read/written under frame_mutex_ so the render loop
   // copies it out before invoking.
   std::function<void()> render_pump_{};
+
+  // One-shot tasks submitted via RunOnRenderThread and drained on the render
+  // thread at the end of each loop iteration (after the pump and queued draws).
+  // Guarded by frame_mutex_.
+  std::vector<std::function<void()>> render_tasks_;
 
   std::atomic<bool> running_{false};
   std::atomic<bool> should_close_{false};

@@ -22,12 +22,14 @@
 
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
+#include "neoflux/core/config.h"
 #include "neoflux/renderers/render_layer.h"
 #include "neoflux/version.h"
 #include "neoflux/widgets/route_registry.h"
 #include "neoflux/widgets/widget.h"
 
-DEFINE_int32(target_fps, 60, "Target frames per second for the event loop.");
+DEFINE_int32(target_fps, neoflux::config::kDefaultTargetFps,
+             "Target frames per second for the event loop.");
 DEFINE_bool(verbose_logging, false,
             "Enable verbose (VLOG) logging output.");
 // logtostderr and log_dir are glog built-in flag variables declared in

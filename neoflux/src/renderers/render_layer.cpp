@@ -19,10 +19,11 @@
 #include <glog/logging.h>
 
 #include "neoflux/renderers/glfw_bridge.h"
+#include "neoflux/core/config.h"
 #include "neoflux/renderers/render_command.h"
 #include "neoflux/renderers/tgfx_renderer.h"
 
-DEFINE_uint64(render_queue_capacity, 2048,
+DEFINE_uint64(render_queue_capacity, neoflux::config::kDefaultRenderQueueCapacity,
               "Capacity of the render command SPSC ring queue. "
               "One slot is reserved for full/empty distinction, so the "
               "maximum storable commands are (capacity - 1).");
@@ -243,6 +244,34 @@ void RenderLayer::SetRenderPump(std::function<void()> pump) {
   frame_cv_.notify_one();
 }
 
+void RenderLayer::RunOnRenderThread(std::function<void()> task) {
+  if (task == nullptr) {
+    return;
+  }
+  if (!running_.load()) {
+    // No render thread is alive to service the task. The GL context/window has
+    // already been torn down, so any GL names the task would free are reclaimed
+    // by the driver. Drop the task rather than run it on this thread (which has
+    // no current GL context and would itself crash).
+    LOG(WARNING) << "RunOnRenderThread: render thread not running, dropping task";
+    return;
+  }
+  // Signal completion once the render thread has executed the wrapped task, so
+  // the caller (App thread) blocks until GL teardown has actually happened.
+  auto done = std::make_shared<std::promise<void>>();
+  std::future<void> fut = done->get_future();
+  {
+    std::scoped_lock lock(frame_mutex_);
+    render_tasks_.push_back([task = std::move(task), done]() mutable {
+      task();
+      done->set_value();
+    });
+    frame_ready_ = true;
+  }
+  frame_cv_.notify_one();
+  fut.wait();
+}
+
 bool RenderLayer::IsRunning() const noexcept { return running_.load(); }
 
 bool RenderLayer::ShouldClose() const {
@@ -355,6 +384,20 @@ void RenderLayer::RenderLoop() {
           }
           break;
       }
+    }
+
+    // Drain one-shot render-thread tasks (e.g. external GL producer teardown).
+    // Run them AFTER the pump and all queued draw commands for this iteration so
+    // a task that deletes GL textures/FBOs cannot race a pending DrawTexture that
+    // still references them. The caller of RunOnRenderThread blocks on the
+    // promise set inside these tasks.
+    std::vector<std::function<void()>> tasks;
+    {
+      std::scoped_lock lock(frame_mutex_);
+      tasks = std::move(render_tasks_);
+    }
+    for (auto& t : tasks) {
+      t();
     }
   }
 

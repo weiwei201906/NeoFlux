@@ -5,15 +5,17 @@
 //
 // Reference media player screen. Shows how to compose a MediaWidget with
 // transport controls (play/pause/back). The source is taken from the
-// --media_source gflag (default: ./sample.mp4).
+// --media_source gflag (default: ./assets/media/sample.mp4).
 // =============================================================================
 
 #include "media_view.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
 #include "neoflux/widgets/button.h"
 #include "neoflux/widgets/container.h"
@@ -22,7 +24,7 @@
 #include "neoflux/widgets/sized_box.h"
 #include "neoflux/widgets/text.h"
 
-DEFINE_string(media_source, "./sample.mp4",
+DEFINE_string(media_source, "./assets/media/sample.mp4",
               "Path or URL passed to the demo MediaWidget on the /media route.");
 
 namespace neoflux_app {
@@ -63,7 +65,20 @@ std::shared_ptr<neoflux::Widget> BuildMediaView(
 
   // Video surface: flex-grow to fill remaining vertical space.
   auto media = std::make_shared<neoflux::MediaWidget>();
-  media->SetSource(FLAGS_media_source)
+  // mpv will emit END_FILE/error events if the path does not exist, but warn
+  // here up front so the user immediately knows to pass --media_source=<path>
+  // instead of seeing a silent black surface. URLs (http://...) are skipped.
+  const std::string& source = FLAGS_media_source;
+  const bool looks_like_url =
+      source.starts_with("http://") || source.starts_with("https://") ||
+      source.starts_with("rtsp://") || source.starts_with("rtmp://");
+  std::error_code ec;
+  if (!looks_like_url && !std::filesystem::exists(source, ec)) {
+    LOG(WARNING) << "Media source '" << source
+                 << "' does not exist on disk; pass --media_source=<path> to "
+                    "play a local file.";
+  }
+  media->SetSource(source)
       .SetBackgroundColor({.r = 0, .g = 0, .b = 0, .a = 255})
       .Play();
 

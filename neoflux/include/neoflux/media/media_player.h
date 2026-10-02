@@ -111,6 +111,18 @@ class MediaPlayer {
   // a new frame is available. Returns the current GL texture name (0 if no
   // frame has been decoded yet).
   [[nodiscard]] virtual std::uint32_t UpdateTexture() = 0;
+
+  // Render thread. MUST be called with a current OpenGL context, as the very
+  // LAST render-thread operation on this player, before the App thread destroys
+  // it. Frees all render-API / OpenGL resources owned by the backend (the
+  // mpv render context, GL textures, FBOs). OpenGL objects may only be deleted
+  // on the thread that owns the current context, so a backend that allocated GL
+  // objects on the render thread must reclaim them here -- NOT in the App-thread
+  // destructor. After this returns the player MUST NOT be touched from the
+  // render thread again; the App thread may then safely destroy the player
+  // (which only tears down the non-GL core). The base implementation is a no-op
+  // for backends that own no GL resources.
+  virtual void TeardownRender() {}
 };
 
 // Factory: creates the platform-appropriate media player.

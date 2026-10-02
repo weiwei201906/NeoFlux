@@ -48,7 +48,30 @@ namespace neoflux {
 //
 // Render-thread methods (require a CURRENT OpenGL context; never call from the
 // App/UI thread):
-//   InitRender(), UpdateTexture().
+//   InitRender(), UpdateTexture(), TeardownRender().
+//
+// DESTRUCTION / GL TEARDOWN ORDERING (read this before changing ~MpvMediaPlayer):
+//   The OpenGL context was made current on the render thread (RenderLayer owns
+//   it). mpv_render_context_create and every GL call (GenTextures/GenFramebuffers/
+//   TexImage2D/mpv_render_context_render) happen on that thread. By OpenGL's
+//   rules, mpv_render_context_free() and glDeleteTextures/glDeleteFramebuffers
+//   MUST also run on that same thread with the context current -- doing so on
+//   the App/UI thread (where no context is current) crashes.
+//
+//   Correct shutdown sequence (driven by MediaWidget):
+//     1. [App thread] MediaWidget dtor: SetRenderPump(nullptr), SetWakeCallback,
+//        then RenderLayer::RunOnRenderThread([p]{ p->TeardownRender(); }) which
+//        BLOCKS the App thread until the render thread has freed the mpv render
+//        context and the cached texture/FBO with the context current.
+//     2. [App thread] ~MpvMediaPlayer/~Impl then only calls mpv_terminate_destroy
+//        (mpv core teardown, touches no GL). render_ctx is already nullptr.
+//
+//   If TeardownRender() was never invoked (e.g. unit tests that create the
+//   player on the very thread that owns a GL context, or a player whose render
+//   context was never created), ~Impl frees the GL resources inline on the
+//   calling thread. This is valid ONLY because in that case the calling thread
+//   itself owns the current GL context. Never rely on inline freeing in the
+//   framework: there the App thread has no GL context.
 //
 // Thread-safe / any-thread:
 //   GetState(), GetVideoWidth(), GetVideoHeight(), GetPosition(),
@@ -140,6 +163,13 @@ class MpvMediaPlayer final : public MediaPlayer {
   // FBO-backed texture. Returns the current GL texture name (0 until the first
   // frame is decoded). Cheap to call when no new frame is ready.
   [[nodiscard]] std::uint32_t UpdateTexture() override;
+
+  // Render thread. Must be called with a current OpenGL context. Last
+  // render-thread operation: detaches the mpv update callback, frees the mpv
+  // render context, and deletes the cached GL texture and FBO. Block the App
+  // thread on this (via RenderLayer::RunOnRenderThread) BEFORE destroying the
+  // player. Safe to call if the render context was never created (no-op).
+  void TeardownRender() override;
 
  private:
   struct Impl;

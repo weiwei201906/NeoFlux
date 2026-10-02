@@ -124,33 +124,50 @@ void* GetProcAddress(void* /*ctx*/, const char* name) {
 struct MpvMediaPlayer::Impl {
   Impl() = default;
   ~Impl() {
-    // Detach the mpv update callback and clear all user callbacks first, so
-    // no OnRenderUpdate / callback fires while we tear down mpv and GL.
-    if (render_ctx != nullptr) {
-      mpv_render_context_set_update_callback(render_ctx, nullptr, nullptr);
-    }
+    // Detach all user callbacks first so none fires while we tear down mpv/GL.
     {
       std::scoped_lock lock(mutex);
       wake_callback = nullptr;
       state_callback = nullptr;
       frame_callback = nullptr;
     }
+
+    // GL teardown. In the framework, MediaWidget already ran TeardownRender() on
+    // the render thread (which owns the GL context) BEFORE this destructor runs
+    // on the App thread, so |render_ctx| is nullptr here and there is nothing GL
+    // to free. If TeardownRender() was never called (unit tests that own a GL
+    // context on the calling thread, or a player whose render context was never
+    // created), free inline -- valid ONLY because the calling thread itself owns
+    // the current GL context. Never free |render_ctx|/texture/fbo on the App
+    // thread in production: that thread has no current OpenGL context.
     if (render_ctx != nullptr) {
-      mpv_render_context_free(render_ctx);
-      render_ctx = nullptr;
+      FreeRenderContextAndGlResources();
     }
+
+    // mpv core teardown. Safe on any thread AFTER the render context has been
+    // freed (above). Blocks until mpv's internal threads have joined.
     if (mpv != nullptr) {
       mpv_terminate_destroy(mpv);
       mpv = nullptr;
     }
-    // GL teardown: texture_id / fbo_id were created on the render thread. At
-    // app shutdown the player is destroyed as the render layer winds down;
-    // attempting the deletion here frees the names whenever a GL context is
-    // current, and is a harmless no-op once the context has already been torn
-    // down (the driver reclaims the names with the context). This is explicit
-    // resource cleanup -- NOT an intentional leak. (The previous comment that
-    // claimed we leaked "on purpose" contradicted the fact that the code does
-    // in fact delete.)
+  }
+
+  Impl(const Impl&) = delete;
+  Impl& operator=(const Impl&) = delete;
+  Impl(Impl&&) = delete;
+  Impl& operator=(Impl&&) = delete;
+
+  // Frees the mpv render context and the cached GL texture/FBO. MUST be called
+  // on the render thread with the OpenGL context current (this is where those
+  // objects were created). Idempotent: safe to call when nothing was allocated.
+  // Invoked either by TeardownRender() (framework, render thread) or inline from
+  // ~Impl() (tests, where the calling thread owns the GL context).
+  void FreeRenderContextAndGlResources() {
+    if (render_ctx != nullptr) {
+      mpv_render_context_set_update_callback(render_ctx, nullptr, nullptr);
+      mpv_render_context_free(render_ctx);
+      render_ctx = nullptr;
+    }
     auto& gl = GetGlLoader();
     if (fbo_id != 0 && gl.DeleteFramebuffers != nullptr) {
       gl.DeleteFramebuffers(1, &fbo_id);
@@ -160,12 +177,10 @@ struct MpvMediaPlayer::Impl {
       gl.DeleteTextures(1, &texture_id);
       texture_id = 0;
     }
+    allocated_w = 0;
+    allocated_h = 0;
+    render_initialized = false;
   }
-
-  Impl(const Impl&) = delete;
-  Impl& operator=(const Impl&) = delete;
-  Impl(Impl&&) = delete;
-  Impl& operator=(Impl&&) = delete;
 
   // Creates the mpv handle and configures basic options. Returns true on
   // success.
@@ -240,8 +255,6 @@ bool MpvMediaPlayer::Impl::CreateMpvHandle() {
   mpv_set_option_string(mpv, "no-video", "no");
   mpv_set_option_string(mpv, "vo", "libmpv");
   mpv_set_option_string(mpv, "terminal", "no");
-  mpv_set_option_string(mpv, "msg-level", "all=warn");
-  mpv_request_log_messages(mpv, "warn");
   mpv_set_option_string(mpv, "ytdl", "no");
 
   const int ret = mpv_initialize(mpv);
@@ -251,6 +264,13 @@ bool MpvMediaPlayer::Impl::CreateMpvHandle() {
     mpv = nullptr;
     return false;
   }
+
+  // Route mpv's internal log through glog. terminal=no means mpv writes nothing
+  // to stderr directly; instead records are delivered as MPV_EVENT_LOG_MESSAGE
+  // (consumed in PollEvents). This MUST be after mpv_initialize: it is a command,
+  // not an option. "v" = verbose, enough to see file open, codec negotiation, and
+  // decode/upload, without drowning in trace spam.
+  mpv_request_log_messages(mpv, "v");
 
   return true;
 }
@@ -303,22 +323,58 @@ void MpvMediaPlayer::Impl::PollEvents() {
     }
     switch (event->event_id) {
       case MPV_EVENT_FILE_LOADED:
-        LOG(INFO) << "mpv FILE_LOADED";
+        LOG(INFO) << "MpvMediaPlayer: file loaded, starting playback";
         SetPropertyDouble("pause", 0.0);
         EmitState(MediaState::kPlaying);
         break;
-      case MPV_EVENT_END_FILE:
-        LOG(WARNING) << "mpv END_FILE reason=" << event->error;
-        EmitState(MediaState::kEnded);
+      case MPV_EVENT_START_FILE:
+        LOG(INFO) << "MpvMediaPlayer: starting to load file";
         break;
+      case MPV_EVENT_END_FILE: {
+        // The structured reason/error lives in event->data, not event->error.
+        const auto* end = static_cast<mpv_event_end_file*>(event->data);
+        if (end != nullptr && end->reason == MPV_END_FILE_REASON_ERROR) {
+          LOG(ERROR) << "MpvMediaPlayer: playback error: "
+                     << mpv_error_string(end->error);
+          EmitState(MediaState::kError);
+        } else {
+          LOG(INFO) << "MpvMediaPlayer: end of file (reason="
+                    << (end != nullptr ? static_cast<int>(end->reason) : -1) << ")";
+          EmitState(MediaState::kEnded);
+        }
+        break;
+      }
       case MPV_EVENT_IDLE:
         state.store(MediaState::kIdle);
         break;
       case MPV_EVENT_LOG_MESSAGE: {
         auto* log = static_cast<mpv_event_log_message*>(event->data);
-        LOG(INFO) << "mpv[" << log->prefix << "]: " << log->text;
+        if (log == nullptr) {
+          break;
+        }
+        // mpv log->text ends with a newline; strip it so glog does not emit a
+        // blank line per record.
+        std::string text(log->text != nullptr ? log->text : "");
+        while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+          text.pop_back();
+        }
+        const char* prefix = log->prefix != nullptr ? log->prefix : "mpv";
+        const char* level = log->level != nullptr ? log->level : "info";
+        // Route mpv severity onto the matching glog level so real problems are
+        // not masked as benign INFO chatter.
+        if (std::strcmp(level, "error") == 0 || std::strcmp(level, "fatal") == 0) {
+          LOG(ERROR) << "[mpv/" << prefix << "] " << text;
+        } else if (std::strcmp(level, "warn") == 0) {
+          LOG(WARNING) << "[mpv/" << prefix << "] " << text;
+        } else {
+          LOG(INFO) << "[mpv/" << prefix << "] " << text;
+        }
         break;
       }
+      case MPV_EVENT_SHUTDOWN:
+        // mpv core asked to shut itself down; nothing to do here (the owning
+        // Impl destructor handles mpv_terminate_destroy).
+        break;
       default:
         break;
     }
@@ -476,6 +532,14 @@ void MpvMediaPlayer::SetFrameCallback(FrameCallback callback) {
 void MpvMediaPlayer::SetWakeCallback(std::function<void()> callback) {
   std::scoped_lock lock(impl_->mutex);
   impl_->wake_callback = std::move(callback);
+}
+
+void MpvMediaPlayer::TeardownRender() {
+  // Render thread, GL context current. Free the mpv render context and the
+  // cached GL texture/FBO on the thread that owns the context. After this, the
+  // App thread may destroy the player (mpv_terminate_destroy touches no GL).
+  // FreeRenderContextAndGlResources() is a no-op if nothing was ever allocated.
+  impl_->FreeRenderContextAndGlResources();
 }
 
 void MpvMediaPlayer::InitRender() {
@@ -662,6 +726,7 @@ void MpvMediaPlayer::SetWakeCallback(std::function<void()> callback) {
 }
 void MpvMediaPlayer::InitRender() {}
 std::uint32_t MpvMediaPlayer::UpdateTexture() { return 0; }
+void MpvMediaPlayer::TeardownRender() {}
 
 }  // namespace neoflux
 

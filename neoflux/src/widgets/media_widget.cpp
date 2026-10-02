@@ -95,14 +95,29 @@ MediaWidget::MediaWidget() : impl_(std::make_unique<Impl>()) {
 }
 
 MediaWidget::~MediaWidget() {
-  // Detach the pump/wake while the render thread is still joined (Application
-  // teardown joins the render thread before the widget tree is destroyed).
+  // Teardown ordering (Application::Stop clears navigation_stack_ BEFORE it
+  // joins the render thread, so the render thread still owns the current GL
+  // context when this runs):
+  //   1. Detach the per-frame pump so the render thread stops pulling mpv frames.
+  //   2. Detach mpv's internal-thread wake callback and issue mpv stop.
+  //   3. Free the mpv render context + GL texture/FBO ON THE RENDER THREAD (the
+  //      only thread with the GL context current). RunOnRenderThread blocks until
+  //      that completes, so by the time this destructor returns and the player
+  //      unique_ptr runs ~MpvMediaPlayer, render_ctx is already nullptr and the
+  //      App-thread destructor only does mpv_terminate_destroy (no GL calls).
   if (impl_->render_layer != nullptr) {
     impl_->render_layer->SetRenderPump(nullptr);
   }
   if (impl_->player != nullptr) {
     impl_->player->SetWakeCallback(nullptr);
     impl_->player->Stop();
+    if (impl_->render_layer != nullptr) {
+      // Non-owning observer only: the player unique_ptr below outlives this
+      // synchronous call (RunOnRenderThread blocks until the lambda returns).
+      MediaPlayer* player = impl_->player.get();
+      impl_->render_layer->RunOnRenderThread(
+          [player]() { player->TeardownRender(); });
+    }
   }
 }
 
