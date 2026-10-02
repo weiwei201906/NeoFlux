@@ -179,7 +179,9 @@ void RenderLayer::Stop() {
 
   LOG(INFO) << "RenderLayer stopping";
 
-  // Wake the render thread so it can exit the wait loop.
+  // Wake the render thread so it can exit the wait loop. The render thread
+  // releases the WGL context on itself before returning (see RenderLoop), so by
+  // the time join() returns it is safe for the App thread to destroy the window.
   Wake();
 
   if (render_thread_ != nullptr && render_thread_->joinable()) {
@@ -187,7 +189,15 @@ void RenderLayer::Stop() {
   }
   render_thread_.reset();
 
-  renderer_.reset();
+  // Intentionally abandon the renderer rather than destroy it here. tgfx's
+  // GLDevice teardown requires the WGL context to be current AND a full
+  // releaseAll() protocol that this app does not implement; destroying it on the
+  // App thread deadlocks (it issues GL calls / blocks on a context lock owned by
+  // the render thread), while destroying it on the render thread trips tgfx's
+  // debug assertions. The process is about to exit, so we leak the small host-side
+  // object and let the OS reclaim all GPU resources when the window/GL context is
+  // destroyed below.
+  renderer_.release();
 
   if (glfw_bridge_ != nullptr) {
     glfw_bridge_->Shutdown();
@@ -400,6 +410,15 @@ void RenderLayer::RenderLoop() {
       t();
     }
   }
+
+  // Detach the WGL context from this thread. This MUST happen before the App
+  // thread's glfwDestroyWindow/glfwTerminate runs, otherwise WGL blocks waiting
+  // for the context that is still current on the (now-exiting) render thread.
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+  if (glfw_bridge_ != nullptr) {
+    glfw_bridge_->ReleaseContext();
+  }
+#endif
 
   LOG(INFO) << "Render thread exiting";
 }
