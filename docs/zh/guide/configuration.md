@@ -14,6 +14,7 @@ NeoFlux 使用 [gflags](https://github.com/gflags/gflags) 做运行时配置，�
 | `--render_backend` | `string` | `"gl"` | 选择 tgfx 渲染后端。本构建仅 `gl` 可用；`vulkan`、`cpu` 及任何未知值都是启动期硬错误（不静默回退）。 |
 | `--target_fps` | `int32` | `60` | 应用事件循环的目标帧率。 |
 | `--render_queue_capacity` | `uint64` | `2048` | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
+| `--render_queue_drop_log_max` | `int32` | `10` | 每个进程最多打印多少次"渲染队列已满、丢弃命令"警告。超过后静默统计，不再刷屏。仅在诊断背压时调大。 |
 | `--verbose_logging` | `bool` | `false` | 开启 `VLOG(1)` 并把 INFO 日志镜像到 stderr。 |
 | `--logtostderr` | `bool` | `false` | 开启后所有日志写到 stderr 而非文件。 |
 | `--log_dir` | `string` | `"./logs"` | `.log` 文件目录（自动创建），仅在未开启 `--logtostderr` 时生效。 |

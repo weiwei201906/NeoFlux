@@ -15,6 +15,7 @@ flag below is optional and passed on the command line:
 | `--render_backend` | `string` | `"gl"` | Selects the tgfx render backend. Only `gl` is available in this build; `vulkan`, `cpu`, and any unknown value are a hard startup error (no silent fallback). |
 | `--target_fps` | `int32` | `60` | Target frames-per-second for the application event loop. |
 | `--render_queue_capacity` | `uint64` | `2048` | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
+| `--render_queue_drop_log_max` | `int32` | `10` | Maximum number of "render command queue full, dropped commands" warnings emitted per process. After this many drops, subsequent overflows are counted silently. Raise this only when diagnosing back-pressure. |
 | `--verbose_logging` | `bool` | `false` | Enables `VLOG(1)` output and mirrors INFO logs to stderr. |
 | `--logtostderr` | `bool` | `false` | When set, writes all logs to stderr instead of files. |
 | `--log_dir` | `string` | `"./logs"` | Directory for `.log` files (created automatically). Only used when `--logtostderr` is off. |
