@@ -189,6 +189,13 @@ void Application::Run() {
 void Application::Stop() {
   LOG(INFO) << "Application stopping";
   event_loop_.Stop();
+  // Destroy the widget tree BEFORE joining the render thread. MediaWidget's
+  // destructor detaches its render pump and stops mpv; the mpv render context
+  // (GL resources) must be torn down while the render thread (which owns the
+  // GL context) is still alive. Clearing navigation_stack_ here runs all
+  // widget destructors on the App thread while the render thread can still
+  // service the final pump.
+  navigation_stack_.clear();
   if (render_layer_ != nullptr) {
     render_layer_->Stop();
   }

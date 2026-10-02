@@ -1,0 +1,9 @@
+[submodule "thirdparty/taitank"]
+	path = thirdparty/taitank
+	url = https://github.com/Tencent/taitank.git
+[submodule "thirdparty/freetype"]
+	path = thirdparty/freetype
+	url = https://github.com/freetype/freetype.git
+[submodule "thirdparty/tgfx"]
+	path = thirdparty/tgfx
+	url = https://github.com/Tencent/tgfx.git
