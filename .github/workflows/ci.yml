@@ -49,8 +49,7 @@ jobs:
         run: |
           cmake -S . -B build -G "${{ matrix.cmake-generator }}" \
             -DCMAKE_BUILD_TYPE=Release \
-            -DNEOFLUX_BUILD_TESTS=ON \
-            -DNEOFLUX_USE_TGFX=OFF
+            -DNEOFLUX_BUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build -j
@@ -90,15 +89,32 @@ jobs:
           cmake -S . -B build -G "Unix Makefiles" \
             -DCMAKE_BUILD_TYPE=Release \
             -DNEOFLUX_BUILD_TESTS=ON \
-            -DNEOFLUX_USE_TGFX=OFF \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-      - name: Run clang-tidy on neoflux/src
+      - name: Run clang-tidy on neoflux source
         run: |
-          find neoflux/src -name '*.cpp' -print0 | xargs -0 -n1 \
-            clang-tidy -p build --quiet --extra-arg=-Wno-unknown-warning-option 2>&1 | tee clang-tidy.log
-          # Fail on any warning.
-          if grep -q "warning:" clang-tidy.log; then
-            echo "::error::clang-tidy reported warnings"
+          # run-clang-tidy reads compile_commands.json and checks every TU listed
+          # there. The header filter restricts warnings to our own headers;
+          # thirdparty headers (glog, glfw, tgfx, taitank, freetype) are excluded.
+          run-clang-tidy -p build -j"$(nproc)" \
+            -header-filter='(neoflux/include/neoflux|neoflux/src)/.*' \
+            -quiet --extra-arg=-Wno-unknown-warning-option \
+            2>&1 | tee clang-tidy.log
+          # Fail on any warning or error.
+          if grep -qE '(warning|error):' clang-tidy.log; then
+            echo "::error::clang-tidy reported warnings/errors"
+            exit 1
+          fi
+
+      - name: Enforce ASCII-only source
+        run: |
+          # Framework source and user app must stay pure ASCII (no non-ASCII
+          # characters in comments, strings, or log output). Docs are exempt.
+          violations=$(grep -rPn '[^\x00-\x7F]' \
+            --include='*.h' --include='*.cpp' --include='*.hpp' \
+            neoflux/include neoflux/src src 2>/dev/null || true)
+          if [ -n "$violations" ]; then
+            echo "::error::Non-ASCII characters found in source:"
+            echo "$violations"
             exit 1
           fi
