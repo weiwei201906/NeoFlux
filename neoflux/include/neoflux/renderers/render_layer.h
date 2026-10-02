@@ -14,6 +14,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -52,6 +53,20 @@ class RenderLayer : public NonCopyable {
   // Submits a batch of render commands to the ring queue.
   std::size_t Submit(const RenderCommand* commands, std::size_t count);
 
+  // Wakes the render thread without submitting commands. Thread-safe. Used by
+  // external GL producers (e.g. the mpv media player, which signals frame
+  // availability on its own internal thread) to ask the render thread to wake
+  // and pull a newly decoded frame via the registered render pump.
+  void Wake();
+
+  // Registers a callback invoked on the render thread (GL context current) at
+  // the top of every render-loop wake, before queued commands are executed.
+  // Used by external GL producers to pull newly decoded frames into a texture
+  // on the thread that owns the GL context. The callback must be non-blocking
+  // and must not throw. At most one pump is supported; a later call replaces the
+  // earlier one. Set once at wiring time. Pass nullptr to clear.
+  void SetRenderPump(std::function<void()> pump);
+
   // Returns true if the render thread is running.
   [[nodiscard]] bool IsRunning() const noexcept;
 
@@ -75,10 +90,15 @@ class RenderLayer : public NonCopyable {
   SpscRingQueue<RenderCommand> command_queue_;
 
   // Condition variable to wake the render thread when a new frame is
-  // submitted. Avoids busy-polling on the SPSC queue.
+  // submitted or an external producer (e.g. mpv) signals a new frame. Avoids
+  // busy-polling on the SPSC queue.
   std::mutex frame_mutex_{};
   std::condition_variable frame_cv_{};
   bool frame_ready_ = false;
+  // External GL pump (e.g. mpv UpdateTexture), invoked on the render thread at
+  // the top of each wake. Read/written under frame_mutex_ so the render loop
+  // copies it out before invoking.
+  std::function<void()> render_pump_{};
 
   std::atomic<bool> running_{false};
   std::atomic<bool> should_close_{false};
