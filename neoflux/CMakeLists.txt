@@ -130,9 +130,12 @@ else()
   message(STATUS "libmpv media backend disabled")
 endif()
 
+# taitank is a third-party layout engine; expose its headers as SYSTEM so that
+# clang-tidy's -Werror does not promote third-party diagnostics (e.g.
+# mismatched-tags) into build errors for neoflux TUs.
+target_link_libraries(neoflux SYSTEM PUBLIC taitank)
 target_link_libraries(neoflux
   PUBLIC
-    taitank
     glog::glog
     gflags
     freetype

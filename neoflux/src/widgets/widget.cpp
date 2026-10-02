@@ -136,11 +136,11 @@ std::shared_ptr<Widget> Widget::HitTest(  // NOLINT(misc-no-recursion): bounded 
   const Point local_pos{.x = parent_pos.x - bounds_.x,
                         .y = parent_pos.y - bounds_.y,};
   // Test children in reverse order (top-most / last painted first).
-  for (auto& it : std::views::reverse(children_)) {
-    if (it == nullptr) {
+  for (auto it = children_.rbegin(); it != children_.rend(); ++it) {
+    if (*it == nullptr) {
       continue;
     }
-    std::shared_ptr<Widget> hit = it->HitTest(local_pos);
+    std::shared_ptr<Widget> hit = (*it)->HitTest(local_pos);
     if (hit != nullptr) {
       return hit;
     }
