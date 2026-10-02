@@ -113,6 +113,15 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DNEOFLUX_BUILD_TESTS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        continue-on-error: true
+
+      - name: Dump configure error on failure
+        if: failure()
+        run: |
+          echo "===== CMakeOutput.log tail ====="
+          tail -80 build/CMakeFiles/CMakeOutput.log 2>/dev/null
+          echo "===== CMakeError.log tail ====="
+          tail -80 build/CMakeFiles/CMakeError.log 2>/dev/null
 
       - name: Run clang-tidy on neoflux source
         run: |
