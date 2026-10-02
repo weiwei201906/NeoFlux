@@ -14,7 +14,9 @@
 namespace pk {
 class SkMutex : public std::mutex {
  public:
-  constexpr SkMutex() = default;
+  // NOTE: not constexpr -- std::mutex's default ctor is non-constexpr, and
+  // MinGW GCC 14 rejects a constexpr =default on it.
+  SkMutex() = default;
 
   void acquire() {
     lock();
