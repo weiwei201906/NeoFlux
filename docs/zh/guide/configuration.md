@@ -48,9 +48,21 @@ NeoFlux 使用 [gflags](https://github.com/gflags/gflags) 做运行时配置，�
 `2048` 实际最多存 `2047` 条在途命令。若生产者追上消费者，本帧多余命令被丢弃
 （限频警告）。
 
-::: warning 仅在出现“render command queue full”警告时再调大
+::: warning 仅在出现”render command queue full”警告时再调大
 队列越大越占内存、增加呈现延迟。默认 `2048` 对一般 widget 树已足够。
 :::
+
+### `--render_queue_drop_log_max`
+
+渲染命令队列满载丢帧时，NeoFlux 会打一条 `WARNING` 日志。为避免在持续
+背压下刷屏，每个进程最多打印前 `N` 条丢帧警告，之后的丢弃被静默计数。
+默认 `10`。设为 `0` 可完全关闭丢帧警告。
+
+### `--media_source`
+
+传给 `/media` 路由上内置 demo `MediaWidget` 的路径或 URL。默认
+`./sample.mp4`。这个参数仅用于让 quick-start 应用不用重编译就能指向测试
+视频；真实应用自己构造 `MediaWidget` 并直接调 `SetSource()`。
 
 ### `--verbose_logging`
 

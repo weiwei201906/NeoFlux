@@ -6,13 +6,15 @@
 
 #include "home_view.h"
 
+#include "neoflux/widgets/button.h"
 #include "neoflux/widgets/container.h"
+#include "neoflux/widgets/sized_box.h"
 #include "neoflux/widgets/text.h"
 
 namespace neoflux_app {
 
 std::shared_ptr<neoflux::Widget> BuildHomeView(
-    neoflux::BuildContext& /*context*/) {
+    neoflux::BuildContext& context) {
   auto root = std::make_shared<neoflux::Container>();
   root->SetBackgroundColor({.r = 245, .g = 246, .b = 250, .a = 255})
       .SetPadding({.left = 40.0F, .top = 48.0F, .right = 40.0F, .bottom = 40.0F});
@@ -25,8 +27,16 @@ std::shared_ptr<neoflux::Widget> BuildHomeView(
   subtitle->SetFontSize(16.0F)
       .SetTextColor({.r = 90, .g = 92, .b = 100, .a = 255});
 
+  auto media_btn = std::make_shared<neoflux::Button>("Open Media Player ->");
+  media_btn->SetBackgroundColor({.r = 80, .g = 140, .b = 255, .a = 255})
+      .SetTextColor({.r = 255, .g = 255, .b = 255, .a = 255})
+      .SetFontSize(16.0F)
+      .SetOnPressed([&context]() { context.PushRoute("/media"); });
+
   root->AddChild(title);
   root->AddChild(subtitle);
+  root->AddChild(std::make_shared<neoflux::SizedBox>(0.0F, 24.0F));
+  root->AddChild(media_btn);
   return root;
 }
 

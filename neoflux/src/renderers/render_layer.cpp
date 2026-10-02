@@ -35,6 +35,11 @@ DEFINE_string(render_backend, "gl",
               "An unavailable backend is a hard startup error, never a silent "
               "fallback to GL.");
 
+DEFINE_int32(render_queue_drop_log_max, 10,
+             "Maximum number of times a 'render command queue full, dropped "
+             "commands' warning is emitted per process. After this many "
+             "occurrences, subsequent drops are counted silently.");
+
 namespace neoflux {
 
 RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, modernize-use-equals-default)
@@ -200,9 +205,15 @@ std::size_t RenderLayer::Submit(const RenderCommand* commands,
   std::size_t submitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     if (!command_queue_.TryPush(commands[i])) {
-      LOG_FIRST_N(WARNING, 10)
-          << "Render command queue full, dropped " << (count - i)
-          << " commands";
+      // Rate-limit the drop warning: emit up to FLAGS_render_queue_drop_log_max
+      // times per process. LOG_FIRST_N requires a compile-time constant, so we
+      // implement the cap with a relaxed atomic counter keyed off the runtime gflag.
+      static std::atomic<int> drop_log_count{0};
+      if (drop_log_count.fetch_add(1, std::memory_order_relaxed) <
+          FLAGS_render_queue_drop_log_max) {
+        LOG(WARNING) << "Render command queue full, dropped " << (count - i)
+                     << " commands";
+      }
       break;
     }
     ++submitted;

@@ -135,3 +135,39 @@ visible in the terminal (the app is otherwise GUI-subsystem with no console).
   an OpenGL context.
 - A decode path for the container/codecs your files use (system ffmpeg/libav
   bundled with your mpv build).
+
+## Quick-start example: a full player screen
+
+The scaffolded app ships a `/media` route that demonstrates the whole flow:
+a `MediaWidget` filling the middle of the window, a play/pause toggle, and a
+back button. The source is taken from `--media_source` (default `./sample.mp4`).
+
+```powershell
+# Point the demo at any mpv-supported file or URL:
+.\build\bin\neoflux_app.exe --media_source=C:\videos\clip.mp4 --logtostderr
+```
+
+From the home screen, click **Open Media Player ->** to reach it. The
+equivalent widget code (see `src/views/media/media_view.cpp`):
+
+```cpp
+auto media = std::make_shared<neoflux::MediaWidget>();
+media->SetSource(path).Play();
+
+auto play_btn = std::make_shared<neoflux::Button>("Pause");
+play_btn->SetOnPressed([media, play_btn]() {
+  if (media->GetState() == neoflux::MediaState::kPlaying) {
+    media->Pause();
+    play_btn->SetLabel("Play");
+  } else {
+    media->Play();
+    play_btn->SetLabel("Pause");
+  }
+});
+```
+
+`MediaWidget` is a Flutter-style texture-sharing widget: decoding runs inside
+mpv on its own thread, each frame becomes a GL texture composited by the
+render thread, and `Paint()` on the UI thread just emits one `DrawTexture`
+command. You build your own transport UI out of ordinary buttons/sliders on
+top of it; the widget itself only handles tap-to-toggle by default.

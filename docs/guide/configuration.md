@@ -59,6 +59,20 @@ A larger queue costs memory and can add present latency. The default `2048`
 is plenty for typical widget trees.
 :::
 
+### `--render_queue_drop_log_max`
+
+When the render command queue is full and commands are being dropped, NeoFlux
+emits a `WARNING` log. To avoid flooding the log under sustained backpressure,
+only the first `N` drop warnings per process are printed; later drops are
+counted silently. Default `10`. Set to `0` to silence drop warnings entirely.
+
+### `--media_source`
+
+Path or URL passed to the built-in demo `MediaWidget` on the `/media` route.
+Default `./sample.mp4`. This flag exists solely so the quick-start app can
+point at a test video without rebuilding; real applications construct their
+own `MediaWidget` and call `SetSource()` directly.
+
 ### `--verbose_logging`
 
 A convenience bool. When set, NeoFlux turns on `VLOG(1)` (`FLAGS_v = 1`) and

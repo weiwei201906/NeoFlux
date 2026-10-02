@@ -133,6 +133,7 @@ add_executable(neoflux_app
   src/main.cpp
   src/routers/index.cpp
   src/views/home/home_view.cpp
+  src/views/media/media_view.cpp
 )
 
 target_include_directories(neoflux_app PRIVATE
@@ -147,3 +148,10 @@ target_link_libraries(neoflux_app
 )
 
 target_compile_features(neoflux_app PRIVATE cxx_std_20)
+
+# ---------------------------------------------------------------------------
+# Example applications (opt-in via -DNEOFLUX_BUILD_EXAMPLES=ON).
+# ---------------------------------------------------------------------------
+if(NEOFLUX_BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()

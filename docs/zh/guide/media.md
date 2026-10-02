@@ -118,3 +118,38 @@ mpv 会打印大量诊断信息。加 `--logtostderr` 才能在终端看到（�
 - 构建期可用的 libmpv（`mpv/client.h`、`mpv/render_gl.h`）。
 - 桌面 GL 路径（`--render_backend=gl`），因为渲染上下文包裹 OpenGL 上下文。
 - 你的 mpv 构建所带 ffmpeg/libav 能解码所用封装/编码格式。
+
+## 快速开始：一个完整播放器页面
+
+脚手架应用内置了 `/media` 路由，演示完整流程：窗口中间一块 `MediaWidget`、
+一个播放/暂停切换按钮、一个返回按钮。播放源取自 `--media_source`
+（默认 `./sample.mp4`）。
+
+```powershell
+# 指向任意 mpv 支持的文件或 URL：
+.\build\bin\neoflux_app.exe --media_source=C:\videos\clip.mp4 --logtostderr
+```
+
+在首页点 **Open Media Player ->** 即可进入。等价的 widget 代码见
+`src/views/media/media_view.cpp`：
+
+```cpp
+auto media = std::make_shared<neoflux::MediaWidget>();
+media->SetSource(path).Play();
+
+auto play_btn = std::make_shared<neoflux::Button>("Pause");
+play_btn->SetOnPressed([media, play_btn]() {
+  if (media->GetState() == neoflux::MediaState::kPlaying) {
+    media->Pause();
+    play_btn->SetLabel("Play");
+  } else {
+    media->Play();
+    play_btn->SetLabel("Pause");
+  }
+});
+```
+
+`MediaWidget` 是 Flutter 风格的纹理共享 widget：解码在 mpv 自己的线程上跑，
+每帧变成 GL 纹理由渲染线程合成，UI 线程的 `Paint()` 只发一条
+`DrawTexture` 命令。你在它上面用普通按钮/滑块自己搭控制 UI；widget 默认
+只处理点按切换播放暂停。
