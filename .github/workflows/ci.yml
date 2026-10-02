@@ -101,8 +101,7 @@ jobs:
             -header-filter='(neoflux/include/neoflux|neoflux/src|src)/.*' \
             -quiet \
             -extra-arg-before=-Wno-unknown-warning-option \
-            -extra-arg-before=-Wno-mismatched-tags \
-            neoflux/src src 2>&1 | tee clang-tidy.log
+            '^(?!.*thirdparty/).*(/neoflux/src/|/src/)' 2>&1 | tee clang-tidy.log
           if grep -qE 'error:' clang-tidy.log; then
             echo "::error::clang-tidy reported errors"
             grep -E 'error:' clang-tidy.log | head -30

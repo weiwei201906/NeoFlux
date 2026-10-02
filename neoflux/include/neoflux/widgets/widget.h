@@ -22,8 +22,10 @@
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
 
-// Opaque Taitank layout node (defined in taitank_node.h).
-namespace taitank { struct TaitankNode; }
+// Opaque Taitank layout node (defined in taitank_node.h). Taitank declares it
+// as a class, so match the tag here to avoid clang -Wmismatched-tags under
+// -Werror.
+namespace taitank { class TaitankNode; }
 
 namespace neoflux {
 
