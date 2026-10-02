@@ -52,13 +52,13 @@ jobs:
             -DNEOFLUX_BUILD_TESTS=ON
 
       - name: Build
-        run: cmake --build build -j
+        run: cmake --build build -j 2
         continue-on-error: true
 
       - name: Dump build error
         if: failure()
         shell: bash
-        run: cmake --build build 2>&1 | tail -80 || true
+        run: cmake --build build -j 2 2>&1 | tail -80 || true
 
       - name: Test (Linux, headless via Xvfb)
         if: runner.os == 'Linux'

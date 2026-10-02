@@ -230,6 +230,15 @@ target_include_directories(tgfx PRIVATE
     ${NEOFLUX_VENDORED_DIR}/pathkit)
 target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms neoflux_hwy neoflux_pathkit freetype)
 
+# MinGW GCC 14 is stricter than Linux GCC 11 on tgfx's FTPath.cpp freetype
+# outline casts (unsigned char*/unsigned short* vs freetype's char*/short*):
+#   error: invalid conversion from 'unsigned char*' to 'char*' [-fpermissive]
+# The diagnostic itself suggests -fpermissive; accept it (these become
+# warnings, not -Werror trips).
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(tgfx PRIVATE -fpermissive)
+endif ()
+
 # Strip optional raster image codecs. On desktop tgfx turns PNG/JPEG/WebP
 # decode+encode ON by default (and freetype force-enables PNG_DECODE), and
 # expects libpng/zlib/libjpeg-turbo/libwebp as depsync prebuilts. A fresh CI
