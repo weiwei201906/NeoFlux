@@ -224,7 +224,7 @@ target_include_directories(tgfx PRIVATE
     ${NEOFLUX_VENDORED_DIR}/skcms
     ${NEOFLUX_VENDORED_DIR}/highway
     ${NEOFLUX_VENDORED_DIR}/pathkit)
-target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms neoflux_hwy neoflux_pathkit)
+target_link_libraries(tgfx neoflux_concurrentqueue neoflux_skcms neoflux_hwy neoflux_pathkit freetype)
 
 # Strip optional raster image codecs. On desktop tgfx turns PNG/JPEG/WebP
 # decode+encode ON by default (and freetype force-enables PNG_DECODE), and

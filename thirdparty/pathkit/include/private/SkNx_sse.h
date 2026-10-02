@@ -7,6 +7,13 @@
 
 #pragma once
 
+// Pull in the baseline SSE header first: it defines __m128/__m128d/__m128i.
+// On glibc GCC the higher-level headers (smmintrin->tmmintrin->pmmintrin->
+// emmintrin->xmmintrin) chain transitively, but MinGW's intrinsic headers do
+// not, so including <smmintrin.h> below without this first fails with
+// "__m128 does not name a type".
+#include <xmmintrin.h>
+
 #if PK_CPU_SSE_LEVEL >= PK_CPU_SSE_LEVEL_SSE41
     #include <smmintrin.h>
 #elif PK_CPU_SSE_LEVEL >= PK_CPU_SSE_LEVEL_SSSE3
