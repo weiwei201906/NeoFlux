@@ -113,13 +113,24 @@ add_compile_definitions(NEOFLUX_BACKEND_${NEOFLUX_BACKEND})
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
 endif()
-# tgfx includes third_party/vendor_tools/vendor.cmake. We vendor vendor_tools
-# as a top-level submodule at thirdparty/vendor_tools and copy it into tgfx's
-# expected location at configure time.
-set(VENDOR_TOOLS_SRC "${CMAKE_CURRENT_SOURCE_DIR}/vendor_tools")
-set(VENDOR_TOOLS_DST "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools")
-if(EXISTS "${VENDOR_TOOLS_SRC}/vendor.cmake" AND NOT EXISTS "${VENDOR_TOOLS_DST}/vendor.cmake")
-  file(COPY "${VENDOR_TOOLS_SRC}/" DESTINATION "${VENDOR_TOOLS_DST}")
+# tgfx includes third_party/vendor_tools/vendor.cmake which defines
+# add_vendor_target / find_vendor_libraries / merge_libraries_into. On CI the
+# vendor_tools directory is not synced. The OpenGL backend does not use tgfx's
+# vendored third-party targets (we build freetype ourselves), so we write a
+# no-op stub defining all three functions as empty.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools/vendor.cmake")
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools")
+  file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/vendor_tools/vendor.cmake"
+"# No-op vendor.cmake stub for OpenGL-only CI builds.
+function(add_vendor_target)
+endfunction()
+function(find_vendor_libraries)
+  set(\${ARGV1} \"\" PARENT_SCOPE)
+  set(\${ARGV3} \"\" PARENT_SCOPE)
+endfunction()
+function(merge_libraries_into)
+endfunction()
+")
 endif()
 add_subdirectory(tgfx)
 
