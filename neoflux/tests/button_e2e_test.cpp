@@ -155,6 +155,36 @@ TEST(ButtonE2ETest, PressMoveOutThenUpNoClick) {
 }
 
 // ---------------------------------------------------------------------------
+// pressed_widget_ weak_ptr lifecycle guard.
+//
+// Application stashes pressed_widget_ as a weak_ptr<Widget> on press and locks
+// it on release. If the widget is destroyed between press and release (e.g. the
+// route popped), lock() returns null and OnPointerUp must be skipped.
+// ---------------------------------------------------------------------------
+
+TEST(ButtonE2ETest, PressedWidgetWeakPtrLifecycle) {
+  auto button = std::make_shared<Button>("OK");
+  button->SetBounds(kButtonBounds);
+
+  bool pressed = false;
+  button->SetOnPressed([&] { pressed = true; });
+
+  // Simulate Application pressing the widget: the app stashes a weak_ptr.
+  ASSERT_TRUE(button->OnPointerDown(kInside));
+  std::weak_ptr<Widget> pressed_widget = button->weak_from_this();
+  ASSERT_FALSE(pressed_widget.expired());
+
+  // Destroy the widget (route pop / tree rebuild) before the release event.
+  button.reset();
+  ASSERT_TRUE(pressed_widget.expired());
+
+  // Simulate Application::DispatchPointerEvent(release): lock is null, so
+  // OnPointerUp is never dispatched - no crash, and on_pressed_ never fires.
+  ASSERT_EQ(pressed_widget.lock(), nullptr);
+  EXPECT_FALSE(pressed);
+}
+
+// ---------------------------------------------------------------------------
 // Background EventLoop harness.
 //
 // EventLoop exposes no generic PostTask. To run a closure on the loop thread we
@@ -191,13 +221,16 @@ class EventLoopThreadFixture : public ::testing::Test {
     }
   }
 
+  // Posts |body| to run once on the loop thread.
+  void Post(std::function<void()> body) { PostToLoop(loop_, std::move(body)); }
+
   // Posts a barrier task and blocks (with timeout) until it has executed on
   // the loop thread. Guarantees all previously posted work is drained.
   void WaitIdle() {
     std::mutex m;
     std::condition_variable cv;
     bool done = false;
-    PostToLoop(loop_, [&] {
+    Post([&] {
       {
         const std::scoped_lock<std::mutex> lock(m);
         done = true;
@@ -210,6 +243,7 @@ class EventLoopThreadFixture : public ::testing::Test {
     }));
   }
 
+ private:
   EventLoop loop_{};
   std::thread thread_{[this] { loop_.Run([] {}); }};
 };
@@ -234,7 +268,7 @@ TEST_F(EventLoopThreadFixture, LongPressFiresCallback) {
   });
 
   // Drive the press on the loop thread where EventLoop::Current() is valid.
-  PostToLoop(loop_, [button] { button->OnPointerDown(kInside); });
+  Post([button] { button->OnPointerDown(kInside); });
 
   // Wait for the long-press callback (holds 500ms; allow generous timeout).
   {
@@ -246,7 +280,7 @@ TEST_F(EventLoopThreadFixture, LongPressFiresCallback) {
   EXPECT_TRUE(long_press_fired.load());
 
   // Release on the loop thread to reset pressed state before teardown.
-  PostToLoop(loop_, [button] { button->OnPointerUp(kInside); });
+  Post([button] { button->OnPointerUp(kInside); });
   WaitIdle();
 }
 
@@ -264,7 +298,7 @@ TEST_F(EventLoopThreadFixture, LongPressCancelledOnEarlyRelease) {
   });
 
   // Press then immediately release on the loop thread (well under 500ms).
-  PostToLoop(loop_, [button] {
+  Post([button] {
     button->OnPointerDown(kInside);
     button->OnPointerUp(kInside);
   });
@@ -304,7 +338,7 @@ TEST_F(EventLoopThreadFixture, LongPressSuppressesClick) {
   });
 
   // Press on the loop thread and hold through the 500ms long-press.
-  PostToLoop(loop_, [button] { button->OnPointerDown(kInside); });
+  Post([button] { button->OnPointerDown(kInside); });
 
   {
     std::unique_lock<std::mutex> lock(cv_mutex);
@@ -315,10 +349,52 @@ TEST_F(EventLoopThreadFixture, LongPressSuppressesClick) {
   EXPECT_TRUE(long_press_fired.load());
 
   // Release inside: after the fix this must NOT fire on_pressed_.
-  PostToLoop(loop_, [button] { button->OnPointerUp(kInside); });
+  Post([button] { button->OnPointerUp(kInside); });
   WaitIdle();
 
   EXPECT_FALSE(pressed.load());
+}
+
+// The long-press coroutine must be lifetime-safe when the widget is destroyed
+// while the 500ms Delay timer is still pending. AnimationRuntime::Delay binds a
+// weak_ptr to the owner; on expiry it must observe the expired owner and return
+// without dereferencing the dead widget.
+TEST_F(EventLoopThreadFixture, LongPressCoroutineSurvivesWidgetDestruction) {
+  auto button = std::make_shared<Button>("OK");
+  button->SetBounds(kButtonBounds);
+
+  bool long_press_fired = false;
+  button->SetOnLongPress([&] { long_press_fired = true; });
+
+  // Confirm OnPointerDown has actually run on the loop thread (arming the Delay
+  // coroutine) before we destroy the widget.
+  std::mutex mu;
+  std::condition_variable cv;
+  bool down_done = false;
+  Post([&, button] {
+    button->OnPointerDown(kInside);
+    {
+      const std::scoped_lock<std::mutex> lock(mu);
+      down_done = true;
+    }
+    cv.notify_all();
+  });
+  {
+    std::unique_lock<std::mutex> lock(mu);
+    ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&] {
+      return down_done;
+    }));
+  }
+
+  // Destroy the widget mid-delay. The in-flight coroutine holds only a weak_ptr.
+  button.reset();
+
+  // Let the real 500ms timer elapse; the loop thread must observe the expired
+  // owner and return. No crash, no use-after-free.
+  std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+  WaitIdle();
+
+  EXPECT_FALSE(long_press_fired);
 }
 
 }  // namespace
