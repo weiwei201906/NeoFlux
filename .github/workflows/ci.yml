@@ -96,13 +96,22 @@ jobs:
           which clang-tidy && clang-tidy --version
           which run-clang-tidy
           ls -la build/compile_commands.json
-          head -5 build/compile_commands.json
+          echo "=== first file in compile_commands ==="
+          python3 -c "import json; d=json.load(open('build/compile_commands.json')); print(d[0]['file']); print(d[0]['command'][:200])"
+
+      - name: Run clang-tidy on one file first
+        run: |
+          first=$(python3 -c "import json; d=json.load(open('build/compile_commands.json')); print([x['file'] for x in d if 'neoflux/src' in x['file']][0])")
+          echo "Testing: $first"
+          clang-tidy -p build "$first" 2>&1 | head -50 || true
 
       - name: Run clang-tidy on neoflux source
         run: |
-          run-clang-tidy -p build -j"$(nproc)" -quiet \
+          run-clang-tidy -p build -j1 -quiet \
             neoflux/src \
             2>&1 | tee clang-tidy.log
+          echo "=== last 50 lines ==="
+          tail -50 clang-tidy.log
           if grep -qE 'error:' clang-tidy.log; then
             echo "::error::clang-tidy reported errors"
             echo "=== error lines ==="
