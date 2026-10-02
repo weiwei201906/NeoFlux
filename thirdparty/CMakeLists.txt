@@ -246,6 +246,20 @@ endif ()
 target_include_directories(tgfx SYSTEM INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/tgfx/include)
 
+# MinGW's dwrite_3.h lacks the DWrite 3 GetMatchingFonts(family,weight,
+# stretch,style) overload that tgfx's SystemFont.cpp uses, so that TU cannot
+# compile with MinGW GCC. Drop it and link a tiny no-op stub for the two
+# SystemFont::MakeFromName entry points (system-font lookup is not needed to
+# build on CI). Real MSVC Windows SDK keeps the original file.
+if (MINGW)
+    get_target_property(_tgfx_srcs_mingw tgfx SOURCES)
+    if (_tgfx_srcs_mingw)
+        list(FILTER _tgfx_srcs_mingw EXCLUDE REGEX "SystemFont\\.cpp$")
+        set_target_properties(tgfx PROPERTIES SOURCES "${_tgfx_srcs_mingw}")
+    endif ()
+    target_sources(tgfx PRIVATE ${NEOFLUX_VENDORED_DIR}/stubs/SystemFont_mingw.cpp)
+endif ()
+
 # Strip optional raster image codecs. On desktop tgfx turns PNG/JPEG/WebP
 # decode+encode ON by default (and freetype force-enables PNG_DECODE), and
 # expects libpng/zlib/libjpeg-turbo/libwebp as depsync prebuilts. A fresh CI
