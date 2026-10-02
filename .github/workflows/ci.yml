@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     name: ${{ matrix.name }}
@@ -91,31 +95,14 @@ jobs:
             -DNEOFLUX_BUILD_TESTS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-      - name: Debug clang-tidy env
-        run: |
-          which clang-tidy && clang-tidy --version
-          which run-clang-tidy
-          ls -la build/compile_commands.json
-          echo "=== first file in compile_commands ==="
-          python3 -c "import json; d=json.load(open('build/compile_commands.json')); print(d[0]['file']); print(d[0]['command'][:200])"
-
-      - name: Run clang-tidy on one file first
-        run: |
-          first=$(python3 -c "import json; d=json.load(open('build/compile_commands.json')); print([x['file'] for x in d if 'neoflux/src' in x['file']][0])")
-          echo "Testing: $first"
-          clang-tidy -p build "$first" 2>&1 | head -50 || true
-
       - name: Run clang-tidy on neoflux source
         run: |
-          run-clang-tidy -p build -j1 -quiet \
-            neoflux/src \
-            2>&1 | tee clang-tidy.log
-          echo "=== last 50 lines ==="
-          tail -50 clang-tidy.log
+          find neoflux/src -name '*.cpp' -print0 | xargs -0 -n1 \
+            clang-tidy -p build -quiet 2>&1 | tee clang-tidy.log
+          echo "=== error lines ==="
+          grep -E 'error:' clang-tidy.log | head -20 || true
           if grep -qE 'error:' clang-tidy.log; then
             echo "::error::clang-tidy reported errors"
-            echo "=== error lines ==="
-            grep -E 'error:' clang-tidy.log | head -30
             exit 1
           fi
           echo "clang-tidy: no errors"
