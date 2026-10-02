@@ -83,10 +83,13 @@ MediaWidget::MediaWidget() : impl_(std::make_unique<Impl>()) {
   EnableMeasureFunction();
   impl_->player = CreateMediaPlayer();
   if (impl_->player != nullptr) {
-    impl_->player->SetStateCallback([this](MediaState state) {
-      if (state == MediaState::kPlaying || state == MediaState::kPaused) {
-        MarkNeedsBuild();
-      }
+    // State changes (kLoading/kPlaying/kPaused/kEnded) do NOT trigger a widget
+    // rebuild: Paint() reads the atomically-published texture every frame and
+    // the transport buttons live in the user's view, not here. Rebuilding on
+    // every state transition caused an infinite loop (rebuild -> new MediaWidget
+    // -> Play() -> loadfile -> FILE_LOADED -> state change -> rebuild).
+    impl_->player->SetStateCallback([](MediaState /*state*/) {
+      // Intentionally empty: texture is atomic-published, no tree rebuild needed.
     });
   }
 }

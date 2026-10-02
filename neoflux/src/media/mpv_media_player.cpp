@@ -240,7 +240,8 @@ bool MpvMediaPlayer::Impl::CreateMpvHandle() {
   mpv_set_option_string(mpv, "no-video", "no");
   mpv_set_option_string(mpv, "vo", "libmpv");
   mpv_set_option_string(mpv, "terminal", "no");
-  mpv_set_option_string(mpv, "msg-level", "all=no");
+  mpv_set_option_string(mpv, "msg-level", "all=warn");
+  mpv_request_log_messages(mpv, "warn");
   mpv_set_option_string(mpv, "ytdl", "no");
 
   const int ret = mpv_initialize(mpv);
@@ -302,15 +303,22 @@ void MpvMediaPlayer::Impl::PollEvents() {
     }
     switch (event->event_id) {
       case MPV_EVENT_FILE_LOADED:
+        LOG(INFO) << "mpv FILE_LOADED";
         SetPropertyDouble("pause", 0.0);
         EmitState(MediaState::kPlaying);
         break;
       case MPV_EVENT_END_FILE:
+        LOG(WARNING) << "mpv END_FILE reason=" << event->error;
         EmitState(MediaState::kEnded);
         break;
       case MPV_EVENT_IDLE:
         state.store(MediaState::kIdle);
         break;
+      case MPV_EVENT_LOG_MESSAGE: {
+        auto* log = static_cast<mpv_event_log_message*>(event->data);
+        LOG(INFO) << "mpv[" << log->prefix << "]: " << log->text;
+        break;
+      }
       default:
         break;
     }
@@ -343,6 +351,7 @@ std::string_view MpvMediaPlayer::GetSource() const noexcept {
 
 void MpvMediaPlayer::Play() {
   if (impl_->mpv == nullptr) {
+    LOG(WARNING) << "Play() called but mpv handle is null";
     return;
   }
   // Copy the source under the lock, then issue the command without holding the
@@ -353,8 +362,10 @@ void MpvMediaPlayer::Play() {
     source_copy = impl_->source;
   }
   if (source_copy.empty()) {
+    LOG(WARNING) << "Play() called but source is empty";
     return;
   }
+  LOG(INFO) << "mpv loadfile: " << source_copy;
   const char* cmd[] = {"loadfile", source_copy.c_str(), nullptr};
   mpv_command_async(impl_->mpv, 0, cmd);
   impl_->EmitState(MediaState::kLoading);
