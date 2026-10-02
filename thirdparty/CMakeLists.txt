@@ -210,6 +210,10 @@ file(GLOB_RECURSE NEOFLUX_PATHKIT_SOURCES
 add_library(neoflux_pathkit STATIC ${NEOFLUX_PATHKIT_SOURCES})
 target_include_directories(neoflux_pathkit PUBLIC
     ${NEOFLUX_VENDORED_DIR}/pathkit)
+# SkNx_sse.h is textually included from inside `namespace pk`; on MinGW GCC
+# that pulls the *intrin.h headers into namespace pk (declaring pk::__m128 etc.)
+# and fails to compile. Force pathkit's portable scalar (non-SIMD) SkNx path.
+target_compile_definitions(neoflux_pathkit PRIVATE SKNX_NO_SIMD)
 set_target_properties(neoflux_pathkit PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON)
