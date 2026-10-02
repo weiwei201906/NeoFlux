@@ -99,16 +99,14 @@ jobs:
 
       - name: Run clang-tidy on neoflux source
         run: |
-          run-clang-tidy -p build -j"$(nproc)" \
-            -header-filter='(neoflux/include/neoflux|neoflux/src|src)/.*' \
-            -quiet -extra-arg=-Wno-unknown-warning-option \
-            neoflux/src src \
+          run-clang-tidy -p build -j"$(nproc)" -quiet \
+            neoflux/src \
             2>&1 | tee clang-tidy.log
           if grep -qE 'error:' clang-tidy.log; then
             echo "::error::clang-tidy reported errors"
             exit 1
           fi
-          echo "clang-tidy: no errors (warnings present but non-blocking)"
+          echo "clang-tidy: no errors"
 
       - name: Enforce ASCII-only source
         run: |
