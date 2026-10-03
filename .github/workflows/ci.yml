@@ -24,12 +24,28 @@ jobs:
           - name: Windows (MSVC)
             os: windows-2022
             cmake-generator: "Ninja"
+          - name: macOS (AppleClang)
+            os: macos-14
+            cmake-generator: "Ninja"
 
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
           lfs: false
+
+      # Cache the checked-out submodules. These are the bulk of the clone
+      # cost, and their revisions are pinned by .gitmodules, so the cache key
+      # only needs to change when the pins do.
+      - name: Cache submodules
+        uses: actions/cache@v4
+        with:
+          path: thirdparty
+          key: submodules-${{ runner.os }}-${{ hashFiles('.gitmodules') }}
+
+      - name: Init submodules
+        shell: bash
+        run: bash scripts/bootstrap.sh
 
       - name: Install Linux deps
         if: runner.os == 'Linux'
@@ -48,6 +64,11 @@ jobs:
         run: |
           choco install ninja -y
 
+      - name: Install macOS deps
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja mpv
+
       - name: Configure
         shell: bash
         run: |
@@ -64,8 +85,8 @@ jobs:
           cd build
           xvfb-run -a ctest --output-on-failure
 
-      - name: Test (Windows)
-        if: runner.os == 'Windows'
+      - name: Test (Windows / macOS)
+        if: runner.os != 'Linux'
         run: |
           cd build
           ctest --output-on-failure
@@ -76,7 +97,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
+
+      - name: Cache submodules
+        uses: actions/cache@v4
+        with:
+          path: thirdparty
+          key: submodules-Linux-${{ hashFiles('.gitmodules') }}
+
+      - name: Init submodules
+        run: bash scripts/bootstrap.sh
 
       - name: Install deps
         run: |
