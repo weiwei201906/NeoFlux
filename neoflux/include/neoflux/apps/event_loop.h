@@ -113,10 +113,14 @@ class EventLoop : public NonCopyable {
 
   // Handles that requested a one-frame yield (co_await Yield()).
   // Resumed at the start of the next frame. Guarded by coroutine_mutex_.
+  //
+  // Raw (non-owning) handles: the frame is kept alive by the owning
+  // shared_ptr in active_tasks_, keyed by the same address. Run() clears this
+  // and the containers below on exit, so no handle outlives its run.
   std::vector<std::coroutine_handle<>> yield_handles_{};
 
   // Timer queue: wake-up time -> coroutine handle to resume.
-  // Guarded by coroutine_mutex_.
+  // Guarded by coroutine_mutex_. Raw handles; ownership via active_tasks_.
   std::multimap<std::chrono::steady_clock::time_point,
                 std::coroutine_handle<>>
       timer_queue_{};

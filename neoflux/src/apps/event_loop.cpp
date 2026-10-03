@@ -64,6 +64,19 @@ void EventLoop::Run(const FrameCallback& frame_callback) {
 
   current_loop_ = nullptr;
   running_.store(false);
+
+  // Drop all in-flight coroutine state. Without this, a later Run() on the
+  // same EventLoop would observe timers and yields queued by the previous
+  // run: the timer entries are still in timer_queue_ and would fire, resuming
+  // coroutine handles whose frames the previous run already released.
+  {
+    std::scoped_lock lock(coroutine_mutex_);
+    yield_handles_.clear();
+    timer_queue_.clear();
+    pending_coroutines_.clear();
+    active_tasks_.clear();
+  }
+
   LOG(INFO) << "EventLoop stopped after " << frame_count_.load() << " frames";
 }
 
