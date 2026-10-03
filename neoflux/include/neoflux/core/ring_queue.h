@@ -127,9 +127,14 @@ SpscRingQueue<T>::SpscRingQueue(const std::size_t capacity)
 
 template <typename T>
 SpscRingQueue<T>::~SpscRingQueue() {
-  T dummy{};
-  while (TryPop(dummy)) {
-    // popped and destroyed
+  // Destroy the live elements in place. This deliberately does not go through
+  // TryPop(): that would need a `T dummy` to pop into, which would require T
+  // to be default-constructible and assignable, contradicting the
+  // move/copy-constructible contract asserted in the constructor.
+  const std::size_t head = head_.load(std::memory_order_relaxed);
+  for (std::size_t i = tail_.load(std::memory_order_relaxed); i != head;
+       i = (i + 1) & mask_) {
+    std::destroy_at(Slot(i));
   }
 }
 
