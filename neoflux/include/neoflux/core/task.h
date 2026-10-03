@@ -70,13 +70,34 @@ class Task {
   struct promise_type {
     T value{};
     std::exception_ptr exception;
-    std::coroutine_handle<> continuation;
+
+    // Continuation resumed when this task completes. Set by the awaiting
+    // coroutine in await_suspend(); null when the task is scheduled via
+    // EventLoop::Schedule() rather than awaited.
+    std::coroutine_handle<> continuation{nullptr};
+
+    // Resumes the awaiting coroutine when this task reaches its final suspend
+    // point. Returning the continuation handle (instead of void) makes the
+    // compiler transfer control directly, avoiding a resume/return chain.
+    struct FinalAwaiter {
+      bool await_ready() const noexcept { return false; }
+      std::coroutine_handle<> await_suspend(
+          std::coroutine_handle<promise_type> handle) const noexcept {
+        const std::coroutine_handle<> continuation =
+            handle.promise().continuation;
+        return continuation != nullptr ? continuation : std::noop_coroutine();
+      }
+      void await_resume() const noexcept {}
+    };
 
     Task get_return_object() {
       return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
     }
     std::suspend_always initial_suspend() const noexcept { return {}; }
-    std::suspend_always final_suspend() const noexcept { return {}; }
+    // Suspend at the end so the frame stays alive until the owner (the Task
+    // object or the EventLoop) destroys it. FinalAwaiter hands control to the
+    // awaiting coroutine, if any.
+    FinalAwaiter final_suspend() const noexcept { return {}; }
     void unhandled_exception() { exception = std::current_exception(); }
 
     template <typename U>
@@ -126,9 +147,17 @@ class Task {
   }
 
   // Awaitable interface.
-  bool await_ready() const noexcept {
-    return handle_ != nullptr && handle_.done();
-  }
+  //
+  // await_ready() is false unless there is nothing to run, so the task always
+  // starts via await_suspend(). await_suspend() sets this task's continuation
+  // to the caller and resumes the task; when the task finishes it transfers
+  // control back to the caller through final_suspend()'s FinalAwaiter.
+  //
+  // Note: co_await'ing a task that suspends indefinitely (e.g. one that
+  // awaits Sleep()) suspends the *caller* for the same duration. That is the
+  // intended nesting behaviour -- the caller resumes once the awaited task
+  // completes.
+  bool await_ready() const noexcept { return handle_ == nullptr; }
   void await_suspend(std::coroutine_handle<> caller) {
     handle_.promise().continuation = caller;
     handle_.resume();
@@ -157,13 +186,26 @@ class Task<void> {
  public:
   struct promise_type {
     std::exception_ptr exception;
-    std::coroutine_handle<> continuation;
+
+    // See Task<T>::promise_type for the rationale.
+    std::coroutine_handle<> continuation{nullptr};
+
+    struct FinalAwaiter {
+      bool await_ready() const noexcept { return false; }
+      std::coroutine_handle<> await_suspend(
+          std::coroutine_handle<promise_type> handle) const noexcept {
+        const std::coroutine_handle<> continuation =
+            handle.promise().continuation;
+        return continuation != nullptr ? continuation : std::noop_coroutine();
+      }
+      void await_resume() const noexcept {}
+    };
 
     Task get_return_object() {
       return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
     }
     std::suspend_always initial_suspend() const noexcept { return {}; }
-    std::suspend_always final_suspend() const noexcept { return {}; }
+    FinalAwaiter final_suspend() const noexcept { return {}; }
     void unhandled_exception() { exception = std::current_exception(); }
     void return_void() {}
   };
@@ -204,9 +246,8 @@ class Task<void> {
     }
   }
 
-  bool await_ready() const noexcept {
-    return handle_ != nullptr && handle_.done();
-  }
+  // Awaitable interface. See Task<T>::await_ready for the semantics.
+  bool await_ready() const noexcept { return handle_ == nullptr; }
   void await_suspend(std::coroutine_handle<> caller) {
     handle_.promise().continuation = caller;
     handle_.resume();
