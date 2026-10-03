@@ -35,13 +35,26 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 
 - Flutter-like widget system (StatelessWidget, StatefulWidget, State)
 - Route-based navigation with widget registration
-- Cross-platform: Windows, Linux, macOS (desktop), Android/iOS (mobile)
+- Cross-platform: see [Platform Support](#platform-support) below (Linux / Windows are CI-verified)
 - C++20 standard with modern features (std::string_view, ranges, concepts)
 - Google C++ style guide compliance
 - clang-tidy static analysis
 - GLog logging + GFlags command-line parsing
 - GTest unit testing
 - CMake build system with FetchContent dependency management
+
+## Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Linux (x86-64) | ✅ Verified | CI build + headless tests via Xvfb |
+| Windows (MSVC x64) | ✅ Verified | CI build + tests |
+| macOS | 🚧 Adapted, not CI-verified | Uses the GLFW + OpenGL path |
+| Android | 🚧 Bridge only | `MobileBridge` is a stub; platform layer not wired up |
+| iOS | 🚧 Bridge only | `MobileBridge` is a stub; platform layer not wired up |
+
+> "Verified" means the platform builds and passes tests in CI. Mobile currently
+> only reserves the `platform_surface` hook; see [Mobile Rendering](#mobile-rendering).
 
 ## Quick Start
 
@@ -79,12 +92,28 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 |------|------|---------|-------------|
 | `--target_fps` | int | `60` | Target frame rate for the application event loop and render pacing. |
 | `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Rounded up to the next power of two automatically. |
+| `--render_queue_drop_log_max` | int | `10` | Maximum number of "queue full, commands dropped" warnings emitted before drops are counted silently. |
+| `--render_backend` | string | `gl` | Render backend selection: `gl` (implemented). `vulkan` / `d3d12` / `metal` are not implemented yet; passing them falls back to `gl` with a warning. |
 | `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
 | `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
 | `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |
-| `--render_backend` | string | `vulkan` | Render backend selection: `vulkan`, `gl`, or `cpu`. Vulkan/CPU fall back to OpenGL with a warning when not yet implemented. |
 
 By default, logs are written to files in `./logs/` and no console window appears on Windows (`CMAKE_WIN32_EXECUTABLE`). To debug, pass `--logtostderr --verbose_logging`.
+
+### Render backend (compile-time selection)
+
+The render backend is also selectable at **configure time** via a CMake variable; keep it consistent with the runtime flag:
+
+```bash
+cmake -S . -B build -G Ninja -DNEOFLUX_BACKEND=gl   # one of gl / vulkan / d3d12 / metal
+```
+
+| Backend | Status |
+|---------|--------|
+| `gl` | ✅ Implemented (default) |
+| `vulkan` / `d3d12` / `metal` | 🚧 Switch points reserved, not implemented |
+
+> Use the default `gl` for now. `thirdparty/CMakeLists.txt` validates `NEOFLUX_BACKEND` at configure time.
 
 ## Font System
 

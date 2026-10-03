@@ -37,13 +37,26 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 - 可拖拽 Widget（Draggable）与可滚动视图（ScrollView，支持滚轮与拖拽滚动）
 - C++20 协程：Task\<void\>、Yield()、Sleep()，事件循环驱动
 - 轻量状态机 + 协程"条件锁"模式
-- 跨平台：Windows / Linux / macOS（桌面），Android / iOS（移动）
+- 跨平台：详见下方[平台支持](#平台支持)（Linux / Windows 已通过 CI 验证）
 - C++20 标准，使用 `std::string_view`、designated initializers 等现代特性
 - 遵循 Google C++ 编码规范，clang-tidy 静态分析，-Werror 零警告
 - GLog 日志 + GFlags 命令行参数解析
 - GTest 单元测试
 - CMake 构建系统，FetchContent 自动管理第三方依赖
 - 头文件仅含声明，模板类通过 `.inc` + 显式实例化将实现放在 `.cpp`
+
+## 平台支持
+
+| 平台 | 状态 | 说明 |
+|------|------|------|
+| Linux (x86-64) | ✅ 已验证 | CI 构建 + Xvfb 无头测试 |
+| Windows (MSVC x64) | ✅ 已验证 | CI 构建 + 测试 |
+| macOS | 🚧 代码已适配，未经 CI 验证 | 走 GLFW + OpenGL 路径 |
+| Android | 🚧 仅桥接预留 | `MobileBridge` 为 stub，尚未接入平台层 |
+| iOS | 🚧 仅桥接预留 | `MobileBridge` 为 stub，尚未接入平台层 |
+
+> 「已验证」指该平台的构建与测试在 CI 中通过。移动端目前只预留了
+> `platform_surface` 接口，详见 [移动端渲染](#移动端渲染)。
 
 ## 快速开始
 
@@ -90,14 +103,32 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 
 | 参数                      | 类型   | 默认值    | 说明                                                                 |
 |---------------------------|--------|-----------|----------------------------------------------------------------------|
-| `--target_fps`            | int    | `60`      | 应用事件循环与渲染的目标帧率。                                       |
-| `--render_queue_capacity` | int    | `2048`    | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。 |
-| `--verbose_logging`       | bool   | `false`   | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。               |
-| `--logtostderr`           | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
-| `--log_dir`               | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |
-| `--render_backend`        | string | `vulkan`  | 渲染后端选择：`vulkan`、`gl`、`cpu`。Vulkan/CPU 尚未实现时回退到 OpenGL 并输出警告。 |
+| 参数                          | 类型   | 默认值    | 说明                                                                 |
+|-------------------------------|--------|-----------|----------------------------------------------------------------------|
+| `--target_fps`                | int    | `60`      | 应用事件循环与渲染的目标帧率。                                       |
+| `--render_queue_capacity`     | int    | `2048`    | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。 |
+| `--render_queue_drop_log_max` | int    | `10`      | 命令队列满导致丢弃时的告警最大打印次数，超出后静默计数。             |
+| `--render_backend`            | string | `gl`      | 渲染后端选择：`gl`（已实现）。`vulkan` / `d3d12` / `metal` 尚未实现，传入时会回退到 `gl` 并输出警告。 |
+| `--verbose_logging`           | bool   | `false`   | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。               |
+| `--logtostderr`               | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
+| `--log_dir`                   | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |
 
 默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（`CMAKE_WIN32_EXECUTABLE`）。调试时使用 `--logtostderr --verbose_logging`。
+
+### 渲染后端（编译期选择）
+
+除运行时参数外，渲染后端还可在 **configure 阶段**通过 CMake 变量选定，二者需保持一致：
+
+```bash
+cmake -S . -B build -G Ninja -DNEOFLUX_BACKEND=gl   # 可选 gl / vulkan / d3d12 / metal
+```
+
+| 后端 | 状态 |
+|------|------|
+| `gl` | ✅ 已实现（默认） |
+| `vulkan` / `d3d12` / `metal` | 🚧 已预留切换点，尚未实现 |
+
+> 当前请使用默认的 `gl`。`thirdparty/CMakeLists.txt` 在 configure 期即会校验 `NEOFLUX_BACKEND` 的合法性。
 
 ## 字体系统
 
