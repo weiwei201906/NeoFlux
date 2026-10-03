@@ -13,6 +13,7 @@
 # Core library
 # ---------------------------------------------------------------------------
 add_library(neoflux STATIC
+  src/core/flags.cpp
   src/core/ring_queue.cpp
   src/core/font_manager.cpp
   src/core/types.cpp

@@ -20,18 +20,14 @@
 
 #include "neoflux/renderers/glfw_bridge.h"
 #include "neoflux/core/config.h"
+#include "neoflux/core/flags.h"
 #include "neoflux/renderers/render_command.h"
 #include "neoflux/renderers/tgfx_renderer.h"
 
-DEFINE_uint64(render_queue_capacity, neoflux::config::kDefaultRenderQueueCapacity,
-              "Capacity of the render command SPSC ring queue. "
-              "One slot is reserved for full/empty distinction, so the "
-              "maximum storable commands are (capacity - 1).");
-
-DEFINE_int32(render_queue_drop_log_max, 10,
-             "Maximum number of times a 'render command queue full, dropped "
-             "commands' warning is emitted per process. After this many "
-             "occurrences, subsequent drops are counted silently.");
+// render_queue_capacity, render_queue_drop_log_max and render_backend are
+// defined in core/flags.cpp and declared in core/flags.h. The backend flag
+// carries a validator, registered there so that an unknown value is rejected
+// at parse time.
 
 namespace neoflux {
 

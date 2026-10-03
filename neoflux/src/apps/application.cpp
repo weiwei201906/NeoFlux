@@ -20,6 +20,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "neoflux/core/flags.h"
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
 #include "neoflux/core/config.h"
@@ -28,11 +29,9 @@
 #include "neoflux/widgets/route_registry.h"
 #include "neoflux/widgets/widget.h"
 
-DEFINE_int32(target_fps, neoflux::config::kDefaultTargetFps,
-             "Target frames per second for the event loop.");
-DEFINE_bool(verbose_logging, false,
-            "Enable verbose (VLOG) logging output.");
-// logtostderr and log_dir are glog built-in flag variables declared in
+// target_fps and verbose_logging are defined in core/flags.cpp and declared
+// in core/flags.h. logtostderr and log_dir are glog built-in flag variables
+// declared in
 // <glog/flags.h> (pulled in via <glog/logging.h>). When glog is built without
 // gflags integration it does not register them with the gflags command-line
 // parser, so we pre-scan argv in Init() to handle --logtostderr / --log_dir=
