@@ -4,9 +4,14 @@
 mpv 不另开窗口，而是由 NeoFlux 已有的 OpenGL 上下文驱动渲染：每帧解码后的视频
 变成一张普通 GL 纹理，像其它内容一样由 widget 绘制。
 
-::: warning 可选功能
+::: warning 可选功能，且与 OpenGL 后端绑定
 桌面视频支持受编译宏 `NEOFLUX_HAS_MPV` 控制，构建时需要 libmpv 开发文件。
 未开启时媒体 API 不参与编译，框架其余部分照常工作。
+
+媒体属于 **OpenGL 后端模块**：只有 `NEOFLUX_BACKEND=gl` 时构建才会探测并链接
+libmpv。在 `vulkan`/`d3d12`/`metal` 构建下，mpv 不下载、不链接、不编译
+（`MpvMediaPlayer` 退化为空实现），`MediaWidget` 只渲染占位内容。这是刻意
+设计：mpv→GL 纹理互操作在其他后端上没有对应实现，与其半可用，不如彻底解耦。
 :::
 
 ## 线程模型

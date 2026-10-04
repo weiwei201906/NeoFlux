@@ -385,14 +385,17 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
           command.rect.x, command.rect.y, command.rect.width,
           command.rect.height));
       break;
-    case RenderCommandType::kDrawTexture: {
 #if defined(NEOFLUX_BACKEND_gl)
-      // Wrap an externally-produced GL texture (e.g. mpv render context) as a
-      // tgfx BackendTexture and draw it into the destination rect. MakeFrom
-      // does NOT take ownership of the GL texture; the producer (mpv) manages
-      // its lifetime. The texture id stays the same across frames; only its
-      // contents are updated by mpv, so re-creating the Image each frame is
-      // cheap (just a handle, no GPU upload).
+    case RenderCommandType::kDrawTexture: {
+      // Media module (GL backend only): wrap an externally-produced GL texture
+      // (mpv render context) as a tgfx BackendTexture and draw it into the
+      // destination rect. MakeFrom does NOT take ownership of the GL texture;
+      // the producer (mpv) manages its lifetime. The texture id stays the same
+      // across frames; only its contents are updated by mpv, so re-creating
+      // the Image each frame is cheap (just a handle, no GPU upload).
+      // On other backends this case does not exist at all: the media module is
+      // bound to the GL backend (see neoflux/CMakeLists.txt) and MediaWidget
+      // degrades to a placeholder, so no kDrawTexture command is ever sent.
       tgfx::GLTextureInfo gl_info{};
       gl_info.id = command.texture_id;
       gl_info.target = 0x0DE1U;   // GL_TEXTURE_2D
@@ -408,16 +411,9 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
         impl_->canvas->drawImageRect(image, dest,
                                      tgfx::SamplingOptions());
       }
-#else
-      // The external-texture interop path (mpv produces GL textures) exists only
-      // on the OpenGL backend. Other backends currently have no equivalent
-      // producer, so the command is ignored rather than mis-rendered. Video
-      // output on vulkan/d3d12/metal requires a backend-specific texture
-      // sharing implementation (e.g. VkImage / ID3D12Resource / IOSurface).
-      (void)command;
-#endif
       break;
     }
+#endif
     default:
       break;
   }

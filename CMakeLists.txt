@@ -161,8 +161,12 @@ add_custom_command(TARGET neoflux_app POST_BUILD
 )
 
 # On Windows, the loader resolves libmpv-2.dll from the executable directory.
-# Copy it next to neoflux_app when the prebuilt bundle exists.
-if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/mpv-bundle/libmpv-2.dll")
+# Copy it next to neoflux_app when the prebuilt bundle exists AND the build
+# targets the OpenGL backend -- media is bound to the GL backend module, so
+# other backends neither need nor get the DLL.
+if(WIN32
+   AND NEOFLUX_BACKEND STREQUAL "gl"
+   AND EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/mpv-bundle/libmpv-2.dll")
   add_custom_command(TARGET neoflux_app POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_SOURCE_DIR}/thirdparty/mpv-bundle/libmpv-2.dll"

@@ -5,10 +5,17 @@ mpv's **render API**. Instead of putting mpv in its own window, the renderer
 is driven by NeoFlux's existing OpenGL context so each decoded video frame
 becomes a normal GL texture that a widget can draw.
 
-::: warning Optional feature
+::: warning Optional feature, bound to the OpenGL backend
 Desktop video support is gated behind the `NEOFLUX_HAS_MPV` compile definition
 and requires libmpv development files at build time. Without it, the media
 APIs are not compiled in and the rest of the framework works unchanged.
+
+Media is part of the **OpenGL backend module**: the build probes and links
+libmpv only when `NEOFLUX_BACKEND=gl`. On `vulkan`/`d3d12`/`metal` builds mpv
+is not downloaded, linked, or compiled (`MpvMediaPlayer` becomes a no-op stub)
+and `MediaWidget` renders its placeholder. This is deliberate: the mpv-to-GL
+texture interop has no equivalent on those backends yet, so the module stays
+decoupled instead of half-working.
 :::
 
 ## Threading model

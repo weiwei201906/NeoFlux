@@ -50,9 +50,13 @@ struct RenderCommand {
   float translate_y = 0.0F;        // kTranslate
   float corner_radius = 0.0F;      // kDrawRoundedRect
 
-  // OpenGL texture name to composite (kDrawTexture). The texture is produced by
-  // the platform media backend (e.g. libmpv render API) and is sampled into
-  // `rect` by the render layer.
+  // External texture name to composite (kDrawTexture). The command is part of
+  // the backend-agnostic render protocol, but today only the OpenGL backend
+  // implements it: the texture is a GL name produced by the media module
+  // (libmpv render API, bound to the GL backend) and imported via tgfx's GL
+  // texture interop. Other backends ignore the command; a future backend can
+  // implement its own importer (VkImage / ID3D12Resource / IOSurface) without
+  // changing this protocol.
   std::uint32_t texture_id = 0;
 
   // Factory: create a draw-rect command.
