@@ -42,8 +42,8 @@ struct RenderCommand {
   // Payload fields (valid depending on `type`).
   Rect rect{};                     // kDrawRect, kClipRect
   Color color{};                   // kDrawRect, kDrawText
-  std::string text{};              // kDrawText (UTF-8)
-  std::string font_name{};         // kDrawText (font name, resolved by FontManager)
+  std::string text;               // kDrawText (UTF-8)
+  std::string font_name;          // kDrawText (font name, resolved by FontManager)
   Point point{};                   // kDrawText
   float font_size = 14.0F;         // kDrawText
   float translate_x = 0.0F;        // kTranslate

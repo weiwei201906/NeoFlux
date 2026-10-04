@@ -35,7 +35,7 @@ class GlfwBridge;
 class PlatformBridge;
 
 // The render layer owns the render thread and executes render commands.
-class RenderLayer : public NonCopyable {
+class RenderLayer : public NonCopyable {  // NOLINT(cppcoreguidelines-special-member-functions)
  public:
   RenderLayer();
   ~RenderLayer();
@@ -110,13 +110,13 @@ class RenderLayer : public NonCopyable {
   // Condition variable to wake the render thread when a new frame is
   // submitted or an external producer (e.g. mpv) signals a new frame. Avoids
   // busy-polling on the SPSC queue.
-  std::mutex frame_mutex_{};
-  std::condition_variable frame_cv_{};
+  std::mutex frame_mutex_;
+  std::condition_variable frame_cv_;
   bool frame_ready_ = false;
   // External GL pump (e.g. mpv UpdateTexture), invoked on the render thread at
   // the top of each wake. Read/written under frame_mutex_ so the render loop
   // copies it out before invoking.
-  std::function<void()> render_pump_{};
+  std::function<void()> render_pump_;
 
   // One-shot tasks submitted via RunOnRenderThread and drained on the render
   // thread at the end of each loop iteration (after the pump and queued draws).

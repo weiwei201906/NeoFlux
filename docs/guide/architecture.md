@@ -2,7 +2,7 @@
 
 NeoFlux splits a UI application into two independently threaded layers that
 communicate through a single lock-free queue. The application layer owns all
-business logic and layout; the render layer owns the GPU/GL context and turns
+business logic and layout; the render layer owns the tgfx device and turns
 recorded commands into pixels.
 
 ## Two-layer split
@@ -27,10 +27,10 @@ recorded commands into pixels.
 |    |                 waits on frame_cv_, drains queue, honors Begin/End bounds     |
 |    |                            |                                                 |
 |    |                            v                                                 |
-|    |                     TgfxRenderer  (tgfx, or built-in GL fallback)            |
+|    |                     TgfxRenderer  (tgfx Window / Surface)                    |
 |    |                            |                                                 |
-|    |      desktop: GlfwBridge (GLFW window + WGL context) -> SwapBuffers()        |
-|    |      mobile:  platform surface (ANativeWindow / CAMetalLayer)                 |
+|    |      desktop: GlfwBridge (GLFW window, GLFW_NO_API) — input only             |
+|    |      tgfx Window owns the GPU context + swapchain and presents on submit()   |
 +----+-----------------------------------------------------------------------------+
 ```
 
@@ -58,20 +58,20 @@ CPU near zero.
 ## Render layer (render thread)
 
 `RenderLayer::Start()` spawns a dedicated `std::thread` running `RenderLoop()`.
-This thread exclusively owns the GL context.
 
-- **GL context ownership** — on desktop the context is created by the
-  `GlfwBridge`. It is briefly made current on the main thread so the OpenGL
-  loader (`glfwGetProcAddress` / WGL) can resolve function pointers, then
-  released and re-acquired on the render thread for all actual drawing.
+- **GPU context ownership** — the tgfx `Window` created by `TgfxRenderer`
+  (lazily, in `BeginFrame()` on the render thread) owns the GPU context, the
+  graphics surface/swapchain, and presentation. NeoFlux never creates or
+  makes current a GL/EGL/WGL context itself: GLFW windows are created with
+  `GLFW_NO_API`, and the GLFW/mobile bridges only carry the native window
+  handle and input.
 - **Frame state machine** — commands are only executed between `kBeginFrame`
   and `kEndFrame`. This prevents the render thread from presenting a partial
   frame while the application is still submitting commands.
-- **Backend** — `TgfxRenderer` wraps `tgfx`. When `NEOFLUX_USE_TGFX` is off,
-  the same class falls back to a built-in OpenGL renderer (shader + VBO +
-  FreeType glyph atlas). The `--render_backend` flag defaults to `gl` (the only
-  backend available in this build); `vulkan`, `cpu`, and unknown values are a
-  hard startup error rather than a silent GL fallback.
+- **Backend** — `TgfxRenderer` wraps `tgfx`, which is a required dependency
+  (there is no build or renderer without it). The GPU backend is tgfx's own
+  `TGFX_USE_*` compile-time switch resolved to exactly one backend at
+  configure time; there is no runtime backend flag.
 
 ## How commands cross threads
 
@@ -82,10 +82,11 @@ The two layers never call each other's rendering code across a frame. Instead:
    queue is full the overflowing commands are dropped (rate-limited warning).
 2. `Submit()` then sets `frame_ready_ = true` and `frame_cv_.notify_one()` to
    wake the render thread.
-3. The **render thread** is the sole consumer: it waits on `frame_cv_` (16 ms
-   max), then `TryPop()`s every available command and dispatches it to
-   `TgfxRenderer`. At `kEndFrame` it calls `EndFrame()` and, on desktop,
-   `GlfwBridge::SwapBuffers()`.
+3. The **render thread** is the sole consumer: it waits on `frame_cv_`, then
+   `TryPop()`s every available command and dispatches it to `TgfxRenderer`.
+   At `kEndFrame` it calls `EndFrame()`, whose `context->submit()` both
+   submits the recording to the GPU and presents it through the tgfx Window
+   (there is no separate buffer swap).
 
 ### SpscRingQueue details
 
@@ -125,10 +126,13 @@ press and release cannot leave a dangling pointer. See
 
 ## Platform matrix
 
-| Platform | Windowing | GL/GL context | Render target |
-|----------|-----------|----------------|---------------|
-| Windows / Linux / macOS | `GlfwBridge` (GLFW) | WGL / GLX / CGL via GLFW | window framebuffer |
-| Android / iOS | OS-provided surface | n/a | `ANativeWindow` / `CAMetalLayer` |
+| Platform | Windowing | tgfx Window (context + swapchain owner) |
+|----------|-----------|------------------------------------------|
+| Linux | `GlfwBridge` (X11) | `tgfx::EGLWindow::MakeFrom(XID)` — OpenGL backend |
+| Windows | `GlfwBridge` (Win32) | `tgfx::WGLWindow::MakeFrom(HWND)` (OpenGL) or `VulkanWindow` / `D3D12Window` |
+| macOS | `GlfwBridge` (Cocoa) | `tgfx::MetalWindow` over a `CAMetalLayer` |
+| Android | app shell (`ANativeWindow`) | `tgfx::EGLWindow::MakeFrom(ANativeWindow*)` |
+| iOS | app shell (ObjC++) | `tgfx::EAGLWindow::MakeFrom(CAEAGLLayer*)` — shell not wired yet |
 
 The preprocessor selects the bridge: `glfw_bridge.cpp` is built on desktop,
 `mobile_bridge.cpp` on Android/iOS (`NEOFLUX_PLATFORM_DESKTOP` vs

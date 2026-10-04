@@ -26,8 +26,10 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 
 - **Application Layer**: Runs business logic, builds the widget tree, computes
   layout via Taitank, and records render commands.
-- **Render Layer**: Consumes commands from the SPSC ring queue and executes
-  them using tgfx (mobile) or a GLFW+OpenGL bridge (desktop).
+- **Render Layer**: Consumes commands from the SPSC ring queue and replays
+  them as tgfx draws. A tgfx `Window` owns the GPU context and swapchain on
+  every platform (EGL/WGL/Metal/Vulkan/D3D12 per build); the GLFW/mobile
+  bridges only carry the native window and input.
 - **SPSC Ring Queue**: Lock-free single-producer single-consumer FIFO queue
   connecting the two layers without mutex contention.
 
@@ -41,7 +43,8 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 - clang-tidy static analysis
 - GLog logging + GFlags command-line parsing
 - GTest unit testing
-- CMake build system with FetchContent dependency management
+- CMake build system with vendored git-submodule dependencies (offline
+  builds, pinned revisions)
 
 ## Platform Support
 
@@ -49,7 +52,7 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 |----------|--------|-------|
 | Linux (x86-64) | ✅ Verified | CI build + headless tests via Xvfb |
 | Windows (MSVC x64) | ✅ Verified | CI build + tests |
-| macOS | 🚧 Adapted, not CI-verified | Uses the GLFW + OpenGL path |
+| macOS | 🚧 Adapted, not CI-verified | tgfx Metal backend (`MetalWindow` presents into a `CAMetalLayer` on the GLFW NSWindow); the CMake default on Apple is `TGFX_USE_METAL=ON` |
 | Android | 🚧 Renderer + input wired, no app shell | tgfx `EGLWindow` owns the EGL context and renders into the `ANativeWindow`; `MobileBridge` dispatches touch input into the widget tree. An Android app shell (NativeActivity/JNI) that creates the surface and forwards touch events is still needed. |
 | iOS | 🚧 Shell required | The `EAGLWindow::MakeFrom(CAEAGLLayer*)` path is defined but the ObjC++ app shell (view hierarchy) does not exist in this repository; `TgfxRenderer::Init` fails with an explicit log. |
 
@@ -118,12 +121,13 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 
 The GPU backend is **not** a runtime flag and not a NeoFlux concept: the
 renderer is built entirely on tgfx, and the backend is tgfx's own
-`TGFX_USE_*` CMake switch (exactly one per build, default `TGFX_USE_OPENGL=ON`).
-See [Render backend](#render-backend-compile-time).
+`TGFX_USE_*` CMake switch (exactly one per build; `TGFX_USE_OPENGL` is the
+default outside Apple, Apple defaults to Metal).
+See [GPU backend](#gpu-backend-compile-time-selection).
 
 By default, logs are written to files in `./logs/` and no console window appears on Windows (`CMAKE_WIN32_EXECUTABLE`). To debug, pass `--logtostderr --verbose_logging`.
 
-### Render backend (compile-time selection)
+### GPU backend (compile-time selection)
 
 The GPU backend is tgfx's own concern. Pick one of tgfx's native switches at
 configure time; `thirdparty/CMakeLists.txt` mirrors tgfx's own resolution
@@ -131,20 +135,29 @@ configure time; `thirdparty/CMakeLists.txt` mirrors tgfx's own resolution
 `TGFX_USE_*=1` define so NeoFlux sources agree with what tgfx compiled:
 
 ```bash
-cmake -S . -B build -G Ninja                                # default: OpenGL
-cmake -S . -B build -G Ninja -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF   # Apple
+cmake -S . -B build -G Ninja                                # default: OpenGL (Linux/Windows/Android)
+cmake -S . -B build -G Ninja -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF   # Apple (also the Apple default)
 cmake -S . -B build -G Ninja -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   # Windows
 ```
 
-| tgfx backend | Status |
-|---------|--------|
-| `TGFX_USE_OPENGL` | ✅ Implemented (default): desktop WGL/GLX + Android EGL (`tgfx::EGLWindow`) + iOS EAGL path |
-| `TGFX_USE_VULKAN` / `TGFX_USE_D3D12` / `TGFX_USE_METAL` | 🚧 Code paths exist (tgfx `Window` abstraction), not exercised in CI |
+tgfx is a **required** dependency (there is no build without it): make sure
+the submodule is initialized (`git submodule update --init --recursive`),
+and configure fails with an actionable message if the `tgfx` target is
+missing.
 
-> Keep the default OpenGL unless you have a specific reason to experiment;
-> `tgfx`'s CMake validates platform support (e.g. D3D12 requires Windows) and
-> NeoFlux's `thirdparty/CMakeLists.txt` fails configure with an actionable
-> message on unsupported combinations.
+| tgfx backend | Surface acquisition | Status |
+|---------|---------|--------|
+| `TGFX_USE_OPENGL` | Linux `tgfx::EGLWindow` (X11) / Windows `tgfx::WGLWindow` / Android `tgfx::EGLWindow` | ✅ Implemented (default outside Apple), desktop CI-verified on Linux |
+| `TGFX_USE_METAL` | `tgfx::MetalWindow` over a `CAMetalLayer` on the GLFW NSWindow | 🚧 Code path exists, not exercised in CI (Apple default) |
+| `TGFX_USE_VULKAN` | `tgfx::VulkanWindow` (Win32 HWND) | 🚧 Code path exists, not exercised in CI |
+| `TGFX_USE_D3D12` | `tgfx::D3D12Window::MakeForHwnd` | 🚧 Code path exists, not exercised in CI |
+
+> In every case NeoFlux never manages a GL/EGL/WGL context itself: GLFW
+> windows are created with `GLFW_NO_API`, the tgfx `Window` owns the context
+> and swapchain, and presentation happens on `context->submit()`. tgfx's
+> CMake validates platform support (e.g. D3D12 requires Windows, Metal
+> requires Apple) and configure fails with an actionable message on
+> unsupported combinations (Apple + OpenGL is rejected outright).
 
 ## Font System
 
@@ -382,7 +395,7 @@ neoflux/
 ├── .clang-tidy             # clang-tidy rules
 ├── .clang-format           # Code style
 ├── cmake/                  # CMake modules
-├── thirdparty/             # Third-party dependencies (FetchContent)
+├── thirdparty/             # Third-party dependencies (git submodules)
 ├── include/neoflux/        # Public headers
 │   ├── core/               # Ring queue, types, utilities
 │   ├── widget/             # Widget system (Widget, Container, Text, Button)
@@ -416,4 +429,8 @@ app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
 ```
 
 On desktop, pass `nullptr` for `platform_surface` and the framework creates
-the GLFW window itself.
+the GLFW window itself (with `GLFW_NO_API`); the tgfx `Window` is then built
+from its native handle (`EGLWindow` on Linux/X11, `WGLWindow` on Windows,
+`MetalWindow` on Apple) exactly like the mobile path. There is no
+NeoFlux-managed GL context anywhere: context, surface, swapchain, and
+presentation all belong to tgfx.

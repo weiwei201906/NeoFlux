@@ -2,8 +2,9 @@
 
 On desktop, NeoFlux can render video through [libmpv](https://mpv.io) using
 mpv's **render API**. Instead of putting mpv in its own window, the renderer
-is driven by NeoFlux's existing OpenGL context so each decoded video frame
-becomes a normal GL texture that a widget can draw.
+is driven by the tgfx Window's OpenGL context (EGLWindow/WGLWindow, the
+`TGFX_USE_OPENGL` build) so each decoded video frame becomes a normal GL
+texture that a widget can draw.
 
 ::: warning Optional feature, bound to the OpenGL backend
 Desktop video support is gated behind the `NEOFLUX_HAS_MPV` compile definition

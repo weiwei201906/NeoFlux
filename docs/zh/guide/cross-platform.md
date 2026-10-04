@@ -32,7 +32,7 @@ app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
 
 ## 构建系统
 
-CMake 构建，FetchContent 管理依赖，所有第三方库放在 `thirdparty/` 下。
+CMake 构建，第三方库以 git submodule 内置于 `thirdparty/` 并从源码构建。
 
 ## 下一步
 

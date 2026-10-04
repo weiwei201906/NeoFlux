@@ -1,8 +1,9 @@
 # 媒体播放（libmpv）
 
 桌面端，NeoFlux 可通过 [libmpv](https://mpv.io) 的**渲染 API** 渲染视频。
-mpv 不另开窗口，而是由 NeoFlux 已有的 OpenGL 上下文驱动渲染：每帧解码后的视频
-变成一张普通 GL 纹理，像其它内容一样由 widget 绘制。
+mpv 不另开窗口，而是由 tgfx Window 的 OpenGL 上下文（`TGFX_USE_OPENGL` 构建下的
+EGLWindow/WGLWindow）驱动渲染：每帧解码后的视频变成一张普通 GL 纹理，像其它内容
+一样由 widget 绘制。
 
 ::: warning 可选功能，且与 OpenGL 后端绑定
 桌面视频支持受编译宏 `NEOFLUX_HAS_MPV` 控制，构建时需要 libmpv 开发文件。

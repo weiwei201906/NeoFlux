@@ -46,18 +46,13 @@ GlfwBridge::GlfwBridge() : impl_(std::make_unique<Impl>()) {}
 
 GlfwBridge::~GlfwBridge() { Shutdown(); }
 
-// The GPU backend is tgfx's own compile-time choice (see thirdparty/
-// CMakeLists.txt, which resolves tgfx's TGFX_USE_* switches to exactly one).
-// The OpenGL path needs a GL context created by GLFW; the other tgfx backends
-// (Vulkan/D3D12/Metal) create their own swapchain/surface from the native
-// window handle, so GLFW must be told to create the window WITHOUT a client API
-// context (GLFW_NO_API). Creating a GL context there would be useless and, on
-// some drivers, conflict with the backend's own device creation.
-#if defined(TGFX_USE_OPENGL)
-#define NEOFLUX_GLFW_WANTS_GL_CONTEXT 1
-#else
-#define NEOFLUX_GLFW_WANTS_GL_CONTEXT 0
-#endif
+// GLFW is a pure window + input bridge on every desktop platform: the window
+// is created WITHOUT a client-API context (GLFW_NO_API). The tgfx Window
+// (EGLWindow on Linux/X11, WGLWindow on Windows, MetalWindow on Apple) owns
+// the GPU context and the swapchain, and presentation happens on
+// context->submit() -- there is no GLFW buffer swap anywhere. Creating a GL
+// context here would be useless and, on some drivers, conflict with the
+// backend's own device creation.
 
 bool GlfwBridge::Init(int width, int height, std::string_view title) {
   if (impl_->initialized) {
@@ -72,15 +67,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
     return false;
   }
 
-#if NEOFLUX_GLFW_WANTS_GL_CONTEXT
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
-#else
-  // Vulkan / D3D12 / Metal: the backend owns surface creation and presentation.
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-#endif
 
   const std::string title_str(title);  // NOLINT(bugprone-unused-local-non-trivial-variable)
   impl_->window = glfwCreateWindow(width, height, title_str.c_str(), nullptr,
@@ -130,30 +117,6 @@ void GlfwBridge::PollEvents() const {
   }
 }
 
-void GlfwBridge::SwapBuffers() {
-  if (impl_->window != nullptr) {
-    glfwSwapBuffers(impl_->window);
-  }
-}
-
-void GlfwBridge::MakeContextCurrent() {
-#if NEOFLUX_GLFW_WANTS_GL_CONTEXT
-  if (impl_->window != nullptr) {
-    glfwMakeContextCurrent(impl_->window);
-    glfwSwapInterval(1);
-  }
-#else
-  // No GL context exists for non-OpenGL backends; presentation is driven by the
-  // tgfx Window's own swapchain (context->submit()), not by GLFW buffer swap.
-#endif
-}
-
-void GlfwBridge::ReleaseContext() {
-#if NEOFLUX_GLFW_WANTS_GL_CONTEXT
-  glfwMakeContextCurrent(nullptr);
-#endif
-}
-
 bool GlfwBridge::ShouldClose() const {
   return impl_->window != nullptr && glfwWindowShouldClose(impl_->window) != 0;
 }
@@ -188,10 +151,6 @@ Point GlfwBridge::GetCursorPos() const noexcept {
   double ypos = 0.0;
   glfwGetCursorPos(impl_->window, &xpos, &ypos);
   return {.x = static_cast<float>(xpos), .y = static_cast<float>(ypos)};
-}
-
-void* GlfwBridge::GetGlContext() const noexcept {
-  return static_cast<void*>(impl_->window);
 }
 
 void GlfwBridge::SetInputCallback(InputEventCallback callback) noexcept {
@@ -253,10 +212,12 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
   // InputAction (GLFW_PRESS==1, GLFW_RELEASE==0 -- the shared enum is the
   // other way around, plus the mobile kTouch/kMove entries).
   const auto btn = static_cast<MouseButton>(button);
-  const auto act = (action == GLFW_PRESS)
-                       ? InputAction::kPress
-                       : ((action == GLFW_REPEAT) ? InputAction::kRepeat
-                                                  : InputAction::kRelease);
+  InputAction act = InputAction::kRelease;
+  if (action == GLFW_PRESS) {
+    act = InputAction::kPress;
+  } else if (action == GLFW_REPEAT) {
+    act = InputAction::kRepeat;
+  }
   bridge->impl_->input_callback(btn, act,
                                 {.x = static_cast<float>(cursor_x),
                                  .y = static_cast<float>(cursor_y)});
@@ -327,8 +288,6 @@ GLFWwindow* GlfwBridge::GetNativeHandle() const noexcept { return nullptr; }
 Point GlfwBridge::GetCursorPos() const noexcept {
   return {.x = 0.0F, .y = 0.0F};
 }
-
-void* GlfwBridge::GetGlContext() const noexcept { return nullptr; }
 
 void GlfwBridge::ErrorCallback(int /*error*/, const char* /*description*/) {}
 

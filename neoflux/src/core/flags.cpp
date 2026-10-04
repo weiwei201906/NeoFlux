@@ -20,8 +20,6 @@
 
 #include <gflags/gflags.h>
 
-#include "neoflux/core/config.h"
-
 namespace neoflux {
 
 // ---------------------------------------------------------------------------
@@ -33,14 +31,13 @@ DEFINE_bool(verbose_logging, false,
 // ---------------------------------------------------------------------------
 // Event loop
 // ---------------------------------------------------------------------------
-DEFINE_int32(target_fps, neoflux::config::kDefaultTargetFps,
+DEFINE_int32(target_fps, 60,
              "Target frames per second for the event loop.");
 
 // ---------------------------------------------------------------------------
 // Render layer
 // ---------------------------------------------------------------------------
-DEFINE_uint64(render_queue_capacity,
-              neoflux::config::kDefaultRenderQueueCapacity,
+DEFINE_uint64(render_queue_capacity, 2048,
               "Capacity of the render command SPSC ring queue. "
               "One slot is reserved for full/empty distinction, so the "
               "maximum storable commands are (capacity - 1).");

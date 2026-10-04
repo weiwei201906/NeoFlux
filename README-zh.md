@@ -25,7 +25,7 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 ```
 
 - **Application 层**：运行业务逻辑，构建 Widget 树，通过 Taitank flexbox 引擎计算布局，记录渲染命令。
-- **Render 层**：从 SPSC 环形队列消费命令，使用 tgfx 执行绘制。移动端 tgfx 直接渲染到平台 Surface，桌面端通过 GLFW 创建窗口 + OpenGL 上下文。
+- **Render 层**：从 SPSC 环形队列消费命令，重放为 tgfx 绘制调用。所有平台统一由 tgfx `Window` 持有 GPU 上下文与交换链（按构建为 EGL/WGL/Metal/Vulkan/D3D12）；GLFW / 移动端 bridge 只负责承载原生窗口与输入。
 - **SPSC 环形队列**：无锁单生产者单消费者有界环形缓冲区，位运算回绕，无需互斥锁。
 
 ## 特性
@@ -42,7 +42,7 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 - 遵循 Google C++ 编码规范，clang-tidy 静态分析，-Werror 零警告
 - GLog 日志 + GFlags 命令行参数解析
 - GTest 单元测试
-- CMake 构建系统，FetchContent 自动管理第三方依赖
+- CMake 构建系统，第三方依赖以 git submodule 形式内置（离线构建、版本锁定）
 - 头文件仅含声明，模板类通过 `.inc` + 显式实例化将实现放在 `.cpp`
 
 ## 平台支持
@@ -51,7 +51,7 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 |------|------|------|
 | Linux (x86-64) | ✅ 已验证 | CI 构建 + Xvfb 无头测试 |
 | Windows (MSVC x64) | ✅ 已验证 | CI 构建 + 测试 |
-| macOS | 🚧 代码已适配，未经 CI 验证 | 走 GLFW + OpenGL 路径 |
+| macOS | 🚧 代码已适配，未经 CI 验证 | tgfx Metal 后端（`MetalWindow` 在 GLFW NSWindow 的 `CAMetalLayer` 上呈现）；Apple 上 CMake 默认 `TGFX_USE_METAL=ON` |
 | Android | 🚧 渲染与输入已接线，缺应用壳 | tgfx `EGLWindow` 持有 EGL 上下文并渲染到 `ANativeWindow`；`MobileBridge` 把触摸输入分发进控件树。仍需一个创建 Surface 并转发触摸事件的 Android 应用壳（NativeActivity/JNI）。 |
 | iOS | 🚧 需要应用壳 | `EAGLWindow::MakeFrom(CAEAGLLayer*)` 路径已定义，但本仓库尚无 ObjC++ 应用壳（视图层级）；`TgfxRenderer::Init` 会打日志并显式失败。 |
 
@@ -67,7 +67,7 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 
 - CMake 3.20+
 - 支持 C++20 的编译器（GCC 11+ / Clang 14+ / MSVC 2022）
-- Git（用于 FetchContent 下载依赖）
+- Git（用于拉取 submodule 依赖，`git clone --recurse-submodules`）
 
 ### 构建
 
@@ -120,26 +120,28 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 | `--logtostderr`               | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
 | `--log_dir`                   | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |
 
-GPU 后端**不是**运行时参数，也不是 NeoFlux 的概念：渲染层完全构建在 tgfx 之上，后端由 tgfx 自己的 `TGFX_USE_*` CMake 开关选定（每次构建恰好一个，默认 `TGFX_USE_OPENGL=ON`），详见 [渲染后端](#渲染后端编译期选择)。
+GPU 后端**不是**运行时参数，也不是 NeoFlux 的概念：渲染层完全构建在 tgfx 之上，后端由 tgfx 自己的 `TGFX_USE_*` CMake 开关选定（每次构建恰好一个；Apple 之外默认 `TGFX_USE_OPENGL=ON`，Apple 默认 Metal），详见 [GPU 后端](#gpu-后端编译期选择)。
 
 默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（`CMAKE_WIN32_EXECUTABLE`）。调试时使用 `--logtostderr --verbose_logging`。
 
-### 渲染后端（编译期选择）
+### GPU 后端（编译期选择）
 
 GPU 后端由 tgfx 负责。configure 阶段使用 tgfx 的原生开关；`thirdparty/CMakeLists.txt` 复刻 tgfx 的消解规则（固定优先级：VULKAN > D3D12 > METAL > OPENGL）并导出唯一的 `TGFX_USE_*=1` 宏，保证 NeoFlux 源码与 tgfx 实际编译的后端一致：
 
 ```bash
-cmake -S . -B build -G Ninja                                # 默认：OpenGL
+cmake -S . -B build -G Ninja                                # 默认：OpenGL（Linux/Windows/Android）
 cmake -S . -B build -G Ninja -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF   # Apple
 cmake -S . -B build -G Ninja -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   # Windows
 ```
 
-| tgfx 后端 | 状态 |
-|------|------|
-| `TGFX_USE_OPENGL` | ✅ 已实现（默认）：桌面 WGL/GLX + Android EGL（`tgfx::EGLWindow`）+ iOS EAGL 路径 |
-| `TGFX_USE_VULKAN` / `TGFX_USE_D3D12` / `TGFX_USE_METAL` | 🚧 代码路径已存在（tgfx `Window` 抽象），尚未在 CI 中验证 |
+| tgfx 后端 | 表面获取 | 状态 |
+|------|------|------|
+| `TGFX_USE_OPENGL` | Linux `tgfx::EGLWindow`（X11）/ Windows `tgfx::WGLWindow` / Android `tgfx::EGLWindow` | ✅ 已实现（Apple 之外的默认），桌面已在 Linux CI 验证 |
+| `TGFX_USE_METAL` | `tgfx::MetalWindow`，呈现到 GLFW NSWindow 的 `CAMetalLayer` | 🚧 代码路径已存在，尚未在 CI 验证（Apple 默认） |
+| `TGFX_USE_VULKAN` | `tgfx::VulkanWindow`（Win32 HWND） | 🚧 代码路径已存在，尚未在 CI 验证 |
+| `TGFX_USE_D3D12` | `tgfx::D3D12Window::MakeForHwnd` | 🚧 代码路径已存在，尚未在 CI 验证 |
 
-> 没有特殊需求请保持默认的 OpenGL；tgfx 的 CMake 会校验平台支持（如 D3D12 仅限 Windows），NeoFlux 的 `thirdparty/CMakeLists.txt` 也会在不支持的组合上给出可操作的 configure 期报错。
+> 任何情况下 NeoFlux 都不自管 GL/EGL/WGL 上下文：GLFW 窗口以 `GLFW_NO_API` 创建，上下文与交换链由 tgfx `Window` 持有，`context->submit()` 完成呈现。tgfx 是**必备**依赖（不存在没有 tgfx 的构建）：请先初始化 submodule（`git submodule update --init --recursive`），`tgfx` 目标缺失时 configure 会直接报错。tgfx 的 CMake 会校验平台支持（如 D3D12 仅限 Windows、Metal 仅限 Apple），Apple + OpenGL 组合会被直接拒绝并给出原因。
 
 ## 字体系统
 
@@ -315,9 +317,9 @@ neoflux/
 ├── README-zh.md            # 中文文档（本文件）
 ├── .clang-tidy             # clang-tidy 规则
 ├── .clang-format           # 代码风格
-├── thirdparty/             # 第三方依赖（FetchContent）
+├── thirdparty/             # 第三方依赖（git submodules）
 │   ├── fonts/              # 字体目录（开发者自行放入）
-│   └── CMakeLists.txt      # FetchContent 配置
+│   └── CMakeLists.txt      # 依赖接线与后端开关配置
 ├── include/neoflux/        # 公共头文件（仅声明）
 │   ├── core/               # 环形队列、类型定义、协程、工具
 │   ├── widget/             # Widget 系统
@@ -349,4 +351,4 @@ JNI/UI 线程调用其 `DispatchTouchEvent()`，`Application::Init` 把回调接
 app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
 ```
 
-桌面端 `platform_surface` 传 `nullptr`，框架自动创建 GLFW 窗口。
+桌面端 `platform_surface` 传 `nullptr`，框架自动创建 GLFW 窗口（`GLFW_NO_API`），随后与移动端完全一致地基于其原生句柄构建 tgfx `Window`（Linux/X11 用 `EGLWindow`、Windows 用 `WGLWindow`、Apple 用 `MetalWindow`）。任何平台都不存在 NeoFlux 自管的 GL 上下文：上下文、Surface、交换链与呈现全部归 tgfx。

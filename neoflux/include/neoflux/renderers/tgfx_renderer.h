@@ -8,18 +8,20 @@
 //
 // The GPU backend is tgfx's own COMPILE-TIME choice (tgfx's TGFX_USE_*
 // switches; exactly one is active per build, resolved in
-// thirdparty/CMakeLists.txt):
-//   - OpenGL (default): GLFW creates a GL context and this renderer attaches
-//     to it via tgfx::GLDevice::Current(), drawing into the default
-//     framebuffer that GLFW swaps.
-//   - Vulkan / D3D12 / Metal (desktop): the backend device is created on the
-//     render thread and wrapped in a tgfx::Window, which owns the swapchain;
-//     Surface::MakeFrom(context, window) + context->submit() present the
-//     frame. GLFW is created with GLFW_NO_API and does not swap buffers.
-//   - Android: tgfx::EGLWindow owns the EGL display/context/surface for the
-//     ANativeWindow handed over by the app shell and presents on submit().
+// thirdparty/CMakeLists.txt). Every platform follows the same shape: a tgfx
+// Window owns the GPU device, the graphics surface/swapchain, and presents on
+// context->submit(). Only window CREATION is platform-specific:
+//   - Desktop OpenGL:  Linux -> tgfx::EGLWindow::MakeFrom(XID)   (X11)
+//                      Win32 -> tgfx::WGLWindow::MakeFrom(HWND)
+//                      Apple -> unsupported; build with TGFX_USE_METAL.
+//   - Desktop Vulkan / D3D12 / Metal: a backend tgfx Window wraps the GLFW
+//     native window (VulkanWindow / D3D12Window / MetalWindow).
+//   - Android: tgfx::EGLWindow::MakeFrom(ANativeWindow*).
 //
-// Pimpl: all tgfx / GL / GLFW state lives in struct Impl defined in the .cpp.
+// GLFW is a pure window + input bridge: windows are created with GLFW_NO_API
+// and NeoFlux never manages a GL/EGL/WGL context itself.
+//
+// Pimpl: all tgfx / GLFW state lives in struct Impl defined in the .cpp.
 // The public header exposes no third-party types.
 // =============================================================================
 
@@ -40,17 +42,18 @@ class TgfxRenderer : public NonCopyable {
   TgfxRenderer();
   ~TgfxRenderer();
 
-  // Binds the surface and (desktop) the GLFW window whose WGL context is
-  // already current on the calling thread. Real tgfx device creation is
-  // deferred to the first BeginFrame(), which runs on the render thread.
+  // Binds the native window handed over by the platform layer (GLFWwindow*
+  // on desktop, ANativeWindow* on Android). Real tgfx window/device creation
+  // is deferred to the first BeginFrame(), which runs on the render thread.
   bool Init(int width, int height, void* native_handle = nullptr);
 
-  // Begins a new frame: (re)creates the tgfx device/surface for the current
-  // framebuffer size and clears the background.
+  // Begins a new frame: (re)creates the tgfx window/surface and clears the
+  // background.
   void BeginFrame(const Color& clear_color = {255, 255, 255, 255});
 
-  // Ends the frame: flushes and submits all tgfx recording to the GL context.
-  // Buffer swap is performed separately by the GLFW bridge.
+  // Ends the frame: flushes and submits all tgfx recording to the GPU. The
+  // tgfx Window presents the frame as part of submit(); there is no separate
+  // buffer swap.
   void EndFrame();
 
   // Replays a single render command on the current canvas.

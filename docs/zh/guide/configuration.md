@@ -16,7 +16,7 @@ GPU 后端是 tgfx 自己的编译期选择，不是 NeoFlux 的概念。用 tgf
 
 | tgfx 开关 | 平台 | 说明 |
 |------|------|------|
-| `TGFX_USE_OPENGL`（默认 ON） | 桌面 + 移动端 | 桌面通过 WGL / CGL / GLX，Android 走 `tgfx::EGLWindow`（EGL），iOS 走 EAGL 路径。唯一经过完整测试的后端。 |
+| `TGFX_USE_OPENGL`（Apple 之外的默认） | Linux / Windows / Android | Linux `tgfx::EGLWindow`（X11）、Windows `tgfx::WGLWindow`、Android `tgfx::EGLWindow`。唯一经过完整测试的后端。 |
 | `TGFX_USE_VULKAN` | 桌面 | 需要 Vulkan SDK 和支持 Vulkan 的驱动；tgfx 以 shaderc 构建。 |
 | `TGFX_USE_D3D12` | 仅 Windows | 需要 Windows SDK 的 D3D12 头文件。 |
 | `TGFX_USE_METAL` | 仅 Apple | 需要 Apple Metal 框架。 |
@@ -43,9 +43,9 @@ SDK 的 D3D12 头文件、Apple Metal 框架等），且尚未在 CI 中跑过�
 
 | 参数 | 类型 | 默认值 | 含义 |
 |------|------|--------|------|
-| `--target_fps` | `int32` | `60`（来自 `config::kDefaultTargetFps`） | 应用事件循环的目标帧率。 |
+| `--target_fps` | `int32` | `60` | 应用事件循环的目标帧率。 |
 | `--idle_fps` | `int32` | `15` | 空闲心跳帧率：连续数帧无渲染请求且无协程/定时器任务后，循环降到此帧率（输入事件立即唤醒）；`0` 表示禁用空闲降频。 |
-| `--render_queue_capacity` | `uint64` | `2048`（来自 `config::kDefaultRenderQueueCapacity`） | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
+| `--render_queue_capacity` | `uint64` | `2048` | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
 | `--render_queue_drop_log_max` | `int32` | `10` | 每个进程最多打印多少次"渲染队列已满、丢弃命令"警告。超过后静默统计，不再刷屏。仅在诊断背压时调大。 |
 | `--native_tuning` | `bool` | `true` | 平台原生调优层总开关；`false` 时所有入口均为 no-op。 |
 | `--native_render_rt_priority` | `int32` | `1` | Linux/Android：渲染线程尝试的 SCHED_FIFO 优先级（1..99）。 |
@@ -150,10 +150,9 @@ VLOG(1) << "Detailed per-frame debug info";  // 配 --verbose_logging 显示
 | 常量 | 默认值 | 含义 |
 |------|--------|------|
 | `config::kCacheLineSize` | `64` | CPU 缓存行字节数。用于 SPSC 队列头尾分占不同缓存行（避免伪共享）。Apple M 系列/新 AMD 可用 `-DNEOFLUX_CACHE_LINE_SIZE=128` 覆盖。 |
-| `config::kDefaultRenderQueueCapacity` | `2048` | `--render_queue_capacity` 的默认值。 |
-| `config::kDefaultTargetFps` | `60` | `--target_fps` 的默认值。 |
-| `config::kLongPressThresholdMs` | `500` | `Button` 长按检测阈值（毫秒）。 |
-| `config::kFlingStopThreshold` | `0.02` | 惯性滑动停止阈值（屏幕高度/秒）。 |
+
+这是唯一的编译期常量：其余一切可调项都是 gflags（见上方 flag 总表）。
+控件行为参数（长按时长、惯性阈值）由各自控件持有，不进全局配置。
 
 ### 缓存行定尺寸与运行时检测
 
@@ -181,7 +180,8 @@ cmake --build build
 机器上过度对齐无害但会浪费一点内存，因此请设为检测器报告的尺寸，而不要更大。
 完整的平台矩阵与自动启动钩子见 [平台原生调优层](./native-tuning.md)。
 
-::: tip gflag 默认值跟随 config.h
-gflag 定义使用这些常量作为默认值。改 `config.h` 里的 `kDefaultTargetFps`
-为 30 并重新编译，`--target_fps` 的默认值自动变成 30，无需修改 flag 定义。
+::: tip 编译期 vs 运行时
+只有必须为常量的值（如 `alignas` 实参）才放在 `config.h`。其余一切——
+包括 `--target_fps`、`--render_queue_capacity` 的默认值——都直接定义在
+`core/flags.cpp`，全部运行时可调。
 :::

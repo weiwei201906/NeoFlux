@@ -1,9 +1,11 @@
 # Renderer / Render Backends
 
 The render layer sits on its own thread and consumes render commands pushed from
-the application thread over the SPSC ring queue. On desktop it is the GLFW/WGL
-bridge; on mobile it is tgfx. The concrete graphics backend is chosen at runtime
-by the `--render_backend` flag.
+the application thread over the SPSC ring queue. It replays the commands as
+tgfx draws: a tgfx `Window` owns the GPU context and swapchain on every
+platform, and `context->submit()` presents each frame. The concrete GPU backend
+is tgfx's own compile-time `TGFX_USE_*` choice — there is no runtime backend
+flag (see [GPU backend](../guide/configuration.md)).
 
 ## RenderLayer
 
@@ -18,7 +20,8 @@ through:
 RenderLayer& Application::GetRenderLayer() noexcept;
 ```
 
-It owns the GL/Vulkan context, the command sink, and presents each frame.
+It owns the tgfx device (through `TgfxRenderer`), the command sink, and
+presents each frame.
 
 ## GlfwBridge (desktop window & input)
 
@@ -26,34 +29,31 @@ It owns the GL/Vulkan context, the command sink, and presents each frame.
 class GlfwBridge : public NonCopyable;
 ```
 
-Header: `<neoflux/renderers/glfw_bridge.h>`. Wraps the GLFW window, the OpenGL
-context, and translates OS input into NeoFlux callbacks.
+Header: `<neoflux/renderers/glfw_bridge.h>`. Wraps the GLFW window (created
+with `GLFW_NO_API`) and translates OS input into NeoFlux callbacks. It is a
+pure window + input bridge: GPU context, surface, and presentation belong to
+the tgfx `Window` inside `TgfxRenderer`.
 
 | Method | Signature | Notes |
 |--------|-----------|-------|
-| `Init` | `bool Init(int w, int h, std::string_view title)` | create window. |
+| `Init` | `bool Init(int w, int h, std::string_view title)` | create window (`GLFW_NO_API`). |
 | `Shutdown` | `void Shutdown() noexcept` | |
 | `PollEvents` | `void PollEvents() const` | non-blocking. |
-| `SwapBuffers` | `void SwapBuffers()` | present. |
 | `ShouldClose` | `bool ShouldClose() const` | |
 | `GetFramebufferSize` | `void GetFramebufferSize(int& w, int& h) const` | |
 | `GetWindowSize` | `void GetWindowSize(int& w, int& h) const` | |
-| `GetNativeHandle` | `GLFWwindow* GetNativeHandle() const noexcept` | |
+| `GetNativeHandle` | `GLFWwindow* GetNativeHandle() const noexcept` | handed to `TgfxRenderer::Init`. |
 | `GetCursorPos` | `Point GetCursorPos() const noexcept` | |
-| `GetGlContext` | `void* GetGlContext() const noexcept` | for tgfx. |
-| `MakeContextCurrent` | `void MakeContextCurrent()` | |
-| `ReleaseContext` | `static void ReleaseContext()` | detach. |
 
 Input callback setters: `SetInputCallback`, `SetScrollCallback`,
 `SetResizeCallback`, `SetMouseMoveCallback`.
 
-## Full gflag reference
+## gflag reference
 
 All flags are parsed from `argc/argv` passed to `Application::Init`.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--render_backend` | `string` | `"gl"` | Graphics backend. Only `gl` is available in this build; `vulkan`, `cpu`, and any unknown value are a hard startup error (no silent fallback). |
 | `--target_fps` | `int32` | `60` | Frame rate cap for the event loop. |
 | `--render_queue_capacity` | `uint64` | `2048` | SPSC ring-queue slots. Rounded up to a power of two; usable slots = capacity - 1. |
 | `--verbose_logging` | `bool` | `false` | Enable verbose (debug) logging. |
@@ -63,15 +63,15 @@ All flags are parsed from `argc/argv` passed to `Application::Init`.
 ### Example
 
 ```powershell
-.\my_app.exe --render_backend=gl --target_fps=30 --verbose_logging --logtostderr
+.\my_app.exe --target_fps=30 --verbose_logging --logtostderr
 ```
 
 ```bash
-./my_app --render_backend=gl --render_queue_capacity=4096 --log_dir=./logs
+./my_app --render_queue_capacity=4096 --log_dir=./logs
 ```
 
-::: warning No silent backend fallback
-If the selected `--render_backend` cannot be created (e.g. `vulkan` in a
-GL-only build, or any unknown value), NeoFlux logs an error and refuses to
-start rather than silently falling back to GL. Pass `--render_backend=gl`.
+::: tip Backend selection is compile-time
+There is no runtime backend flag. Switching GPU backends means re-running
+CMake with a different `TGFX_USE_*` switch and rebuilding — see
+[GPU backend](../guide/configuration.md).
 :::

@@ -9,19 +9,23 @@
 // of its own (backend selection is tgfx's TGFX_USE_* compile-time choice, see
 // thirdparty/CMakeLists.txt).
 //
-// Surface acquisition by platform:
-//   - Desktop OpenGL: GLFW owns the window and a WGL/GLX context; this file
-//     hands that already-current context to tgfx via tgfx::GLDevice::Current()
-//     and draws into the default framebuffer (id 0). GLFW swaps buffers.
-//   - Desktop Vulkan / D3D12 / Metal: a tgfx Window (VulkanWindow /
-//     D3D12Window / MetalWindow) owns the swapchain and presents on submit().
-//   - Android: tgfx::EGLWindow creates and owns the EGL display/context/
-//     surface for the ANativeWindow handed over by the app shell, and presents
-//     on submit().
+// Every platform goes through the same shape: a tgfx Window owns the GPU
+// device, the graphics surface/swapchain, and presents on context->submit().
+// Only the window CREATION is platform-specific:
+//   - Desktop OpenGL:  Linux  -> tgfx::EGLWindow::MakeFrom(XID)   (X11)
+//                      Win32 -> tgfx::WGLWindow::MakeFrom(HWND)
+//                      Apple -> unsupported; build with TGFX_USE_METAL
+//                              (tgfx's CGL path needs an ObjC++ shell).
+//   - Desktop Vulkan / D3D12 / Metal: a backend tgfx Window
+//     (VulkanWindow / D3D12Window / MetalWindow) wraps the GLFW-created
+//     native window and owns the swapchain.
+//   - Android: tgfx::EGLWindow::MakeFrom(ANativeWindow*).
 //   - iOS: the EAGLWindow path requires the ObjC++ app shell (CAEAGLLayer);
 //     not wired yet (explicit log, see EnsureDevice).
 //
-// All tgfx / GL / GLFW state lives in TgfxRenderer::Impl (Pimpl).
+// GLFW is a pure window + input bridge on every platform: the window is
+// created with GLFW_NO_API and NeoFlux never touches a GL/EGL/WGL context
+// itself. All tgfx / GLFW state lives in TgfxRenderer::Impl (Pimpl).
 // =============================================================================
 
 #include "neoflux/renderers/tgfx_renderer.h"
@@ -34,7 +38,6 @@
 #include "neoflux/core/font_manager.h"
 #include "neoflux/core/types.h"
 
-#if defined(NEOFLUX_HAVE_TGFX)
 #include "tgfx/core/Canvas.h"
 #include "tgfx/core/Color.h"
 #include "tgfx/core/Font.h"
@@ -49,18 +52,36 @@
 #include "tgfx/gpu/Context.h"
 
 #if defined(NEOFLUX_PLATFORM_DESKTOP)
+
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#if defined(TGFX_USE_OPENGL)
-// Desktop OpenGL: attach to the context GLFW made current (GLDevice.h).
-#include "tgfx/gpu/opengl/GLDevice.h"
-#include "tgfx/gpu/opengl/GLTypes.h"
-#else
-// Desktop Vulkan / D3D12 / Metal: render through the tgfx Window abstraction —
-// a backend Window owns the swapchain and presents on submit().
+
+// Expose the GLFW native-accessors so the tgfx Window can be built from the
+// platform's native window handle (XID on X11, HWND on Windows, NSWindow* on
+// Apple). The matching window-system headers come via glfw3native.h.
+#if defined(_WIN32)
+#define GLFW_EXPOSE_NATIVE_WIN32
+#elif defined(__linux__)
+#define GLFW_EXPOSE_NATIVE_X11
+#elif defined(__APPLE__)
+#define GLFW_EXPOSE_NATIVE_COCOA
+#endif
 #include <GLFW/glfw3native.h>
 
 #include "tgfx/gpu/Window.h"
-#if defined(TGFX_USE_VULKAN)
+
+#if defined(TGFX_USE_OPENGL)
+// GL interop types (GLTextureInfo) for the media module's mpv->tgfx bridge.
+#include "tgfx/gpu/opengl/GLTypes.h"
+#if defined(_WIN32)
+#include "tgfx/gpu/opengl/wgl/WGLWindow.h"
+#elif defined(__linux__)
+#include "tgfx/gpu/opengl/egl/EGLWindow.h"
+#elif defined(__APPLE__)
+#error "NeoFlux on Apple requires the tgfx Metal backend (-DTGFX_USE_METAL=ON); \
+the tgfx OpenGL backend needs an ObjC++ (CGL) app shell we do not provide."
+#endif
+#elif defined(TGFX_USE_VULKAN)
 #include "tgfx/gpu/vulkan/VulkanDevice.h"
 #include "tgfx/gpu/vulkan/VulkanWindow.h"
 #elif defined(TGFX_USE_D3D12)
@@ -69,79 +90,87 @@
 #elif defined(TGFX_USE_METAL)
 #include "tgfx/gpu/metal/MetalDevice.h"
 #include "tgfx/gpu/metal/MetalWindow.h"
-#endif
-#endif  // TGFX_USE_OPENGL
-#else
-// Mobile: tgfx owns the EGL/EAGL context and swapchain through its Window
-// abstraction; the platform only hands us the native window handle.
+#endif  // TGFX_USE_OPENGL / VULKAN / D3D12 / METAL
+
+#else  // mobile
+
 #if defined(__ANDROID__)
 #include <android/native_window.h>
 #include "tgfx/gpu/opengl/egl/EGLWindow.h"
 #endif
+
 #endif  // NEOFLUX_PLATFORM_DESKTOP
-#endif  // NEOFLUX_HAVE_TGFX
 
 namespace neoflux {
 
-#if defined(NEOFLUX_HAVE_TGFX)
 struct TgfxRenderer::Impl {
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
-  // The GLFW window whose native render surface/context backs `device`.
-  // Assigned in Init() from the native handle passed by RenderLayer::Start().
-  GLFWwindow* window = nullptr;
-#else
-  // Mobile: the native window handle from the app shell (ANativeWindow* on
-  // Android, CAEAGLLayer* on iOS once the ObjC++ shell exists).
+  // The native window handed over by the platform layer: GLFWwindow* on
+  // desktop, ANativeWindow* on Android (CAEAGLLayer* on iOS once the ObjC++
+  // shell exists). Assigned in Init(); the tgfx Window is built from it
+  // lazily in EnsureDevice() on the render thread.
   void* native_window = nullptr;
-#endif
 
-  // tgfx objects. The device wraps the window's native rendering context; the
-  // context is locked on the render thread for the whole frame.
+  // tgfx objects. The Device comes from the tgfx Window; the context is
+  // locked on the render thread for the whole frame.
   std::shared_ptr<tgfx::Device> device;
   tgfx::Context* context = nullptr;
   std::shared_ptr<tgfx::Surface> surface;
   tgfx::Canvas* canvas = nullptr;
 
-  // Window-based paths — desktop Vulkan/D3D12/Metal AND every mobile build:
-  // the tgfx Window owns the graphics surface/swapchain and presents
-  // automatically on context->submit(). Unused on the desktop-GL path, which
-  // renders into the default framebuffer that GLFW swaps.
-#if !defined(NEOFLUX_PLATFORM_DESKTOP) || !defined(TGFX_USE_OPENGL)
+  // The tgfx Window owns the graphics surface/swapchain on every platform
+  // and presents automatically on context->submit().
   std::shared_ptr<tgfx::Window> tgfx_window;
-#endif
 
   std::shared_ptr<tgfx::Typeface> typeface;
   FontManager font_manager;
 
-  int width = 0;    // Logical (window) size, layout coordinates.
+  int width = 0;  // Logical (window) size, layout coordinates.
   int height = 0;
-  int fb_width = 0;  // Physical framebuffer size (for the render target).
-  int fb_height = 0;
   bool ready = false;
 
-  // Acquires the tgfx device/context for the window's native rendering
-  // surface. Must be called on the thread where that context is current
-  // (desktop OpenGL) or where rendering will happen (all other paths).
+  // Builds the tgfx Window for the platform's native window and locks the
+  // render context. Called on the render thread from BeginFrame().
   bool EnsureDevice() {
     if (ready) {
       return true;
     }
-#if defined(NEOFLUX_PLATFORM_DESKTOP) && defined(TGFX_USE_OPENGL)
-    // Attach to the WGL/GLX context GLFW already made current on this thread.
-    auto gl_device = tgfx::GLDevice::Current();
-    if (gl_device == nullptr) {
-      LOG(ERROR) << "tgfx::GLDevice::Current() returned nullptr; no current "
-                    "GL context on this thread";
+#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#if defined(TGFX_USE_OPENGL)
+    // Desktop OpenGL: tgfx creates and owns the EGL/WGL context and surface
+    // for the native window; NeoFlux holds no GL context of its own.
+#if defined(_WIN32)
+    auto* hwnd = glfwGetWin32Window(static_cast<GLFWwindow*>(native_window));
+    if (hwnd == nullptr) {
+      LOG(ERROR) << "glfwGetWin32Window() returned nullptr";
       return false;
     }
-    device = gl_device;
-    LOG(INFO) << "tgfx GL device attached to existing GLFW context";
-#elif defined(NEOFLUX_PLATFORM_DESKTOP)
-    // Desktop Vulkan / D3D12 / Metal: create the backend device and wrap the
-    // GLFW native window in a tgfx Window. Only device/window creation is
-    // backend-specific; the per-frame drawing code is shared through the
-    // tgfx Window/Surface abstraction.
-#if defined(TGFX_USE_VULKAN)
+    tgfx_window = tgfx::WGLWindow::MakeFrom(hwnd);
+    if (tgfx_window == nullptr) {
+      LOG(ERROR) << "tgfx::WGLWindow::MakeFrom(HWND) failed";
+      return false;
+    }
+#elif defined(__linux__)
+    // X11: the EGL native window is the XID (Window) of the GLFW window.
+    const auto xid = glfwGetX11Window(static_cast<GLFWwindow*>(native_window));
+    if (xid == 0) {
+      LOG(ERROR) << "glfwGetX11Window() returned 0 (is GLFW using the X11 "
+                    "backend?)";
+      return false;
+    }
+    tgfx_window = tgfx::EGLWindow::MakeFrom(xid);
+    if (tgfx_window == nullptr) {
+      LOG(ERROR) << "tgfx::EGLWindow::MakeFrom(XID) failed";
+      return false;
+    }
+#else
+    LOG(ERROR) << "tgfx OpenGL backend is not supported on this desktop "
+                  "platform (Apple requires -DTGFX_USE_METAL=ON)";
+    return false;
+#endif
+    device = tgfx_window->getDevice();
+    LOG(INFO) << "tgfx GL window surface ready (" << width << "x" << height
+              << ")";
+#elif defined(TGFX_USE_VULKAN)
     // VulkanWindow only exposes a Win32 (HWND) target on Windows in the pinned
     // tgfx revision; see the header for the Android/OHOS overloads.
 #if defined(_WIN32)
@@ -151,7 +180,8 @@ struct TgfxRenderer::Impl {
       return false;
     }
     device = vk_device;
-    tgfx_window = tgfx::VulkanWindow::MakeFrom(glfwGetWin32Window(window), vk_device);
+    tgfx_window = tgfx::VulkanWindow::MakeFrom(glfwGetWin32Window(
+        static_cast<GLFWwindow*>(native_window)), vk_device);
 #else
     LOG(ERROR) << "tgfx's Vulkan backend has no window binding for this "
                   "platform in this revision (only Win32/Android/OHOS)";
@@ -164,7 +194,9 @@ struct TgfxRenderer::Impl {
       return false;
     }
     device = d3d_device;
-    tgfx_window = tgfx::D3D12Window::MakeForHwnd(glfwGetWin32Window(window), d3d_device);
+    tgfx_window = tgfx::D3D12Window::MakeForHwnd(
+        glfwGetWin32Window(static_cast<GLFWwindow*>(native_window)),
+        d3d_device);
 #elif defined(TGFX_USE_METAL)
     auto mtl_device = tgfx::MetalDevice::Make();
     if (mtl_device == nullptr) {
@@ -174,7 +206,8 @@ struct TgfxRenderer::Impl {
     device = mtl_device;
     // GLFW owns the NSWindow when it was created with GLFW_NO_API; attach a
     // CAMetalLayer to its content view and let tgfx present into it.
-    NSWindow* native_window = glfwGetCocoaWindow(window);
+    NSWindow* native_window = glfwGetCocoaWindow(
+        static_cast<GLFWwindow*>(this->native_window));
     if (native_window == nil) {
       LOG(ERROR) << "glfwGetCocoaWindow() returned nil";
       return false;
@@ -186,14 +219,11 @@ struct TgfxRenderer::Impl {
     native_window.contentView.layer = layer;
     native_window.contentView.wantsLayer = YES;
     tgfx_window = tgfx::MetalWindow::MakeFrom(layer, mtl_device);
-#endif  // backend selection
-    if (tgfx_window == nullptr) {
-      LOG(ERROR) << "Failed to create the tgfx Window for the selected backend";
-      return false;
-    }
 #else
-  // Mobile: tgfx creates and owns the EGL display/context/surface for the
-  // ANativeWindow and presents (eglSwapBuffers) on context->submit().
+    LOG(ERROR) << "No tgfx GPU backend enabled in this build";
+    return false;
+#endif  // TGFX_USE_OPENGL / VULKAN / D3D12 / METAL
+#else   // mobile
 #if defined(__ANDROID__)
     auto* anw = static_cast<ANativeWindow*>(native_window);
     if (anw == nullptr) {
@@ -206,7 +236,8 @@ struct TgfxRenderer::Impl {
       return false;
     }
     device = tgfx_window->getDevice();
-    LOG(INFO) << "tgfx EGLWindow surface ready (" << width << "x" << height << ")";
+    LOG(INFO) << "tgfx EGLWindow surface ready (" << width << "x" << height
+              << ")";
 #elif defined(__APPLE__) && defined(TARGET_OS_IPHONE)
     // iOS: EAGLWindow::MakeFrom(CAEAGLLayer*) is the equivalent path, but the
     // layer is obtained from the ObjC++ app shell (UIView hierarchy), which
@@ -218,8 +249,11 @@ struct TgfxRenderer::Impl {
     LOG(ERROR) << "No tgfx Window binding for this mobile platform";
     return false;
 #endif  // __ANDROID__ / iOS
-#endif  // desktop-GL / desktop-other / mobile
+#endif  // NEOFLUX_PLATFORM_DESKTOP
 
+    if (device == nullptr) {
+      device = tgfx_window->getDevice();
+    }
     context = device->lockContext();
     if (context == nullptr) {
       LOG(ERROR) << "tgfx device->lockContext() returned nullptr";
@@ -229,35 +263,25 @@ struct TgfxRenderer::Impl {
     return true;
   }
 };
-#else
-struct TgfxRenderer::Impl {
-  int width = 0;
-  int height = 0;
-};
-#endif  // NEOFLUX_HAVE_TGFX
 
 TgfxRenderer::TgfxRenderer() : impl_(std::make_unique<Impl>()) {}
 
 TgfxRenderer::~TgfxRenderer() = default;
 
 bool TgfxRenderer::Init(int width, int height, void* native_handle) {
-#if defined(NEOFLUX_HAVE_TGFX)
   impl_->width = width;
   impl_->height = height;
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
-  // Desktop passes the GLFWwindow*; the backend device is created lazily in
-  // BeginFrame() on the render thread, where the native context is valid.
-  impl_->window = static_cast<GLFWwindow*>(native_handle);
-#else
-  // Mobile: the app shell hands over the native window (ANativeWindow* on
-  // Android). tgfx::EGLWindow creates and owns the EGL context/surface from
-  // it lazily in EnsureDevice() on the render thread.
+  // Desktop: the GLFWwindow* (created with GLFW_NO_API). Mobile: the native
+  // window (ANativeWindow* on Android). The tgfx Window — and through it the
+  // device/context/surface — is created lazily in EnsureDevice() on the
+  // render thread.
   if (native_handle == nullptr) {
-    LOG(ERROR) << "TgfxRenderer::Init: null native window from the app shell";
+    LOG(ERROR) << "TgfxRenderer::Init: null native window from the platform "
+                  "layer";
     return false;
   }
   impl_->native_window = native_handle;
-#endif
+
   // Fonts live in the project's assets/fonts/ (not thirdparty/). Probe the
   // working-directory relative locations the binary can be launched from; on
   // mobile the app shell is responsible for extracting bundled assets to one
@@ -278,18 +302,9 @@ bool TgfxRenderer::Init(int width, int height, void* native_handle) {
     LOG(WARNING) << "No fonts found in thirdparty/fonts; text will be blank.";
   }
   return true;
-#else
-  // tgfx is not compiled into this build (NEOFLUX_HAVE_TGFX undefined).
-  LOG(ERROR) << "TgfxRenderer::Init: tgfx is not available in this build";
-  (void)width;
-  (void)height;
-  (void)native_handle;
-  return false;
-#endif
 }
 
 void TgfxRenderer::BeginFrame(const Color& clear_color) {
-#if defined(NEOFLUX_HAVE_TGFX)
   if (!impl_->EnsureDevice()) {
     return;
   }
@@ -300,10 +315,11 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
   int win_w = impl_->width;
   int win_h = impl_->height;
 #if defined(NEOFLUX_PLATFORM_DESKTOP)
-  glfwGetFramebufferSize(impl_->window, &fb_w, &fb_h);
+  auto* window = static_cast<GLFWwindow*>(impl_->native_window);
+  glfwGetFramebufferSize(window, &fb_w, &fb_h);
   int queried_w = 0;
   int queried_h = 0;
-  glfwGetWindowSize(impl_->window, &queried_w, &queried_h);
+  glfwGetWindowSize(window, &queried_w, &queried_h);
   if (queried_w > 0 && queried_h > 0) {
     win_w = queried_w;
     win_h = queried_h;
@@ -335,35 +351,15 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
   const float sy = win_h > 0 ? static_cast<float>(fb_h) /
                                    static_cast<float>(win_h)
                              : 1.0F;
-#if defined(NEOFLUX_PLATFORM_DESKTOP) && defined(TGFX_USE_OPENGL)
-  // (Re)create the surface on the GL default framebuffer (id 0) whenever the
-  // framebuffer size changes. Bottom-left origin matches GL; tgfx flips the
-  // canvas internally so drawing uses y-down logical coordinates.
-  if (impl_->surface == nullptr || fb_w != impl_->fb_width ||
-      fb_h != impl_->fb_height) {
-    impl_->fb_width = fb_w;
-    impl_->fb_height = fb_h;
-    tgfx::GLFrameBufferInfo frame_buffer;  // id=0 (default fb), GL_RGBA8.
-    tgfx::BackendRenderTarget render_target(frame_buffer, fb_w, fb_h);
-    impl_->surface = tgfx::Surface::MakeFrom(
-        impl_->context, render_target, tgfx::ImageOrigin::BottomLeft);
-    if (impl_->surface == nullptr) {
-      LOG(ERROR) << "tgfx Surface::MakeFrom(default framebuffer) failed";
-      return;
-    }
-  }
-#else
-  // tgfx Window paths (desktop Vulkan/D3D12/Metal and every mobile build):
-  // the Window owns the render target (its swapchain backbuffer) and picks up
-  // size changes itself, so a surface is acquired per frame rather than kept
-  // across resizes. Window surfaces use a top-left origin, unlike the GL
-  // default framebuffer.
+
+  // The tgfx Window owns the render target (its swapchain backbuffer) and
+  // picks up size changes itself, so a surface is acquired per frame rather
+  // than kept across resizes.
   impl_->surface = tgfx::Surface::MakeFrom(impl_->context, impl_->tgfx_window);
   if (impl_->surface == nullptr) {
     LOG(ERROR) << "tgfx Surface::MakeFrom(context, window) failed";
     return;
   }
-#endif
 
   impl_->canvas = impl_->surface->getCanvas();
   if (impl_->canvas == nullptr) {
@@ -374,41 +370,27 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
   impl_->canvas->clear(
       tgfx::Color::FromRGBA(clear_color.r, clear_color.g, clear_color.b,
                             clear_color.a));
-#else
-  (void)clear_color;
-#endif
 }
 
 void TgfxRenderer::EndFrame() {
-#if defined(NEOFLUX_HAVE_TGFX)
   if (impl_->canvas != nullptr) {
     impl_->canvas->restore();
   }
   impl_->canvas = nullptr;
-#if defined(NEOFLUX_PLATFORM_DESKTOP) && defined(TGFX_USE_OPENGL)
-  // Submit recorded draws to the GL context; GLFW then swaps buffers.
-  if (impl_->context != nullptr) {
-    impl_->context->flushAndSubmit();
-  }
-#else
-  // Window paths (desktop Vulkan/D3D12/Metal and every mobile build):
   // flush returns a Recording that is submitted to the GPU; submitting on a
-  // Window-backed surface also presents it (swapchain flip / eglSwapBuffers),
-  // so GLFW does NOT swap buffers for these paths.
+  // Window-backed surface also presents it (swapchain flip / eglSwapBuffers /
+  // wglSwapBuffers), so no platform-side buffer swap exists anywhere.
   if (impl_->context != nullptr) {
     auto recording = impl_->context->flush();
     if (recording != nullptr) {
       impl_->context->submit(std::move(recording));
     }
   }
-#endif
   // Drop the surface so a resize is picked up next frame.
   impl_->surface.reset();
-#endif
 }
 
 void TgfxRenderer::Execute(const RenderCommand& command) {
-#if defined(NEOFLUX_HAVE_TGFX)
   if (impl_->canvas == nullptr) {
     return;
   }
@@ -458,15 +440,16 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
       break;
 #if defined(TGFX_USE_OPENGL)
     case RenderCommandType::kDrawTexture: {
-      // Media module (GL backend only): wrap an externally-produced GL texture
-      // (mpv render context) as a tgfx BackendTexture and draw it into the
-      // destination rect. MakeFrom does NOT take ownership of the GL texture;
-      // the producer (mpv) manages its lifetime. The texture id stays the same
-      // across frames; only its contents are updated by mpv, so re-creating
-      // the Image each frame is cheap (just a handle, no GPU upload).
-      // On non-OpenGL tgfx builds this case does not exist at all: the media
-      // module is bound to OpenGL (see neoflux/CMakeLists.txt) and MediaWidget
-      // degrades to a placeholder, so no kDrawTexture command is ever sent.
+      // Media module (GL interop only): wrap an externally-produced GL
+      // texture (mpv render context) as a tgfx BackendTexture and draw it
+      // into the destination rect. MakeFrom does NOT take ownership of the
+      // GL texture; the producer (mpv) manages its lifetime. The texture id
+      // stays the same across frames; only its contents are updated by mpv,
+      // so re-creating the Image each frame is cheap (just a handle, no GPU
+      // upload). On non-OpenGL tgfx builds this case does not exist at all:
+      // the media module is bound to OpenGL (see neoflux/CMakeLists.txt) and
+      // MediaWidget degrades to a placeholder, so no kDrawTexture command is
+      // ever sent.
       tgfx::GLTextureInfo gl_info{};
       gl_info.id = command.texture_id;
       gl_info.target = 0x0DE1U;   // GL_TEXTURE_2D
@@ -488,7 +471,6 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
     default:
       break;
   }
-#endif
 }
 
 void TgfxRenderer::Resize(int width, int height) {

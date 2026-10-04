@@ -3,14 +3,15 @@
 // =============================================================================
 // NeoFlux - Platform Bridge
 //
-// Abstract interface for platform-specific window/context management.
+// Abstract interface for platform-specific window/input management.
 // Desktop implementations use GLFW; mobile implementations use the native
-// platform API (ANativeWindow on Android, CAMetalLayer/EAGL on iOS).
+// platform API (ANativeWindow on Android, UIView/CALayer on iOS).
 //
-// The render layer owns a PlatformBridge and uses it to:
-//   - Make the GL context current on the render thread
-//   - Swap the front/back buffers
-//   - Query window dimensions
+// Bridges are pure window + input carriers: the graphics surface, context,
+// and presentation belong to the tgfx Window (see TgfxRenderer). The render
+// layer owns a PlatformBridge and uses it to:
+//   - Query window dimensions and the native window handle
+//   - Poll platform events
 //   - Dispatch input events to the application
 // =============================================================================
 
@@ -51,13 +52,6 @@ using InputEventCallback =
 class PlatformBridge {
  public:
   virtual ~PlatformBridge() = default;
-
-  // Makes the platform's rendering context current on the calling thread.
-  // Must be called on the render thread before any GL/tgfx operations.
-  virtual void MakeContextCurrent() = 0;
-
-  // Swaps the front and back buffers (presents the rendered frame).
-  virtual void SwapBuffers() = 0;
 
   // Returns the current window width in pixels.
   [[nodiscard]] virtual int GetWidth() const noexcept = 0;

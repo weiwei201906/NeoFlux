@@ -21,7 +21,6 @@
 #include "native/native_tuning.h"
 #include "neoflux/renderers/glfw_bridge.h"
 #include "neoflux/renderers/platform_bridge.h"
-#include "neoflux/core/config.h"
 #include "neoflux/core/flags.h"
 #include "neoflux/renderers/render_command.h"
 #include "neoflux/renderers/tgfx_renderer.h"
@@ -89,8 +88,9 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   renderer_ = std::make_unique<TgfxRenderer>();
 
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  // Desktop: create GLFW window + OpenGL context, tgfx renders into the
-  // GLFW framebuffer. GLFW handles windowing, input, and buffer swap.
+  // Desktop: create the GLFW window (GLFW_NO_API); the tgfx Window built in
+  // TgfxRenderer::EnsureDevice() owns the GPU context, surface, and
+  // presentation. GLFW only handles windowing and input.
   glfw_bridge_ = std::make_unique<GlfwBridge>();
   if (!glfw_bridge_->Init(width, height, title)) {
     LOG(ERROR) << "Failed to initialize GLFW bridge";
@@ -98,32 +98,19 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
     return false;
   }
 
-  // Temporarily make the GL context current on the main thread so that
-  // renderer_->Init() can load GL function pointers via glfwGetProcAddress.
-  // On Windows, wglGetProcAddress requires a current context; without it
-  // all function pointers resolve to NULL and the first frame renders
-  // nothing (window appears black until an input event triggers a re-render
-  // after the render thread has made the context current).
-  glfw_bridge_->MakeContextCurrent();
-
   if (!renderer_->Init(width, height, glfw_bridge_->GetNativeHandle())) {
     LOG(ERROR) << "Failed to initialize tgfx renderer";
-    GlfwBridge::ReleaseContext();
     glfw_bridge_->Shutdown();
     glfw_bridge_.reset();
     return false;
   }
 
-  // Release the context from the main thread; the render thread will
-  // acquire it exclusively via MakeContextCurrent() in RenderLoop().
-  GlfwBridge::ReleaseContext();
-
   // Note: renderer_->Init() already stored the logical window size for
   // u_resolution (shader layout coordinates). The actual framebuffer size
   // (which may differ due to DPI scaling) is queried each frame in
-  // TgfxRenderer::BeginFrame() and used only for glViewport. Do NOT call
-  // Resize() here with the framebuffer size -- that would corrupt u_resolution
-  // and make layout coordinates mismatch the shader.
+  // TgfxRenderer::BeginFrame(). Do NOT call Resize() here with the
+  // framebuffer size -- that would corrupt u_resolution and make layout
+  // coordinates mismatch the shader.
 #else
   // Mobile: tgfx owns the EGL context and swapchain (tgfx::EGLWindow); the
   // platform bridge only carries the native window and touch input.
@@ -148,11 +135,11 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   running_.store(true);
   render_thread_ = std::make_unique<std::thread>([this]() { RenderLoop(); });
 
-  // Block until the render thread has made the GL context current and
-  // performed a preliminary frame to initialise GL resources (shaders,
-  // FBOs, font textures). Without this, the first real frame submitted by
-  // the application can race GL initialisation and render partially or
-  // not at all until an input event triggers a second frame.
+  // Block until the render thread is up and will service submitted frames
+  // promptly. The tgfx Window/device is created lazily in BeginFrame() on the
+  // render thread, so the first real frame triggers tgfx initialisation
+  // (surfaces, fonts) there; the wait merely avoids the first frame racing
+  // thread startup.
   if (render_ready_future_.wait_for(std::chrono::seconds(5)) ==
       std::future_status::timeout) {
     LOG(WARNING) << "Render thread did not become ready within 5s; "
@@ -170,9 +157,9 @@ void RenderLayer::Stop() {
 
   LOG(INFO) << "RenderLayer stopping";
 
-  // Wake the render thread so it can exit the wait loop. The render thread
-  // releases the WGL context on itself before returning (see RenderLoop), so by
-  // the time join() returns it is safe for the App thread to destroy the window.
+  // Wake the render thread so it can exit the wait loop. join() returns after
+  // the render thread has drained its frame state, so by the time it returns
+  // it is safe for the App thread to destroy the window.
   Wake();
 
   if (render_thread_ != nullptr && render_thread_->joinable()) {
@@ -181,14 +168,14 @@ void RenderLayer::Stop() {
   render_thread_.reset();
 
   // Intentionally abandon the renderer rather than destroy it here. tgfx's
-  // GLDevice teardown requires the WGL context to be current AND a full
-  // releaseAll() protocol that this app does not implement; destroying it on the
-  // App thread deadlocks (it issues GL calls / blocks on a context lock owned by
-  // the render thread), while destroying it on the render thread trips tgfx's
-  // debug assertions. The process is about to exit, so we leak the small host-side
-  // object and let the OS reclaim all GPU resources when the window/GL context is
-  // destroyed below.
-  renderer_.release();
+  // Device teardown requires a full releaseAll() protocol that this app does
+  // not implement, and destroying it from a non-owning thread can deadlock on
+  // the device's context lock. The process is about to exit, so we leak the
+  // small host-side object and let the OS reclaim all GPU resources when the
+  // window and the tgfx Window's context are destroyed below.
+  // Intentional leak: unique_ptr::release() discards the pointer on purpose
+  // (the OS reclaims everything at process exit; see the comment above).
+  renderer_.release();  // NOLINT(bugprone-unused-return-value)
 
   mobile_bridge_.reset();
   if (glfw_bridge_ != nullptr) {
@@ -251,20 +238,21 @@ void RenderLayer::RunOnRenderThread(std::function<void()> task) {
     return;
   }
   if (!running_.load()) {
-    // No render thread is alive to service the task. The GL context/window has
-    // already been torn down, so any GL names the task would free are reclaimed
-    // by the driver. Drop the task rather than run it on this thread (which has
-    // no current GL context and would itself crash).
+    // No render thread is alive to service the task. The window/tgfx device
+    // have already been torn down, so any GPU resources the task would free
+    // are reclaimed by the driver/process teardown. Drop the task rather than
+    // run it on this thread (which has no render device and would itself
+    // crash).
     LOG(WARNING) << "RunOnRenderThread: render thread not running, dropping task";
     return;
   }
   // Signal completion once the render thread has executed the wrapped task, so
-  // the caller (App thread) blocks until GL teardown has actually happened.
+  // the caller (App thread) blocks until teardown has actually happened.
   auto done = std::make_shared<std::promise<void>>();
   std::future<void> fut = done->get_future();
   {
     std::scoped_lock lock(frame_mutex_);
-    render_tasks_.push_back([task = std::move(task), done]() mutable {
+    render_tasks_.emplace_back([task = std::move(task), done]() mutable {
       task();
       done->set_value();
     });
@@ -333,19 +321,10 @@ void RenderLayer::RenderLoop() {
 
   LOG(INFO) << "Render thread started";
 
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-  // Make the OpenGL context current on the render thread. The context was
-  // created in GlfwBridge::Init but not bound, so this thread owns it
-  // exclusively for all rendering and buffer swap operations.
-  if (glfw_bridge_ != nullptr) {
-    glfw_bridge_->MakeContextCurrent();
-  }
-#endif
-
-  // Signal readiness immediately: the GL context is current and the renderer
-  // has been initialised in Start(). The first real frame from the
-  // application will trigger BeginFrame() which lazily initialises GL
-  // resources (shaders, FBOs, font textures) on this thread.
+  // Signal readiness immediately: the tgfx Window/device is created lazily in
+  // BeginFrame() on this thread. The first real frame from the application
+  // will trigger BeginFrame() which initialises tgfx resources (fonts,
+  // surfaces) on this thread.
   render_ready_.set_value();
 
   // Frame state machine: only render commands between kBeginFrame and
@@ -370,9 +349,9 @@ void RenderLayer::RenderLoop() {
       pump = render_pump_;  // copy under the lock; invoke outside it
     }
 
-    // Pull any newly-decoded external frame (e.g. mpv -> GL texture) while the
-    // GL context is current, BEFORE executing queued draw commands, so the
-    // composited texture contents are up to date for this frame.
+    // Pull any newly-decoded external frame (e.g. mpv -> GL texture) before
+    // executing queued draw commands, so the composited texture contents are
+    // up to date for this frame.
     if (pump != nullptr) {
       pump();
     }
@@ -390,11 +369,8 @@ void RenderLayer::RenderLoop() {
         case RenderCommandType::kEndFrame:
           if (in_frame && renderer_ != nullptr) {
             renderer_->EndFrame();
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-            if (glfw_bridge_ != nullptr) {
-              glfw_bridge_->SwapBuffers();
-            }
-#endif
+            // Presentation is part of EndFrame(): the tgfx Window submits the
+            // recording and flips its own swapchain. No GLFW swap here.
             ++frames_rendered;
             if (frames_rendered % 60 == 0) {
               LOG(INFO) << "Rendered " << frames_rendered << " frames";
@@ -424,15 +400,6 @@ void RenderLayer::RenderLoop() {
       t();
     }
   }
-
-  // Detach the WGL context from this thread. This MUST happen before the App
-  // thread's glfwDestroyWindow/glfwTerminate runs, otherwise WGL blocks waiting
-  // for the context that is still current on the (now-exiting) render thread.
-#ifdef NEOFLUX_PLATFORM_DESKTOP
-  if (glfw_bridge_ != nullptr) {
-    glfw_bridge_->ReleaseContext();
-  }
-#endif
 
   LOG(INFO) << "Render thread exiting";
 }

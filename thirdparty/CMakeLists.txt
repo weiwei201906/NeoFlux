@@ -77,21 +77,41 @@ add_subdirectory(freetype)
 #
 # The GPU backend is tgfx's own concept. Pick exactly one of tgfx's native
 # options at configure time, e.g.:
-#   -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF   (Apple)
-#   -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   (Windows)
-#   -DTGFX_USE_VULKAN=ON -DTGFX_USE_OPENGL=OFF  (Windows/macOS/OHOS/Android)
+#   -DTGFX_USE_METAL=ON  (Apple; the platform default below)
+#   -DTGFX_USE_D3D12=ON  (Windows)
+#   -DTGFX_USE_VULKAN=ON (Windows/OHOS)
+#   -DTGFX_USE_OPENGL=ON (Linux/Windows/Android; the desktop default)
 # tgfx itself validates platform support and enforces single-backend builds;
 # there is deliberately no runtime backend flag (tgfx permits exactly one GPU
 # backend per build). Switching backends = reconfigure + rebuild.
 #
 # NeoFlux code contains NO backend branching of its own: the renderer only
-# consumes tgfx's Device/Window/Surface abstractions. The one mirrored macro
-# below exists because tgfx defines TGFX_USE_* PRIVATE (consumers cannot see
-# them); the media module's GL interop and the renderer's surface acquisition
-# need the same knowledge in NeoFlux sources, under tgfx's own naming.
+# consumes tgfx's Device/Window/Surface abstractions. The mirrored TGFX_USE_*
+# macro below exists because tgfx defines TGFX_USE_* PRIVATE (consumers cannot
+# see them); the media module's GL interop and the renderer's surface
+# acquisition need the same knowledge in NeoFlux sources, under tgfx's own
+# naming.
+#
+# Platform defaults: Apple defaults to Metal (NeoFlux's Apple rendering goes
+# through tgfx's MetalWindow; tgfx's OpenGL/CGL path would require an ObjC++
+# app shell that does not exist yet). Everything else defaults to OpenGL,
+# which covers Linux/Windows desktop (EGLWindow/WGLWindow) and Android
+# (EGLWindow).
 # ---------------------------------------------------------------------------
-set(TGFX_USE_OPENGL ON CACHE BOOL "tgfx OpenGL/EGL backend (desktop + Android)")
-set(TGFX_USE_METAL OFF CACHE BOOL "tgfx Metal backend (Apple only)")
+if(APPLE)
+  set(TGFX_USE_METAL ON CACHE BOOL "tgfx Metal backend (Apple only)")
+  set(TGFX_USE_OPENGL OFF CACHE BOOL "tgfx OpenGL/EGL backend (Linux/Win32/Android)")
+  if(TGFX_USE_OPENGL)
+    message(FATAL_ERROR
+      "TGFX_USE_OPENGL is not supported on Apple: NeoFlux's Apple rendering "
+      "path requires the tgfx Metal backend (-DTGFX_USE_METAL=ON, the "
+      "default). tgfx's OpenGL/CGL window needs an ObjC++ app shell that "
+      "NeoFlux does not provide.")
+  endif()
+else()
+  set(TGFX_USE_OPENGL ON CACHE BOOL "tgfx OpenGL/EGL backend (Linux/Win32/Android)")
+  set(TGFX_USE_METAL OFF CACHE BOOL "tgfx Metal backend (Apple only)")
+endif()
 set(TGFX_USE_D3D12 OFF CACHE BOOL "tgfx D3D12 backend (Windows only)")
 set(TGFX_USE_VULKAN OFF CACHE BOOL "tgfx Vulkan backend")
 set(TGFX_USE_WEBGPU OFF CACHE BOOL "tgfx WebGPU backend (web only)")

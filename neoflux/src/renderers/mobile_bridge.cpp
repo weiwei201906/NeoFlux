@@ -62,15 +62,6 @@ class MobileBridge final : public PlatformBridge {
 
   ~MobileBridge() override = default;
 
-  // No-op: the EGL/EAGL context is created, made current, and presented by
-  // tgfx (EGLWindow / EAGLWindow) on the render thread. Kept for interface
-  // uniformity with the desktop bridge.
-  void MakeContextCurrent() override {}
-
-  // No-op: presentation happens inside tgfx's context->submit() (which runs
-  // eglSwapBuffers on the Window's surface).
-  void SwapBuffers() override {}
-
   [[nodiscard]] int GetWidth() const noexcept override { return width_; }
   [[nodiscard]] int GetHeight() const noexcept override { return height_; }
 

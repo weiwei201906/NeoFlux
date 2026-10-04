@@ -102,17 +102,14 @@ target_include_directories(neoflux
 )
 
 # ---------------------------------------------------------------------------
-# OpenGL link dependency -- GL backend module only
+# GPU backend link dependency
 #
-# All drawing goes through tgfx; the framework itself contains no GL calls
-# (the former self-managed GL loader under src/native/gl was dead code and has
-# been removed). The system OpenGL library is therefore linked only for the
-# OpenGL backend build, where the window bridge and tgfx's GL device need it.
-# Vulkan/D3D12/Metal builds carry zero OpenGL dependency.
+# All drawing goes through tgfx, which creates and owns the GPU context and
+# surface for the platform window (EGL/WGL on the OpenGL backend, Vulkan/
+# D3D12/Metal devices elsewhere). NeoFlux contains no GL calls of its own, so
+# there is deliberately no find_package(OpenGL) here: tgfx links the windowing
+# system's GL/EGL libraries itself (see tgfx's CMakeLists.txt).
 # ---------------------------------------------------------------------------
-if(TGFX_USE_OPENGL)
-  find_package(OpenGL REQUIRED)
-endif()
 
 # ---------------------------------------------------------------------------
 # libmpv (optional desktop media backend) -- BOUND TO THE OPENGL BACKEND
@@ -203,22 +200,25 @@ target_link_libraries(neoflux
     freetype
 )
 
-# The system OpenGL library is part of the GL backend module only (see the
-# comment above); other backends must not inherit it.
-if(TGFX_USE_OPENGL)
-  target_link_libraries(neoflux PUBLIC OpenGL::GL)
-endif()
+# The system OpenGL library is not linked at all: NeoFlux has no GL calls,
+# and tgfx brings its own EGL/WGL/GLES linkage (see the backend comment above).
 
-# tgfx is the required rendering backend: it performs all 2D rasterization,
-# text layout, and GPU dispatch. GLFW remains only a window/context bridge.
-if(TARGET tgfx)
-  target_link_libraries(neoflux PRIVATE tgfx)
-  target_compile_definitions(neoflux PRIVATE NEOFLUX_HAVE_TGFX=1)
-  target_include_directories(neoflux PRIVATE
-    ${tgfx_SOURCE_DIR}/src
-    ${tgfx_SOURCE_DIR}/include
-  )
+# tgfx is the REQUIRED rendering backend: it performs all 2D rasterization,
+# text layout, GPU dispatch, and owns the platform's graphics surface. There
+# is no build without it. Initialize the thirdparty/tgfx submodule
+# (git submodule update --init --recursive) before configuring.
+if(NOT TARGET tgfx)
+  message(FATAL_ERROR
+    "tgfx was not found as a CMake target. NeoFlux requires tgfx to build: "
+    "make sure the thirdparty/tgfx submodule is initialized "
+    "(git submodule update --init --recursive) and add_subdirectory(tgfx) "
+    "runs in thirdparty/CMakeLists.txt.")
 endif()
+target_link_libraries(neoflux PRIVATE tgfx)
+target_include_directories(neoflux PRIVATE
+  ${tgfx_SOURCE_DIR}/src
+  ${tgfx_SOURCE_DIR}/include
+)
 
 # GLFW is only available on desktop platforms.
 if(TARGET glfw)

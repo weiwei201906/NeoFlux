@@ -5,6 +5,11 @@
 //
 // GLFW window/input bridge for desktop. Pimpl: all state (GLFWwindow*,
 // callbacks, cursor cache) lives in struct Impl defined in glfw_bridge.cpp.
+//
+// GLFW is a pure window + input bridge: the window is created with
+// GLFW_NO_API and all GL/EGL/WGL context management belongs to the tgfx
+// Window (see TgfxRenderer). There is deliberately no context or swap API
+// here.
 // =============================================================================
 
 #ifndef NEOFLUX_RENDER_GLFW_BRIDGE_H_
@@ -36,8 +41,9 @@ using ResizeCallback = std::function<void(int width, int height)>;
 // Callback type for mouse cursor move events.
 using MouseMoveCallback = std::function<void(const Point& pos)>;
 
-// Desktop window and input bridge using GLFW.
-class GlfwBridge : public NonCopyable {
+// Desktop window and input bridge using GLFW. Copy/move are deleted by the
+// NonCopyable base, so the special-member-functions rule is satisfied there.
+class GlfwBridge : public NonCopyable {  // NOLINT(cppcoreguidelines-special-member-functions)
  public:
   GlfwBridge();
   ~GlfwBridge();
@@ -50,9 +56,6 @@ class GlfwBridge : public NonCopyable {
 
   // Polls for window and input events (non-blocking).
   void PollEvents() const;
-
-  // Swaps the front and back buffers (presents the frame).
-  void SwapBuffers();
 
   // Returns true if the window has been requested to close.
   [[nodiscard]] bool ShouldClose() const;
@@ -68,15 +71,6 @@ class GlfwBridge : public NonCopyable {
 
   // Returns the current cursor position in window coordinates.
   [[nodiscard]] Point GetCursorPos() const noexcept;
-
-  // Returns the OpenGL context (for tgfx initialization).
-  [[nodiscard]] void* GetGlContext() const noexcept;
-
-  // Makes the OpenGL context current on the calling thread.
-  void MakeContextCurrent();
-
-  // Releases the OpenGL context from the calling thread.
-  static void ReleaseContext();
 
   // Sets the callback invoked for mouse button events.
   void SetInputCallback(InputEventCallback callback) noexcept;

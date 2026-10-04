@@ -89,10 +89,10 @@ class SpscRingQueue {
   std::vector<std::byte> storage_;
 
   // Actual capacity (rounded up to power of two, including reserved slot).
-  std::size_t capacity_;
+  std::size_t capacity_ = 0;
 
   // Bitmask for index wrapping: capacity_ - 1 (all lower bits set).
-  std::size_t mask_;
+  std::size_t mask_ = 0;
 
   // Producer index (cache-line aligned).
   alignas(detail::kCacheLineSize) std::atomic<std::size_t> head_;
@@ -108,9 +108,7 @@ class SpscRingQueue {
 
 template <typename T>
 SpscRingQueue<T>::SpscRingQueue(const std::size_t capacity)
-    : capacity_(0),
-      mask_(0),
-      head_(0),
+    : head_(0),
       tail_(0) {
   assert(capacity >= 2 && "SpscRingQueue capacity must be at least 2");
   static_assert(std::is_move_constructible_v<T> ||

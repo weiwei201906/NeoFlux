@@ -8,20 +8,21 @@ flag below is optional and passed on the command line:
 .\build\bin\neoflux_app.exe --target_fps=120 --logtostderr
 ```
 
-## Render backend (compile-time)
+## GPU backend (tgfx, compile-time)
 
 The GPU backend is tgfx's own compile-time choice, not a NeoFlux concept.
 Select it with tgfx's native `TGFX_USE_*` CMake switches (exactly one per
 build); `thirdparty/CMakeLists.txt` resolves them with tgfx's own priority
 (VULKAN > D3D12 > METAL > OPENGL) and exports a single `TGFX_USE_*=1` define
-so NeoFlux sources agree with what tgfx compiled.
+so NeoFlux sources agree with what tgfx compiled. tgfx is a **required**
+dependency — configure fails if the `tgfx` target is missing.
 
-| tgfx switch | Platform | Notes |
-|-------|----------|-------|
-| `TGFX_USE_OPENGL` (default ON) | Desktop + mobile | OpenGL via WGL / CGL / GLX on desktop, `tgfx::EGLWindow` (EGL) on Android, EAGL path on iOS. The only fully-tested backend. |
-| `TGFX_USE_VULKAN` | Desktop | Requires the Vulkan SDK and a Vulkan-capable driver; tgfx is built with shaderc. |
-| `TGFX_USE_D3D12` | Windows only | Requires the Windows SDK D3D12 headers. |
-| `TGFX_USE_METAL` | Apple only | Requires the Apple Metal framework. |
+| tgfx switch | Platform | Surface acquisition |
+|-------|----------|---------------------|
+| `TGFX_USE_OPENGL` (default outside Apple) | Linux / Windows / Android | Linux `tgfx::EGLWindow` (X11), Windows `tgfx::WGLWindow`, Android `tgfx::EGLWindow`. The only fully-tested backend. |
+| `TGFX_USE_METAL` (Apple default) | Apple only | `tgfx::MetalWindow` over a `CAMetalLayer`. Apple + OpenGL is rejected at configure time. |
+| `TGFX_USE_VULKAN` | Windows | `tgfx::VulkanWindow` (Win32 HWND). Requires a Vulkan-capable driver; tgfx is built with shaderc. |
+| `TGFX_USE_D3D12` | Windows only | `tgfx::D3D12Window::MakeForHwnd`. Requires the Windows SDK D3D12 headers. |
 
 Configure and build with the backend you want:
 
@@ -31,10 +32,10 @@ cmake --build build
 ```
 
 ::: tip OpenGL is the only fully-tested backend
-Vulkan, D3D12, and Metal require additional system dependencies (shaderc,
-Vulkan SDK, Windows SDK D3D12 headers, Apple Metal framework, etc.) and are
-not yet exercised in CI. Keep `TGFX_USE_OPENGL` on unless you have a specific
-reason to experiment.
+Vulkan and D3D12 require additional system dependencies (shaderc, Vulkan
+SDK, Windows SDK D3D12 headers) and are not yet exercised in CI. Keep
+`TGFX_USE_OPENGL` on (outside Apple) unless you have a specific reason to
+experiment.
 :::
 
 ::: warning This is a compile-time choice
@@ -47,9 +48,9 @@ and rebuild.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--target_fps` | `int32` | `60` (from `config::kDefaultTargetFps`) | Target frames-per-second for the application event loop. |
+| `--target_fps` | `int32` | `60` | Target frames-per-second for the application event loop. |
 | `--idle_fps` | `int32` | `15` | Idle heart-beat rate: after a few frames with no render request and no pending coroutine/timer work, the loop drops to this rate (input events wake it instantly). `0` disables idle throttling. |
-| `--render_queue_capacity` | `uint64` | `2048` (from `config::kDefaultRenderQueueCapacity`) | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
+| `--render_queue_capacity` | `uint64` | `2048` | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
 | `--render_queue_drop_log_max` | `int32` | `10` | Maximum number of "render command queue full, dropped commands" warnings emitted per process. After this many drops, subsequent overflows are counted silently. Raise this only when diagnosing back-pressure. |
 | `--native_tuning` | `bool` | `true` | Master switch for the platform-native tuning layer; `false` makes every entry point a no-op. |
 | `--native_render_rt_priority` | `int32` | `1` | Linux/Android: SCHED_FIFO priority attempted for the render thread (1..99). |
@@ -164,10 +165,10 @@ They live in `neoflux/include/neoflux/core/config.h` as `inline constexpr`:
 | Constant | Default | Meaning |
 |----------|---------|---------|
 | `config::kCacheLineSize` | `64` | Cache line size in bytes. Used to pad SPSC queue head/tail to separate cache lines (prevents false sharing). Override with `-DNEOFLUX_CACHE_LINE_SIZE=128` for Apple M-series / newer AMD. |
-| `config::kDefaultRenderQueueCapacity` | `2048` | Default for `--render_queue_capacity`. |
-| `config::kDefaultTargetFps` | `60` | Default for `--target_fps`. |
-| `config::kLongPressThresholdMs` | `500` | Long-press detection threshold for `Button` (ms). |
-| `config::kFlingStopThreshold` | `0.02` | Minimum fling velocity (screen heights/sec) below which inertia stops. |
+
+This is the only compile-time constant: everything tunable at runtime is a
+gflag (see the flag reference above). Widget behavior values (long-press
+timing, fling thresholds) are owned by their widgets, not by global config.
 
 ### Cache-line sizing vs runtime detection
 
@@ -201,8 +202,9 @@ but wastes a little memory, so set it to the size the detector reports, not
 higher. For the full platform matrix and the automatic startup hook, see
 [Native Tuning Layer](./native-tuning.md).
 
-::: tip gflag defaults follow config.h
-The gflag definitions use these constants as their defaults. Change
-`kDefaultTargetFps` in `config.h` to `30`, rebuild, and `--target_fps` now
-defaults to `30` without touching the flag definition.
+::: tip compile-time vs runtime
+Only values that MUST be constants (e.g. `alignas` arguments) live in
+`config.h`. Everything else — including `--target_fps` and
+`--render_queue_capacity` defaults — is defined directly in
+`core/flags.cpp` and tunable at runtime.
 :::

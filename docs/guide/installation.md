@@ -49,13 +49,14 @@ ctest --output-on-failure
 
 ## Third-Party Dependencies
 
-All dependencies are fetched via CMake `FetchContent` and placed under
-`thirdparty/_deps/` (excluded from git):
+All dependencies are vendored as git submodules under `thirdparty/` and built
+from source (pinned revisions, fully offline once cloned with
+`--recurse-submodules`):
 
+- **tgfx** — 2D graphics rendering (the required GPU/rendering backend)
 - **Taitank** — flexbox layout engine
-- **tgfx** — 2D graphics rendering (mobile)
 - **GLFW** — desktop window/input
-- **FreeType** — font rasterization
+- **FreeType** — font rasterization (tgfx text stack)
 - **glog** — logging
 - **gflags** — command-line flags
 - **googletest** — unit testing (tests only)

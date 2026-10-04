@@ -73,12 +73,11 @@ ctest --test-dir build --output-on-failure
 所有参数均为可选，跟在可执行文件名之后：
 
 ```powershell
-.\build\bin\hello_neoflux.exe --render_backend=gl --target_fps=120 --logtostderr --verbose_logging
+.\build\bin\hello_neoflux.exe --target_fps=120 --logtostderr --verbose_logging
 ```
 
 | 参数 | 示例值 | 作用 |
 |------|--------|------|
-| `--render_backend` | `gl` | 选择渲染后端。默认 `gl`（本构建唯一可用后端）；`vulkan`、`cpu` 及未知值都是启动期硬错误，不静默回退。 |
 | `--target_fps` | `120` | 限制应用事件循环的帧率。 |
 | `--render_queue_capacity` | `4096` | SPSC 渲染命令环形队列容量（内部向上取整为 2 的幂）。 |
 | `--verbose_logging` | （出现即开） | 开启 `VLOG(1)` 调试输出。 |

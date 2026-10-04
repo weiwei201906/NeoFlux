@@ -83,12 +83,11 @@ navigate to different demos. Click **Media Player** to open the video player.
 All flags are optional. Pass them on the command line after the executable:
 
 ```powershell
-.\build\bin\hello_neoflux.exe --render_backend=gl --target_fps=120 --logtostderr --verbose_logging
+.\build\bin\hello_neoflux.exe --target_fps=120 --logtostderr --verbose_logging
 ```
 
 | Flag | Example value | What it does |
 |------|---------------|--------------|
-| `--render_backend` | `gl` | Selects the render backend. Defaults to `gl` (the only backend available in this build); `vulkan`, `cpu`, and unknown values are a hard startup error with no silent fallback. |
 | `--target_fps` | `120` | Caps the application event-loop frame rate. |
 | `--render_queue_capacity` | `4096` | Size of the SPSC render-command ring queue (rounded up to a power of two). |
 | `--verbose_logging` | (present) | Enables `VLOG(1)` debug output. |

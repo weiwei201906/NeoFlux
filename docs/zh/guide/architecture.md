@@ -1,7 +1,7 @@
 # 架构
 
 NeoFlux 把一个 UI 应用拆成两个独立线程层，二者仅通过一条无锁队列通信。
-应用层负责全部业务逻辑与布局；渲染层持有 GPU/GL 上下文，把录制好的命令变成像素。
+应用层负责全部业务逻辑与布局；渲染层持有 tgfx 设备，把录制好的命令变成像素。
 
 ## 两层划分
 
@@ -25,10 +25,10 @@ NeoFlux 把一个 UI 应用拆成两个独立线程层，二者仅通过一条�
 |    |           等待 frame_cv_，排空队列，按 Begin/End 边界绘制      |
 |    |                            |                                 |
 |    |                            v                                 |
-|    |                  TgfxRenderer（tgfx，或内置 GL 回退）         |
+|    |                  TgfxRenderer（tgfx Window / Surface）       |
 |    |                            |                                 |
-|    |   桌面：GlfwBridge（GLFW 窗口 + WGL 上下文）-> SwapBuffers() |
-|    |   移动：平台 Surface（ANativeWindow / CAMetalLayer）         |
+|    |   桌面：GlfwBridge（GLFW 窗口，GLFW_NO_API）——仅输入        |
+|    |   tgfx Window 持有 GPU 上下文 + 交换链，submit() 即呈现      |
 +----+------------------------------------------------------------+
 ```
 
@@ -51,16 +51,16 @@ NeoFlux 把一个 UI 应用拆成两个独立线程层，二者仅通过一条�
 ## 渲染层（渲染线程）
 
 `RenderLayer::Start()` 派生一个专用 `std::thread` 运行 `RenderLoop()`。
-该线程独占 GL 上下文。
 
-- **GL 上下文归属** —— 桌面端上下文由 `GlfwBridge` 创建。先在主线程短暂 make
-  current，让 OpenGL 加载器（`glfwGetProcAddress`/WGL）解析函数指针，然后 release，
-  在渲染线程上重新 acquire，专门负责真正的绘制。
+- **GPU 上下文归属** —— `TgfxRenderer` 在渲染线程上的 `BeginFrame()` 里懒创建
+  tgfx `Window`，由它持有 GPU 上下文、图形表面/交换链并负责呈现。任何平台
+  NeoFlux 都不自行创建或绑定 GL/EGL/WGL 上下文：GLFW 窗口以 `GLFW_NO_API`
+  创建，GLFW/移动端 bridge 只承载原生窗口句柄与输入。
 - **帧状态机** —— 只有 `kBeginFrame` 与 `kEndFrame` 之间的命令才会被执行，
   避免渲染线程在应用还在提交命令时就呈现半帧画面。
-- **后端** —— `TgfxRenderer` 封装 `tgfx`。关闭 `NEOFLUX_USE_TGFX` 时回退到内置
-  OpenGL 渲染器（shader + VBO + FreeType 字形图集）。`--render_backend` 默认为
-  `gl`（本构建唯一可用后端）；`vulkan`、`cpu` 及未知值都是启动期硬错误，而非静默回退到 GL。
+- **后端** —— `TgfxRenderer` 封装 `tgfx`，tgfx 是必备依赖（不存在没有它的构建
+  或渲染器）。GPU 后端由 tgfx 自己的 `TGFX_USE_*` 编译期开关决定，configure 阶段
+  消解为唯一后端；没有运行时后端参数。
 
 ## 命令如何跨线程
 
@@ -69,9 +69,9 @@ NeoFlux 把一个 UI 应用拆成两个独立线程层，二者仅通过一条�
 1. **应用线程**是唯一生产者：`RenderLayer::Submit()` 对每条录制命令调用
    `command_queue_.TryPush(cmd)`。队列满时本帧多余命令被丢弃（限频警告）。
 2. `Submit()` 随后置 `frame_ready_ = true` 并 `frame_cv_.notify_one()` 唤醒渲染线程。
-3. **渲染线程**是唯一消费者：在 `frame_cv_` 上等待（最长 16ms），然后
+3. **渲染线程**是唯一消费者：在 `frame_cv_` 上等待，然后
    `TryPop()` 取走所有可用命令并分发给 `TgfxRenderer`。遇到 `kEndFrame` 时调用
-   `EndFrame()`，桌面端再 `GlfwBridge::SwapBuffers()`。
+   `EndFrame()`，其 `context->submit()` 同时完成提交与呈现（不存在单独的缓冲交换）。
 
 ### SpscRingQueue 细节
 
@@ -106,10 +106,13 @@ NeoFlux 把一个 UI 应用拆成两个独立线程层，二者仅通过一条�
 
 ## 平台矩阵
 
-| 平台 | 窗口 | GL/GL 上下文 | 渲染目标 |
-|------|------|--------------|----------|
-| Windows / Linux / macOS | `GlfwBridge`（GLFW） | WGL / GLX / CGL | 窗口 framebuffer |
-| Android / iOS | 系统提供的 Surface | 无 | `ANativeWindow` / `CAMetalLayer` |
+| 平台 | 窗口 | tgfx Window（上下文 + 交换链持有者） |
+|------|------|--------------------------------------|
+| Linux | `GlfwBridge`（X11） | `tgfx::EGLWindow::MakeFrom(XID)` —— OpenGL 后端 |
+| Windows | `GlfwBridge`（Win32） | `tgfx::WGLWindow::MakeFrom(HWND)`（OpenGL）或 `VulkanWindow` / `D3D12Window` |
+| macOS | `GlfwBridge`（Cocoa） | `tgfx::MetalWindow`，呈现到 `CAMetalLayer` |
+| Android | 应用壳（`ANativeWindow`） | `tgfx::EGLWindow::MakeFrom(ANativeWindow*)` |
+| iOS | 应用壳（ObjC++） | `tgfx::EAGLWindow::MakeFrom(CAEAGLLayer*)` —— 应用壳尚未接线 |
 
 预处理器选择桥接实现：桌面构建 `glfw_bridge.cpp`，Android/iOS 构建
 `mobile_bridge.cpp`（`NEOFLUX_PLATFORM_DESKTOP` 与 `NEOFLUX_PLATFORM_MOBILE`）。

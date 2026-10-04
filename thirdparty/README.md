@@ -1,24 +1,48 @@
 # NeoFlux third-party dependencies
 
-This directory contains all third-party libraries used by NeoFlux.
+Every dependency is vendored here as a git **submodule** and built from
+source via `add_subdirectory` (see `CMakeLists.txt`). A fresh clone with
+`--recurse-submodules` builds fully offline; the exact pinned revision of
+each library is reviewable in this repository.
 
-## Managed via CMake FetchContent
+```sh
+git clone --recurse-submodules https://github.com/weiwei201906/NeoFlux
+# or, after a plain clone:
+git submodule update --init --recursive
+```
 
-Dependencies are automatically downloaded and built by CMake into
-`_deps/` on first configure. No manual installation required.
+## Submodules
 
-| Library    | Purpose                          | Version |
-|------------|----------------------------------|---------|
-| glog       | Logging                          | v0.7.1  |
-| gflags     | Command-line flag parsing        | v2.2.2  |
-| googletest | Unit testing                     | v1.14.0 |
-| glfw       | Desktop window / input (desktop) | 3.4     |
-| taitank    | Flexbox layout engine            | main    |
-| tgfx       | 2D graphics rendering            | main    |
+| Library    | Purpose                                  | Upstream                       |
+|------------|------------------------------------------|--------------------------------|
+| tgfx       | 2D rendering backend (GPU abstractions)  | github.com/Tencent/tgfx        |
+| taitank    | Flexbox layout engine                    | github.com/Tencent/taitank     |
+| freetype   | TrueType/OpenType font rasterization     | github.com/freetype/freetype   |
+| glog       | Logging                                  | github.com/google/glog         |
+| gflags     | Command-line flags                       | github.com/gflags/gflags       |
+| googletest | Unit testing                             | github.com/google/googletest   |
+| glfw       | Desktop window / input (desktop only)    | github.com/glfw/glfw           |
+| vendor_tools | tgfx's vendor helper CMake (stubbed)   | github.com/libpag/vendor_tools |
 
-## Adding a new dependency
+## Vendored in-tree (not submodules)
 
-1. Add a `FetchContent_Declare` + `FetchContent_MakeAvailable` block in
-   `CMakeLists.txt`.
-2. Link the target in the root `CMakeLists.txt`.
-3. Do **not** commit the `_deps/` directory (it is auto-generated).
+tgfx normally pulls these via its `depsync`/gclient tooling, which needs
+network access. We vendor small, well-defined copies instead so offline CI
+configures cleanly, and wire them into the `tgfx` target from
+`CMakeLists.txt`:
+
+| Directory       | Purpose                                                     |
+|-----------------|-------------------------------------------------------------|
+| `concurrentqueue` | Header-only lock-free MPMC queue (cameron314)             |
+| `skcms`         | Color management (portable baseline build)                  |
+| `highway`       | tgfx's SIMD core (headers + dispatch runtime)               |
+| `pathkit`       | Path triangulation slice used by tgfx's PathRef             |
+| `stubs/`        | Small platform stubs (e.g. MinGW system-font shim)          |
+
+## Notes
+
+- The GPU backend is chosen with tgfx's own `TGFX_USE_*` CMake options
+  (exactly one per build; see the block in `CMakeLists.txt`).
+- `mpv-bundle/` (if present) is a downloaded Windows libmpv package managed
+  by `cmake/DownloadMPV.cmake` — it is not a submodule and not committed.
+- `fonts/` holds the font files scanned at startup by `FontManager`.

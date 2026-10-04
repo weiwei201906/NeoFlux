@@ -54,8 +54,8 @@ class FontManager : public NonCopyable {
 
  private:
   // Maps font name (lowercase) to absolute file path.
-  std::unordered_map<std::string, std::string> fonts_{};
-  std::string default_font_{};
+  std::unordered_map<std::string, std::string> fonts_;
+  std::string default_font_;
 };
 
 }  // namespace neoflux
