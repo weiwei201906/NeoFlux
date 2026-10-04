@@ -38,20 +38,48 @@
 #include "tgfx/gpu/Context.h"
 #include "tgfx/gpu/opengl/GLDevice.h"
 #include "tgfx/gpu/opengl/GLTypes.h"
+
+#if !defined(NEOFLUX_BACKEND_gl)
+// Non-OpenGL backends render through the tgfx Window abstraction instead of the
+// GL device: a backend Window owns the swapchain and presents on submit().
+// See the #else of TgfxRenderer::Impl::EnsureDevice() for how it is acquired.
+#include <GLFW/glfw3native.h>
+
+#include "tgfx/gpu/Window.h"
+#if defined(NEOFLUX_BACKEND_vulkan)
+#include "tgfx/gpu/vulkan/VulkanDevice.h"
+#include "tgfx/gpu/vulkan/VulkanWindow.h"
+#elif defined(NEOFLUX_BACKEND_d3d12)
+#include "tgfx/gpu/d3d12/D3D12Device.h"
+#include "tgfx/gpu/d3d12/D3D12Window.h"
+#elif defined(NEOFLUX_BACKEND_metal)
+#include "tgfx/gpu/metal/MetalDevice.h"
+#include "tgfx/gpu/metal/MetalWindow.h"
+#endif
+#endif
 #endif
 
 namespace neoflux {
 
 #if defined(NEOFLUX_PLATFORM_DESKTOP) && defined(NEOFLUX_HAVE_TGFX)
 struct TgfxRenderer::Impl {
+  // The GLFW window whose native render surface/context backs `device`. Assigned
+  // in Init() from the native handle passed by RenderLayer::Start().
   GLFWwindow* window = nullptr;
 
-  // tgfx objects. The device wraps the GLFW-owned WGL context; the context is
-  // locked on the render thread for the whole frame.
-  std::shared_ptr<tgfx::GLDevice> device;
+  // tgfx objects. The device wraps the window's native rendering context; the
+  // context is locked on the render thread for the whole frame.
+  std::shared_ptr<tgfx::Device> device;
   tgfx::Context* context = nullptr;
   std::shared_ptr<tgfx::Surface> surface;
   tgfx::Canvas* canvas = nullptr;
+
+  // Non-OpenGL backends: the tgfx Window owns the graphics surface/swapchain and
+  // presents automatically on context->submit(). Unused on the OpenGL path,
+  // which renders into the default framebuffer that GLFW swaps.
+#if !defined(NEOFLUX_BACKEND_gl)
+  std::shared_ptr<tgfx::Window> tgfx_window;
+#endif
 
   std::shared_ptr<tgfx::Typeface> typeface;
   FontManager font_manager;
@@ -62,18 +90,22 @@ struct TgfxRenderer::Impl {
   int fb_height = 0;
   bool ready = false;
 
-  // Acquires the tgfx device/context for the already-current WGL context.
-  // Must be called on the thread where the GLFW context is current.
+  // Acquires the tgfx device/context for the window's native rendering context.
+  // Must be called on the thread where that context is current (OpenGL) or will
+  // be used (other backends).
+#if defined(NEOFLUX_BACKEND_gl)
   bool EnsureDevice() {
     if (ready) {
       return true;
     }
-    device = tgfx::GLDevice::Current();
-    if (device == nullptr) {
+    // Attach to the WGL context GLFW already made current on this thread.
+    auto gl_device = tgfx::GLDevice::Current();
+    if (gl_device == nullptr) {
       LOG(ERROR) << "tgfx::GLDevice::Current() returned nullptr; no current "
                     "WGL context on this thread";
       return false;
     }
+    device = gl_device;
     context = device->lockContext();
     if (context == nullptr) {
       LOG(ERROR) << "tgfx device->lockContext() returned nullptr";
@@ -83,6 +115,83 @@ struct TgfxRenderer::Impl {
     LOG(INFO) << "tgfx WGL device attached to existing GLFW context";
     return true;
   }
+#else
+  // Creates the backend device and wraps the GLFW native window in a tgfx
+  // Window. Each backend needs a different native handle type. Only the device
+  // creation below is backend-specific; the per-frame drawing code is shared
+  // through the tgfx Window/Surface abstraction.
+  bool EnsureDevice() {
+    if (ready) {
+      return true;
+    }
+#if defined(NEOFLUX_BACKEND_vulkan)
+    // VulkanWindow only exposes a Win32 (HWND) target on Windows in the pinned
+    // tgfx revision; see the header for the Android/OHOS overloads.
+#if defined(_WIN32)
+    auto vk_device = tgfx::VulkanDevice::Make();
+    if (vk_device == nullptr) {
+      LOG(ERROR) << "tgfx::VulkanDevice::Make() failed: no usable Vulkan device";
+      return false;
+    }
+    device = vk_device;
+    tgfx_window = tgfx::VulkanWindow::MakeFrom(glfwGetWin32Window(window), vk_device);
+#else
+    LOG(ERROR) << "NEOFLUX_BACKEND=vulkan has no window binding for this "
+                  "platform in this tgfx revision (only Win32/Android/OHOS)";
+    return false;
+#endif  // _WIN32
+
+#elif defined(NEOFLUX_BACKEND_d3d12)
+    auto d3d_device = tgfx::D3D12Device::Make();
+    if (d3d_device == nullptr) {
+      LOG(ERROR) << "tgfx::D3D12Device::Make() failed: no usable D3D12 device";
+      return false;
+    }
+    device = d3d_device;
+    tgfx_window = tgfx::D3D12Window::MakeForHwnd(glfwGetWin32Window(window), d3d_device);
+
+#elif defined(NEOFLUX_BACKEND_metal)
+    auto mtl_device = tgfx::MetalDevice::Make();
+    if (mtl_device == nullptr) {
+      LOG(ERROR) << "tgfx::MetalDevice::Make() failed: no usable Metal device";
+      return false;
+    }
+    device = mtl_device;
+    // GLFW owns the NSWindow when it was created with GLFW_NO_API; attach a
+    // CAMetalLayer to its content view and let tgfx present into it.
+    NSWindow* native_window = glfwGetCocoaWindow(window);
+    if (native_window == nil) {
+      LOG(ERROR) << "glfwGetCocoaWindow() returned nil";
+      return false;
+    }
+    CAMetalLayer* layer = [CAMetalLayer layer];
+    layer.device = mtl_device->metalDevice();
+    layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    layer.framebufferOnly = YES;
+    native_window.contentView.layer = layer;
+    native_window.contentView.wantsLayer = YES;
+    tgfx_window = tgfx::MetalWindow::MakeFrom(layer, mtl_device);
+#else
+#error "Unknown NEOFLUX_BACKEND: expected gl, vulkan, d3d12 or metal."
+#endif
+
+    if (tgfx_window == nullptr) {
+      LOG(ERROR) << "Failed to create the tgfx Window for backend="
+                 << NEOFLUX_BACKEND_NAME;
+      return false;
+    }
+    // A Window's device may still be initializing; getDevice() can return null
+    // briefly, but by construction the device we passed in is alive.
+    context = device->lockContext();
+    if (context == nullptr) {
+      LOG(ERROR) << "tgfx device->lockContext() returned nullptr";
+      return false;
+    }
+    ready = true;
+    LOG(INFO) << "tgfx " << NEOFLUX_BACKEND_NAME << " device and window ready";
+    return true;
+  }
+#endif
 };
 #else
 struct TgfxRenderer::Impl {
@@ -97,6 +206,8 @@ TgfxRenderer::~TgfxRenderer() = default;
 
 bool TgfxRenderer::Init(int width, int height, void* native_handle) {
 #if defined(NEOFLUX_PLATFORM_DESKTOP) && defined(NEOFLUX_HAVE_TGFX)
+  // Desktop passes the GLFWwindow*; the backend device is created lazily in
+  // BeginFrame() on the render thread, where the native context is valid.
   impl_->window = static_cast<GLFWwindow*>(native_handle);
   impl_->width = width;
   impl_->height = height;
@@ -152,7 +263,15 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
     fb_h = win_h;
   }
 
-  // (Re)create the surface on the default framebuffer (id 0) whenever the
+  // Map logical layout coordinates onto the physical framebuffer.
+  const float sx = win_w > 0 ? static_cast<float>(fb_w) /
+                                   static_cast<float>(win_w)
+                             : 1.0F;
+  const float sy = win_h > 0 ? static_cast<float>(fb_h) /
+                                   static_cast<float>(win_h)
+                             : 1.0F;
+#if defined(NEOFLUX_BACKEND_gl)
+  // (Re)create the surface on the GL default framebuffer (id 0) whenever the
   // framebuffer size changes. Bottom-left origin matches GL; tgfx flips the
   // canvas internally so drawing uses y-down logical coordinates.
   if (impl_->surface == nullptr || fb_w != impl_->fb_width ||
@@ -168,18 +287,22 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
       return;
     }
   }
+#else
+  // Non-OpenGL backends: the tgfx Window owns the render target (its swapchain
+  // backbuffer) and picks up size changes itself, so a surface is acquired per
+  // frame rather than kept across resizes. Window surfaces use a top-left
+  // origin, unlike the GL default framebuffer.
+  impl_->surface = tgfx::Surface::MakeFrom(impl_->context, impl_->tgfx_window);
+  if (impl_->surface == nullptr) {
+    LOG(ERROR) << "tgfx Surface::MakeFrom(context, window) failed";
+    return;
+  }
+#endif
 
   impl_->canvas = impl_->surface->getCanvas();
   if (impl_->canvas == nullptr) {
     return;
   }
-  // Map logical layout coordinates onto the physical framebuffer.
-  const float sx = win_w > 0 ? static_cast<float>(fb_w) /
-                                   static_cast<float>(win_w)
-                             : 1.0F;
-  const float sy = win_h > 0 ? static_cast<float>(fb_h) /
-                                   static_cast<float>(win_h)
-                             : 1.0F;
   impl_->canvas->save();
   impl_->canvas->scale(sx, sy);
   impl_->canvas->clear(
@@ -196,10 +319,18 @@ void TgfxRenderer::EndFrame() {
     impl_->canvas->restore();
   }
   impl_->canvas = nullptr;
+#if defined(NEOFLUX_BACKEND_gl)
   // Submit recorded draws to the GL context; GLFW then swaps buffers.
   if (impl_->context != nullptr) {
     impl_->context->flushAndSubmit();
   }
+#else
+  // Submitting on a Window surface also presents it (swapchain flip); GLFW does
+  // NOT swap buffers for these backends.
+  if (impl_->context != nullptr) {
+    impl_->context->submit();
+  }
+#endif
   // Drop the surface so a resize is picked up next frame.
   impl_->surface.reset();
 #endif
@@ -255,6 +386,7 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
           command.rect.height));
       break;
     case RenderCommandType::kDrawTexture: {
+#if defined(NEOFLUX_BACKEND_gl)
       // Wrap an externally-produced GL texture (e.g. mpv render context) as a
       // tgfx BackendTexture and draw it into the destination rect. MakeFrom
       // does NOT take ownership of the GL texture; the producer (mpv) manages
@@ -276,6 +408,14 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
         impl_->canvas->drawImageRect(image, dest,
                                      tgfx::SamplingOptions());
       }
+#else
+      // The external-texture interop path (mpv produces GL textures) exists only
+      // on the OpenGL backend. Other backends currently have no equivalent
+      // producer, so the command is ignored rather than mis-rendered. Video
+      // output on vulkan/d3d12/metal requires a backend-specific texture
+      // sharing implementation (e.g. VkImage / ID3D12Resource / IOSurface).
+      (void)command;
+#endif
       break;
     }
     default:

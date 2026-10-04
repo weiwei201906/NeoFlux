@@ -46,6 +46,18 @@ GlfwBridge::GlfwBridge() : impl_(std::make_unique<Impl>()) {}
 
 GlfwBridge::~GlfwBridge() { Shutdown(); }
 
+// The render backend is a compile-time choice (see thirdparty/CMakeLists.txt).
+// The OpenGL path needs a GL context created by GLFW; the other tgfx backends
+// (vulkan/d3d12/metal) create their own swapchain/surface from the native
+// window handle, so GLFW must be told to create the window WITHOUT a client API
+// context (GLFW_NO_API). Creating a GL context there would be useless and, on
+// some drivers, conflict with the backend's own device creation.
+#if defined(NEOFLUX_BACKEND_gl)
+#define NEOFLUX_GLFW_WANTS_GL_CONTEXT 1
+#else
+#define NEOFLUX_GLFW_WANTS_GL_CONTEXT 0
+#endif
+
 bool GlfwBridge::Init(int width, int height, std::string_view title) {
   if (impl_->initialized) {
     LOG(WARNING) << "GlfwBridge already initialized";
@@ -59,10 +71,15 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
     return false;
   }
 
+#if NEOFLUX_GLFW_WANTS_GL_CONTEXT
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
+#else
+  // Vulkan / D3D12 / Metal: the backend owns surface creation and presentation.
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+#endif
 
   const std::string title_str(title);  // NOLINT(bugprone-unused-local-non-trivial-variable)
   impl_->window = glfwCreateWindow(width, height, title_str.c_str(), nullptr,
@@ -119,14 +136,21 @@ void GlfwBridge::SwapBuffers() {
 }
 
 void GlfwBridge::MakeContextCurrent() {
+#if NEOFLUX_GLFW_WANTS_GL_CONTEXT
   if (impl_->window != nullptr) {
     glfwMakeContextCurrent(impl_->window);
     glfwSwapInterval(1);
   }
+#else
+  // No GL context exists for non-OpenGL backends; presentation is driven by the
+  // tgfx Window's own swapchain (context->submit()), not by GLFW buffer swap.
+#endif
 }
 
 void GlfwBridge::ReleaseContext() {
+#if NEOFLUX_GLFW_WANTS_GL_CONTEXT
   glfwMakeContextCurrent(nullptr);
+#endif
 }
 
 bool GlfwBridge::ShouldClose() const {

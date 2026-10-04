@@ -50,27 +50,9 @@ DEFINE_int32(render_queue_drop_log_max, 10,
              "commands' warning is emitted per process. After this many "
              "occurrences, subsequent drops are counted silently.");
 
-DEFINE_string(render_backend, "gl",
-              "Render backend selection: gl (implemented). "
-              "vulkan/d3d12/metal are not implemented yet; passing them "
-              "falls back to gl with a warning.");
-
-namespace {
-
-// Rejects an unknown backend at parse time instead of letting it through to
-// the render layer, where it would only be discovered as a fallback warning.
-bool ValidateRenderBackend(const char* /*flagname*/, const std::string& value) {
-  return value == "gl" || value == "vulkan" || value == "d3d12" ||
-         value == "metal";
-}
-
-// Registers the validator as a side effect of static initialisation. gflags
-// requires the flag to be defined before RegisterFlagValidator is called,
-// which the definition above guarantees.
-const bool render_backend_validator =
-    gflags::RegisterFlagValidator(&FLAGS_render_backend,
-                                  &ValidateRenderBackend);
-
-}  // namespace
+// NOTE: there is deliberately no --render_backend flag. tgfx permits exactly
+// one GPU backend per build, so the backend is selected at CMake configure time
+// via -DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal> (see thirdparty/CMakeLists.txt)
+// and cannot be changed at runtime.
 
 }  // namespace neoflux

@@ -101,17 +101,16 @@ cd build && ctest --output-on-failure
 
 NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 
-| 参数                      | 类型   | 默认值    | 说明                                                                 |
-|---------------------------|--------|-----------|----------------------------------------------------------------------|
 | 参数                          | 类型   | 默认值    | 说明                                                                 |
 |-------------------------------|--------|-----------|----------------------------------------------------------------------|
 | `--target_fps`                | int    | `60`      | 应用事件循环与渲染的目标帧率。                                       |
 | `--render_queue_capacity`     | int    | `2048`    | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。 |
 | `--render_queue_drop_log_max` | int    | `10`      | 命令队列满导致丢弃时的告警最大打印次数，超出后静默计数。             |
-| `--render_backend`            | string | `gl`      | 渲染后端选择：`gl`（已实现）。`vulkan` / `d3d12` / `metal` 尚未实现，传入时会回退到 `gl` 并输出警告。 |
 | `--verbose_logging`           | bool   | `false`   | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。               |
 | `--logtostderr`               | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
 | `--log_dir`                   | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |
+
+渲染后端**不是**运行时参数：tgfx 每次构建只允许启用一个 GPU 后端，因此后端在 CMake configure 期通过 `-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>`（默认 `gl`）选定，详见 [渲染后端](#渲染后端编译期选择)。
 
 默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（`CMAKE_WIN32_EXECUTABLE`）。调试时使用 `--logtostderr --verbose_logging`。
 

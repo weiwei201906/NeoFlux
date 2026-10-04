@@ -93,10 +93,12 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 | `--target_fps` | int | `60` | Target frame rate for the application event loop and render pacing. |
 | `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Rounded up to the next power of two automatically. |
 | `--render_queue_drop_log_max` | int | `10` | Maximum number of "queue full, commands dropped" warnings emitted before drops are counted silently. |
-| `--render_backend` | string | `gl` | Render backend selection: `gl` (implemented). `vulkan` / `d3d12` / `metal` are not implemented yet; passing them falls back to `gl` with a warning. |
 | `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
 | `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
 | `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |
+
+The render backend is **not** a runtime flag: tgfx allows only one GPU backend
+per build, so it is chosen at CMake configure time via `-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>` (default `gl`). See [Render backend](#render-backend-compile-time).
 
 By default, logs are written to files in `./logs/` and no console window appears on Windows (`CMAKE_WIN32_EXECUTABLE`). To debug, pass `--logtostderr --verbose_logging`.
 

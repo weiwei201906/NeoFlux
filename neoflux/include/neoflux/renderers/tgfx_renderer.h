@@ -4,10 +4,17 @@
 // NeoFlux - tgfx_renderer.h
 //
 // tgfx-backed renderer. Replays RenderCommand objects as tgfx::Canvas draw
-// calls. On desktop the GLFW bridge creates the window and a WGL OpenGL
-// context; this renderer hands that already-current context to tgfx's OpenGL
-// (WGL) backend via tgfx::GLDevice::Current() and draws into the default
-// framebuffer (id 0). GLFW owns buffer swap.
+// calls.
+//
+// The GPU backend is a COMPILE-TIME choice (-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|
+// metal>; tgfx allows only one per build):
+//   - gl (default): GLFW creates a GL context and this renderer attaches to it
+//     via tgfx::GLDevice::Current(), drawing into the default framebuffer that
+//     GLFW swaps.
+//   - vulkan/d3d12/metal: the backend device is created on the render thread and
+//     wrapped in a tgfx::Window, which owns the swapchain; Surface::MakeFrom(
+//     context, window) + context->submit() present the frame. GLFW is created
+//     with GLFW_NO_API and does not swap buffers.
 //
 // Pimpl: all tgfx / GL / GLFW state lives in struct Impl defined in the .cpp.
 // The public header exposes no third-party types.

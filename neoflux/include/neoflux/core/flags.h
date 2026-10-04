@@ -47,8 +47,8 @@ DECLARE_uint64(render_queue_capacity);
 // Maximum number of "queue full, dropped commands" warnings per process.
 DECLARE_int32(render_queue_drop_log_max);
 
-// Render backend selection. Only "gl" is implemented.
-DECLARE_string(render_backend);
+// No backend flag: the tgfx backend is a compile-time choice
+// (-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>).
 
 }  // namespace neoflux
 

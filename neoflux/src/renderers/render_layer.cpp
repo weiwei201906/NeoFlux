@@ -24,12 +24,31 @@
 #include "neoflux/renderers/render_command.h"
 #include "neoflux/renderers/tgfx_renderer.h"
 
-// render_queue_capacity, render_queue_drop_log_max and render_backend are
-// defined in core/flags.cpp and declared in core/flags.h. The backend flag
-// carries a validator, registered there so that an unknown value is rejected
-// at parse time.
+// render_queue_capacity and render_queue_drop_log_max are defined in
+// core/flags.cpp and declared in core/flags.h.
+//
+// The render backend is NOT a runtime flag. tgfx permits exactly one GPU
+// backend per build (see thirdparty/CMakeLists.txt), so the backend is baked in
+// at configure time via -DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>. It is
+// reflected here by the NEOFLUX_BACKEND_NAME macro purely for logging; switching
+// backends requires a rebuild, not a command-line option.
 
 namespace neoflux {
+
+// Name of the tgfx backend compiled into this binary.
+#if defined(NEOFLUX_BACKEND_NAME)
+static constexpr const char kBackendName[] = NEOFLUX_BACKEND_NAME;
+#elif defined(NEOFLUX_BACKEND_gl)
+static constexpr const char kBackendName[] = "gl";
+#elif defined(NEOFLUX_BACKEND_vulkan)
+static constexpr const char kBackendName[] = "vulkan";
+#elif defined(NEOFLUX_BACKEND_d3d12)
+static constexpr const char kBackendName[] = "d3d12";
+#elif defined(NEOFLUX_BACKEND_metal)
+static constexpr const char kBackendName[] = "metal";
+#else
+static constexpr const char kBackendName[] = "unknown";
+#endif
 
 RenderLayer::RenderLayer()  // NOLINT(cppcoreguidelines-pro-type-member-init, modernize-use-equals-default)
     : command_queue_(FLAGS_render_queue_capacity),
@@ -62,25 +81,9 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   window_width_ = width;
   window_height_ = height;
 
-#if defined(NEOFLUX_BACKEND_gl)
+  // The backend is a compile-time choice; log which one this binary carries.
   LOG(INFO) << "RenderLayer starting: " << width << "x" << height
-            << " backend=gl (tgfx OpenGL)";
-  LOG(INFO) << "Using tgfx OpenGL backend";
-#elif defined(NEOFLUX_BACKEND_vulkan)
-  LOG(INFO) << "RenderLayer starting: " << width << "x" << height
-            << " backend=vulkan (tgfx Vulkan)";
-  LOG(INFO) << "Using tgfx Vulkan backend";
-#elif defined(NEOFLUX_BACKEND_d3d12)
-  LOG(INFO) << "RenderLayer starting: " << width << "x" << height
-            << " backend=d3d12 (tgfx D3D12)";
-  LOG(INFO) << "Using tgfx D3D12 backend";
-#elif defined(NEOFLUX_BACKEND_metal)
-  LOG(INFO) << "RenderLayer starting: " << width << "x" << height
-            << " backend=metal (tgfx Metal)";
-  LOG(INFO) << "Using tgfx Metal backend";
-#else
-  LOG(INFO) << "RenderLayer starting: " << width << "x" << height;
-#endif
+            << " backend=" << kBackendName << " (tgfx)";
 
   renderer_ = std::make_unique<TgfxRenderer>();
 

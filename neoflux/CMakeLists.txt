@@ -64,7 +64,10 @@ target_include_directories(neoflux
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# OpenGL is required for both the GLFW bridge and the OpenGL fallback renderer.
+# OpenGL is required by the GLFW bridge and the OpenGL renderer path. The other
+# tgfx backends (vulkan/d3d12/metal) do not use it, but a broad range of widget,
+# font, and media code currently links OpenGL::GL unconditionally, so it stays a
+# hard dependency for now. Making it conditional is tracked as follow-up work.
 find_package(OpenGL REQUIRED)
 
 # ---------------------------------------------------------------------------
