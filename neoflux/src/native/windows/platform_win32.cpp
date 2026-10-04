@@ -37,6 +37,8 @@
 
 #include <glog/logging.h>
 
+#include "neoflux/core/flags.h"
+
 namespace neoflux::native {
 namespace {
 
@@ -64,8 +66,9 @@ unsigned long long ReadXcr0() {
 
 /// MMCSS registration state so the render thread's characteristics handle is
 /// released exactly once at thread exit. AvSetMmThreadCharacteristicsW hands
-/// the thread to the "Games" profile: GPU-preemption-aware multimedia
-/// scheduling, higher priority than a plain ABOVE_NORMAL bump.
+/// the thread to the configured profile (--native_mmcss_profile, default
+/// "Games"): GPU-preemption-aware multimedia scheduling, higher priority than
+/// a plain ABOVE_NORMAL bump.
 struct MmcssRegistration {
   HANDLE handle{nullptr};
   DWORD index{0};
@@ -83,21 +86,31 @@ struct MmcssRegistration {
 }  // namespace
 
 void TuneRenderThread() noexcept {
-  // Preferred: register with MMCSS ("Games" profile). This supersedes a
-  // plain SetThreadPriority call: the scheduler treats MMCSS threads with
-  // GPU-preemption awareness, which is exactly the render thread's job.
+  if (!FLAGS_native_tuning) {
+    LOG_FIRST_N(INFO, 1) << "native: tuning disabled by --nonative_tuning";
+    return;
+  }
+  // Preferred: register with MMCSS. The profile (default "Games") comes from
+  // --native_mmcss_profile. This supersedes a plain SetThreadPriority call:
+  // the scheduler treats MMCSS threads with GPU-preemption awareness, which
+  // is exactly the render thread's job.
   static thread_local MmcssRegistration mmcss;
   if (mmcss.handle != nullptr) {
     return;  // Idempotent: re-entering TuneRenderThread must not leak a
              // second characteristics handle by overwriting this one.
   }
-  mmcss.handle = AvSetMmThreadCharacteristicsW(L"Games", &mmcss.index);
+  wchar_t profile[64];
+  const int wlen = ::MultiByteToWideChar(
+      CP_UTF8, 0, FLAGS_native_mmcss_profile.c_str(), -1, profile,
+      static_cast<int>(sizeof(profile) / sizeof(profile[0])));
+  mmcss.handle = (wlen > 0) ? AvSetMmThreadCharacteristicsW(profile, &mmcss.index)
+                            : nullptr;
   if (mmcss.handle != nullptr) {
     // Request high MMCSS priority right away -- the destructor only reverts,
     // so this is the one and only place the priority is chosen.
     AvSetMmThreadPriority(mmcss.handle, AVRT_PRIORITY_HIGH);
-    LOG(INFO) << "native: render thread registered with MMCSS profile "
-                 "'Games' (priority HIGH)";
+    LOG(INFO) << "native: render thread registered with MMCSS profile '"
+              << FLAGS_native_mmcss_profile << "' (priority HIGH)";
     return;
   }
   // Fallback: ABOVE_NORMAL rather than THREAD_PRIORITY_TIME_CRITICAL -- the
@@ -113,15 +126,23 @@ void TuneRenderThread() noexcept {
 }
 
 void TuneUiThread() noexcept {
+  if (!FLAGS_native_tuning) {
+    return;  // Master switch off; the render-thread call already logged once.
+  }
   // Frame pacing: EventLoop::Run() waits on a condition_variable with a
   // frame_duration timeout. CV waits inherit the system timer resolution,
   // which defaults to ~15.6 ms -- fatal for 60 FPS pacing. Request the best
-  // resolution the platform grants us. On Windows 10 2004+ this call is
+  // resolution the platform grants us (--native_timer_period_ms, default
+  // 1 ms; 0 disables the request). On Windows 10 2004+ this call is
   // automatically scoped to the calling process (pre-Win10 it is global, so
-  // keep the request at exactly 1 ms and never lower it).
-  const MMRESULT mmres = timeBeginPeriod(1);
-  if (mmres != TIMERR_NOERROR) {
-    LOG(WARNING) << "native: timeBeginPeriod(1) failed, err=" << mmres;
+  // never request coarser than the default).
+  const int period_ms = FLAGS_native_timer_period_ms;
+  if (period_ms > 0) {
+    const MMRESULT mmres = timeBeginPeriod(static_cast<UINT>(period_ms));
+    if (mmres != TIMERR_NOERROR) {
+      LOG(WARNING) << "native: timeBeginPeriod(" << period_ms
+                   << ") failed, err=" << mmres;
+    }
   }
   // Process-wide priority: keeps the whole app (UI, worker, render threads
   // created later) above the default class on a contended desktop without

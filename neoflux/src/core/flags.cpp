@@ -50,6 +50,54 @@ DEFINE_int32(render_queue_drop_log_max, 10,
              "commands' warning is emitted per process. After this many "
              "occurrences, subsequent drops are counted silently.");
 
+// ---------------------------------------------------------------------------
+// Event loop idle pacing
+// ---------------------------------------------------------------------------
+DEFINE_int32(idle_fps, 15,
+             "Idle heart-beat rate for the event loop in frames per second. "
+             "When no render request and no coroutine/timer work is pending "
+             "for a few consecutive frames, the loop drops to this rate to "
+             "save CPU (input events still wake it instantly). 0 disables "
+             "idle throttling entirely (always full --target_fps).");
+
+// ---------------------------------------------------------------------------
+// Native tuning layer (src/native/)
+// ---------------------------------------------------------------------------
+// Best-effort OS-level tuning. Everything degrades silently when the OS
+// refuses; these flags only change what is *attempted*, never correctness.
+DEFINE_bool(native_tuning, true,
+            "Master switch for the platform-native tuning layer (thread "
+            "scheduling, MMCSS, timer resolution, big-core pinning). "
+            "false makes every native entry point a no-op.");
+
+DEFINE_int32(native_render_rt_priority, 1,
+             "Linux/Android: SCHED_FIFO real-time priority attempted for the "
+             "render thread (1 = lowest RT priority). Used only when "
+             "CAP_SYS_NICE is granted; otherwise the nice fallback below is "
+             "tried. Range 1..99.");
+
+DEFINE_int32(native_thread_nice, -5,
+             "Linux/Android: nice value attempted for the render (fallback) "
+             "and UI threads. Negative values require CAP_SYS_NICE and fail "
+             "silently without it. Range -20..19.");
+
+DEFINE_int32(native_bigcore_threshold_permille, 950,
+             "Big-core detection threshold in permille of the fastest core's "
+             "max frequency (950 = 95%). Cores at or above the threshold are "
+             "considered 'big' when pinning the render thread. 500..1000; "
+             "values below 500 are clamped.");
+
+DEFINE_string(native_mmcss_profile, "Games",
+              "Windows: MMCSS (AvSetMmThreadCharacteristicsW) profile name "
+              "used when registering the render thread. Ignored on other "
+              "platforms and when MMCSS is unavailable.");
+
+DEFINE_int32(native_timer_period_ms, 1,
+             "Windows: timer resolution in ms requested via timeBeginPeriod "
+             "from the UI thread (0 disables the request). Fixes the ~15.6 ms "
+             "condition_variable wait granularity that jitters 60 FPS frame "
+             "pacing. Ignored on other platforms.");
+
 // NOTE: there is deliberately no --render_backend flag. tgfx permits exactly
 // one GPU backend per build, so the backend is selected at CMake configure time
 // via -DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal> (see thirdparty/CMakeLists.txt)

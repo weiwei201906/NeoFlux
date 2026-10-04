@@ -47,6 +47,36 @@ DECLARE_uint64(render_queue_capacity);
 // Maximum number of "queue full, dropped commands" warnings per process.
 DECLARE_int32(render_queue_drop_log_max);
 
+// ---------------------------------------------------------------------------
+// Event loop idle pacing
+// ---------------------------------------------------------------------------
+
+// Idle heart-beat rate (fps) after a few frames without work; 0 disables
+// idle throttling. See flags.cpp for the full description.
+DECLARE_int32(idle_fps);
+
+// ---------------------------------------------------------------------------
+// Native tuning layer (src/native/)
+// ---------------------------------------------------------------------------
+
+// Master switch: false turns every native tuning entry point into a no-op.
+DECLARE_bool(native_tuning);
+
+// Linux/Android: SCHED_FIFO priority attempted for the render thread.
+DECLARE_int32(native_render_rt_priority);
+
+// Linux/Android: nice value attempted for render (fallback) and UI threads.
+DECLARE_int32(native_thread_nice);
+
+// Big-core frequency threshold in permille of the fastest core (500..1000).
+DECLARE_int32(native_bigcore_threshold_permille);
+
+// Windows: MMCSS profile name for the render thread registration.
+DECLARE_string(native_mmcss_profile);
+
+// Windows: timeBeginPeriod resolution in ms (0 = do not request).
+DECLARE_int32(native_timer_period_ms);
+
 // No backend flag: the tgfx backend is a compile-time choice
 // (-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>).
 

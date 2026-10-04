@@ -55,6 +55,8 @@
 
 #include <glog/logging.h>
 
+#include "neoflux/core/flags.h"
+
 namespace neoflux::native {
 namespace {
 
@@ -65,11 +67,11 @@ constexpr unsigned int kAvx2Bit = 1U << 5;      ///< leaf 7 EBX[5]
 // XCR0 bits [2:1] must both be set for the OS to save/restore YMM state.
 constexpr std::uint64_t kXcr0XmmYmmMask = 0x6ULL;
 
-/// Attempts a one-notch priority bump; returns true on success. Negative
-/// nice values require CAP_SYS_NICE -- commonly absent in desktop sessions,
-/// so failure here is normal and quiet.
-bool TryNiceBump() {
-  return setpriority(PRIO_PROCESS, 0, -5) == 0;
+/// Attempts a nice bump to the (clamped) configured value; returns true on
+/// success. Negative nice values require CAP_SYS_NICE -- commonly absent in
+/// desktop sessions, so failure here is normal and quiet.
+bool TryNiceBump(int nice_value) {
+  return setpriority(PRIO_PROCESS, 0, nice_value) == 0;
 }
 
 /// Returns max frequency (kHz) per logical CPU from cpufreq, or an empty
@@ -101,18 +103,25 @@ std::vector<std::int64_t> ReadCoreMaxFrequencies() {
 }  // namespace
 
 void TuneRenderThread() noexcept {
-  // Preferred: hard realtime FIFO scheduling (lowest RT priority: we want
-  // deadline predictability, not to outrank kernel threads). Requires
-  // CAP_SYS_NICE -- typically absent, so this is expected to fall through.
-  sched_param sp{};
-  sp.sched_priority = 1;
-  const int rt_rc = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
-  if (rt_rc == 0) {
-    LOG(INFO) << "native: render thread -> SCHED_FIFO prio=1";
+  if (!FLAGS_native_tuning) {
+    LOG_FIRST_N(INFO, 1) << "native: tuning disabled by --nonative_tuning";
     return;
   }
-  if (TryNiceBump()) {
-    LOG(INFO) << "native: render thread -> nice -5 (RT scheduling denied)";
+  // Preferred: hard realtime FIFO scheduling. The RT priority (default: the
+  // lowest, 1) is configurable via --native_render_rt_priority. Requires
+  // CAP_SYS_NICE -- typically absent, so this is expected to fall through.
+  sched_param sp{};
+  sp.sched_priority = std::clamp(FLAGS_native_render_rt_priority, 1, 99);
+  const int rt_rc = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+  if (rt_rc == 0) {
+    LOG(INFO) << "native: render thread -> SCHED_FIFO prio="
+              << sp.sched_priority;
+    return;
+  }
+  const int nice_value = std::clamp(FLAGS_native_thread_nice, -20, 19);
+  if (TryNiceBump(nice_value)) {
+    LOG(INFO) << "native: render thread -> nice " << nice_value
+              << " (RT scheduling denied)";
     return;
   }
   LOG(INFO) << "native: render thread keeps default scheduling (no "
@@ -120,16 +129,23 @@ void TuneRenderThread() noexcept {
 }
 
 void TuneUiThread() noexcept {
+  if (!FLAGS_native_tuning) {
+    return;  // Master switch off; the render-thread call already logged once.
+  }
   // Linux/Android kernels run hrtimers; condition_variable::wait_for() is
   // already sub-millisecond accurate, so there is no timer-resolution work
   // to do here (unlike Windows). A gentle nice bump helps input latency when
   // compositing is busy; failures are normal for unprivileged sessions.
-  if (TryNiceBump()) {
-    LOG(INFO) << "native: ui thread -> nice -5";
+  const int nice_value = std::clamp(FLAGS_native_thread_nice, -20, 19);
+  if (TryNiceBump(nice_value)) {
+    LOG(INFO) << "native: ui thread -> nice " << nice_value;
   }
 }
 
 void PinThreadToBigCores() noexcept {
+  if (!FLAGS_native_tuning) {
+    return;
+  }
   const std::vector<std::int64_t> freqs = ReadCoreMaxFrequencies();
   if (freqs.size() < 2) {
     return;  // No topology data or single core: nothing to do, silently.
@@ -137,23 +153,22 @@ void PinThreadToBigCores() noexcept {
   const std::int64_t max_freq =
       *std::max_element(freqs.begin(), freqs.end());
 
-  // "Big" = every core within 5% of the top frequency. On big.LITTLE SoCs
-  // the LITTLE cluster sits at 60-80% of the big cluster's clock, so the
-  // threshold separates them cleanly while tolerating turbo variance.
+  // "Big" = every core whose max frequency reaches
+  // --native_bigcore_threshold_permille (default 950 = 95%) of the fastest
+  // core. On big.LITTLE SoCs the LITTLE cluster sits at 60-80% of the big
+  // cluster's clock, so the default separates them cleanly while tolerating
+  // turbo variance. Integer permille math avoids any float rounding.
+  const std::int64_t threshold_permille =
+      std::clamp(static_cast<std::int64_t>(FLAGS_native_bigcore_threshold_permille),
+                 std::int64_t{500}, std::int64_t{1000});
   cpu_set_t big_set;
   CPU_ZERO(&big_set);
   int big_count = 0;
-  // Big core: within 5% of the top frequency (19/20 threshold). On
-  // big.LITTLE SoCs the LITTLE cluster sits at 60-80% of the big cluster's
-  // max clock, so this separates the clusters cleanly while tolerating
-  // turbo variance. Integer math avoids any float rounding.
-  constexpr std::int64_t kBigNum = 19;  // numerator of the 0.95 threshold
-  constexpr std::int64_t kBigDen = 20;  // denominator
   for (size_t cpu = 0; cpu < freqs.size(); ++cpu) {
     if (cpu >= CPU_SETSIZE) {
       break;  // cpu_set_t is a fixed 1024-bit mask: never index out-of-bounds.
     }
-    if (freqs[cpu] * kBigNum >= max_freq * kBigDen) {
+    if (freqs[cpu] * threshold_permille >= max_freq * 1000) {
       CPU_SET(static_cast<int>(cpu), &big_set);
       ++big_count;
     }

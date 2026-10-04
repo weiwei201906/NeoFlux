@@ -16,9 +16,15 @@
 
 #include <glog/logging.h>
 
+#include "neoflux/core/flags.h"
+
 namespace neoflux::native {
 
 void TuneRenderThread() noexcept {
+  if (!FLAGS_native_tuning) {
+    LOG_FIRST_N(INFO, 1) << "native: tuning disabled by --nonative_tuning";
+    return;
+  }
   // USER_INTERACTIVE is the top QoS tier: mapped by the scheduler to high
   // CPU priority with timers coalescing disabled. Exactly right for a
   // render thread pacing to the display refresh. Requires macOS 10.10+ /
@@ -32,6 +38,9 @@ void TuneRenderThread() noexcept {
 }
 
 void TuneUiThread() noexcept {
+  if (!FLAGS_native_tuning) {
+    return;  // Master switch off; the render-thread call already logged once.
+  }
   // The main thread on macOS/iOS already runs at USER_INTERACTIVE QoS by
   // default, and timer resolution is not controllable from userspace.
   // Nothing to improve; kept as an explicit no-op so callers stay uniform.
