@@ -16,6 +16,8 @@ void TuneRenderThread() {}
 
 void TuneUiThread() {}
 
+void PinThreadToBigCores() {}
+
 CpuFeatures DetectCpuFeatures() { return {}; }
 
 }  // namespace native

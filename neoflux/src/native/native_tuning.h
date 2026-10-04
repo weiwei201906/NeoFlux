@@ -42,10 +42,18 @@ struct CpuFeatures {
 void TuneRenderThread();
 
 /// Tune the calling thread for UI/event-loop duty (call at the start of
-/// EventLoop::Run()). On Windows this also requests 1 ms timer resolution:
-/// condition_variable::wait_for() inherits the ~15.6 ms default timer
-/// granularity, which visibly jitters frame pacing at 60 FPS.
+/// EventLoop::Run()). On Windows this also requests 1 ms timer resolution
+/// and raises the whole process priority class: condition_variable::wait_for()
+/// inherits the ~15.6 ms default timer granularity, which visibly jitters
+/// frame pacing at 60 FPS.
 void TuneUiThread();
+
+/// Attempt to pin the calling thread to "big"/performance cores when the
+/// platform exposes a big.LITTLE-style topology (Linux/Android via cpufreq
+/// data, Windows via EfficiencyClass). No-op on homogeneous topologies,
+/// when topology data is unavailable, or on Apple platforms where QoS
+/// already drives cluster placement and affinity APIs are not honoured.
+void PinThreadToBigCores();
 
 /// Detect CPU SIMD features. Purely informational; callers must still
 /// provide a scalar fallback (results are not cached across CPUs, hotplug

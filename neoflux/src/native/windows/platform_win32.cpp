@@ -3,8 +3,9 @@
 // =============================================================================
 // NeoFlux - platform_win32.cpp
 //
-// Windows tuning: thread priority shaping, 1 ms timer resolution for frame
-// pacing, and x86 CPU feature detection via cpuid/xgetbv.
+// Windows tuning: MMCSS registration / thread priority shaping, process
+// priority class, 1 ms timer resolution for frame pacing, big-core pinning
+// via EfficiencyClass, and x86 CPU feature detection via cpuid/xgetbv.
 // =============================================================================
 
 #include "native/native_tuning.h"
@@ -15,9 +16,18 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+// EfficiencyClass in SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX and
+// GetLogicalProcessorInformationEx both require targeting Win10 headers.
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
 #include <windows.h>
 
+#include <avrt.h>
 #include <intrin.h>
+
+#include <bit>
+#include <vector>
 
 #include <glog/logging.h>
 
@@ -40,21 +50,45 @@ unsigned long long ReadXcr0() {
 #endif
 }
 
+/// MMCSS registration state so the render thread's characteristics handle is
+/// released exactly once at thread exit. AvSetMmThreadCharacteristicsW hands
+/// the thread to the "Games" profile: GPU-preemption-aware multimedia
+/// scheduling, higher priority than a plain ABOVE_NORMAL bump.
+struct MmcssRegistration {
+  HANDLE handle{nullptr};
+  DWORD index{0};
+
+  ~MmcssRegistration() {
+    if (handle != nullptr) {
+      AvSetMmThreadPriority(handle, AVRT_PRIORITY_HIGH);
+      AvRevertMmThreadCharacteristics(handle);
+    }
+  }
+};
+
 }  // namespace
 
 void TuneRenderThread() {
-  // ABOVE_NORMAL rather than THREAD_PRIORITY_TIME_CRITICAL: the render thread
-  // is latency-sensitive, but TIME_CRITICAL on a non-realtime OS can starve
-  // UI/input threads and cause worse perceived stutter.
+  // Preferred: register with MMCSS ("Games" profile). This supersedes a
+  // plain SetThreadPriority call: the scheduler treats MMCSS threads with
+  // GPU-preemption awareness, which is exactly the render thread's job.
+  static thread_local MmcssRegistration mmcss;
+  mmcss.handle = AvSetMmThreadCharacteristicsW(L"Games", &mmcss.index);
+  if (mmcss.handle != nullptr) {
+    LOG(INFO) << "native: render thread registered with MMCSS profile "
+                 "'Games'";
+    return;
+  }
+  // Fallback: ABOVE_NORMAL rather than THREAD_PRIORITY_TIME_CRITICAL -- the
+  // render thread is latency-sensitive, but TIME_CRITICAL on a non-realtime
+  // OS can starve UI/input threads and cause worse perceived stutter.
   if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL)) {
     LOG(WARNING) << "native: SetThreadPriority(render) failed, err="
                  << GetLastError();
     return;
   }
-  LOG(INFO) << "native: render thread priority = ABOVE_NORMAL";
-  // TODO(platform): register the thread with MMCSS via
-  // AvSetMmThreadCharacteristicsW(L"Games", ...) once avrt.lib availability
-  // across our supported toolchains (MSVC + MinGW) is vetted in CI.
+  LOG(INFO) << "native: render thread priority = ABOVE_NORMAL (MMCSS "
+               "unavailable)";
 }
 
 void TuneUiThread() {
@@ -68,12 +102,72 @@ void TuneUiThread() {
   if (mmres != TIMERR_NOERROR) {
     LOG(WARNING) << "native: timeBeginPeriod(1) failed, err=" << mmres;
   }
+  // Process-wide priority: keeps the whole app (UI, worker, render threads
+  // created later) above the default class on a contended desktop without
+  // reaching Realtime, which the scheduler punishes for I/O-heavy work.
+  if (!SetPriorityClass(GetCurrentProcess(),
+                        ABOVE_NORMAL_PRIORITY_CLASS)) {
+    LOG(WARNING) << "native: SetPriorityClass failed, err=" << GetLastError();
+  }
   if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL)) {
     LOG(WARNING) << "native: SetThreadPriority(ui) failed, err="
                  << GetLastError();
     return;
   }
-  LOG(INFO) << "native: ui thread tuned (1 ms timer resolution requested)";
+  LOG(INFO) << "native: ui thread tuned (1 ms timer resolution + "
+               "ABOVE_NORMAL process class)";
+}
+
+void PinThreadToBigCores() {
+  // Ask for the full logical-processor topology in one shot.
+  DWORD size = 0;
+  GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &size);
+  if (size == 0) {
+    return;  // API unavailable / failed: stay unpinned.
+  }
+  std::vector<char> buffer(size);
+  auto* info =
+      reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data());
+  if (!GetLogicalProcessorInformationEx(RelationProcessorCore, info, &size)) {
+    return;
+  }
+
+  // EfficiencyClass > 0 marks P-cores on hybrid/Big.LITTLE parts
+  // (Intel 12th-gen+, Snapdragon). Cores with class 0 are E-cores or a
+  // homogeneous topology, where pinning would only reduce scheduler freedom.
+  DWORD_PTR big_mask = 0;
+  DWORD offset = 0;
+  bool any_big = false;
+  while (offset < size) {
+    auto* entry =
+        reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(
+            buffer.data() + offset);
+    if (entry->Relationship == RelationProcessorCore &&
+        entry->Processor.EfficiencyClass > 0) {
+      // GROUP_AFFINITY may span groups; this app does not support >64-core
+      // groups yet -- take group 0 cores only.
+      if (entry->Processor.GroupCount > 0) {
+        const GROUP_AFFINITY& ga = entry->Processor.GroupMask[0];
+        if (ga.Group == 0) {
+          big_mask |= ga.Mask;
+        }
+      }
+      any_big = true;
+    }
+    offset += entry->Size;
+  }
+  if (!any_big || big_mask == 0) {
+    LOG(INFO) << "native: homogeneous topology detected, thread not pinned";
+    return;
+  }
+  if (!SetThreadAffinityMask(GetCurrentThread(), big_mask)) {
+    LOG(WARNING) << "native: SetThreadAffinityMask failed, err="
+                 << GetLastError();
+    return;
+  }
+  LOG(INFO) << "native: thread pinned to "
+            << std::popcount(static_cast<unsigned long long>(big_mask))
+            << " performance core(s)";
 }
 
 CpuFeatures DetectCpuFeatures() {

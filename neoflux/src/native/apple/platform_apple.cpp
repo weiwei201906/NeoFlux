@@ -39,6 +39,16 @@ void TuneUiThread() {
   LOG(INFO) << "native: ui thread keeps default QoS (already USER_INTERACTIVE)";
 }
 
+void PinThreadToBigCores() {
+  // Apple Silicon runs P/E clusters, but userspace has no stable API to
+  // address them: thread affinity is not honoured on iOS and only has an
+  // undocumented, App-Store-discouraged tag on macOS. The scheduler places
+  // threads on P-cores based on their QoS class, which TuneRenderThread()
+  // already set to USER_INTERACTIVE -- the correct mechanism on this
+  // platform. Kept as an explicit no-op so callers stay uniform.
+  LOG(INFO) << "native: core pinning handled by QoS on Apple platforms";
+}
+
 CpuFeatures DetectCpuFeatures() {
   CpuFeatures f;
 

@@ -302,9 +302,11 @@ void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
 }
 
 void RenderLayer::RenderLoop() {
-  // Platform-native scheduling tuning (priority / MMCSS / SCHED_FIFO / QoS).
-  // Best-effort: on restricted systems this silently keeps default priority.
+  // Platform-native scheduling tuning (MMCSS / priority / SCHED_FIFO / QoS)
+  // and big-core pinning on hybrid topologies. Best-effort: on restricted
+  // systems these silently keep default scheduling.
   native::TuneRenderThread();
+  native::PinThreadToBigCores();
 
   LOG(INFO) << "Render thread started";
 

@@ -8,12 +8,23 @@
 // cpuid (x86) / getauxval(AT_HWCAP) (ARM).
 // =============================================================================
 
+// cpu_set_t / sched_setaffinity are GNU extensions: they disappear under
+// strict -std=c++20 unless this is defined before any system header.
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include "native/native_tuning.h"
 
 #include <pthread.h>
 #include <sched.h>
 #include <sys/resource.h>
 #include <unistd.h>
+
+#include <algorithm>
+#include <cstdio>
+#include <string>
+#include <vector>
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <cpuid.h>
@@ -56,6 +67,33 @@ bool TryNiceBump() {
   return setpriority(PRIO_PROCESS, 0, -5) == 0;
 }
 
+/// Returns max frequency (kHz) per logical CPU from cpufreq, or an empty
+/// vector when the sysfs tree is unavailable (containers, some VMs, x86
+/// servers with acpi-cpufreq disabled). Present on virtually all ARM SoCs
+/// (big.LITTLE) and modern Intel/AMD hybrid parts.
+std::vector<long> ReadCoreMaxFrequencies() {
+  std::vector<long> freqs;
+  for (int cpu = 0;; ++cpu) {
+    char path[96];
+    std::snprintf(path, sizeof(path),
+                  "/sys/devices/system/cpu/cpu%d/cpufreq/"
+                  "cpuinfo_max_freq",
+                  cpu);
+    FILE* fp = std::fopen(path, "r");
+    if (fp == nullptr) {
+      break;  // cpuN does not exist (or no cpufreq): stop at first gap.
+    }
+    long khz = 0;
+    const bool ok = std::fscanf(fp, "%ld", &khz) == 1;
+    std::fclose(fp);
+    if (!ok) {
+      break;
+    }
+    freqs.push_back(khz);
+  }
+  return freqs;
+}
+
 }  // namespace
 
 void TuneRenderThread() {
@@ -85,6 +123,41 @@ void TuneUiThread() {
   if (TryNiceBump()) {
     LOG(INFO) << "native: ui thread -> nice -5";
   }
+}
+
+void PinThreadToBigCores() {
+  const std::vector<long> freqs = ReadCoreMaxFrequencies();
+  if (freqs.size() < 2) {
+    return;  // No topology data or single core: nothing to do, silently.
+  }
+  const long max_freq =
+      *std::max_element(freqs.begin(), freqs.end());
+
+  // "Big" = every core within 5% of the top frequency. On big.LITTLE SoCs
+  // the LITTLE cluster sits at 60-80% of the big cluster's clock, so the
+  // threshold separates them cleanly while tolerating turbo variance.
+  cpu_set_t big_set;
+  CPU_ZERO(&big_set);
+  int big_count = 0;
+  for (size_t cpu = 0; cpu < freqs.size(); ++cpu) {
+    if (freqs[cpu] * 20 >= max_freq * 19) {  // freq >= 0.95 * max
+      CPU_SET(static_cast<int>(cpu), &big_set);
+      ++big_count;
+    }
+  }
+  if (big_count == 0 || big_count == static_cast<int>(freqs.size())) {
+    // Homogeneous topology (all cores same max clock): leave the scheduler
+    // in charge -- pinning would reduce freedom with no upside.
+    LOG(INFO) << "native: homogeneous cpu topology (" << freqs.size()
+              << " cores), thread not pinned";
+    return;
+  }
+  if (sched_setaffinity(0, sizeof(big_set), &big_set) != 0) {
+    // EPERM without CAP_SYS_NICE on some systems: normal, stay unpinned.
+    return;
+  }
+  LOG(INFO) << "native: render thread pinned to " << big_count << " big"
+            << " core(s) of " << freqs.size();
 }
 
 CpuFeatures DetectCpuFeatures() {
