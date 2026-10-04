@@ -62,15 +62,32 @@ endif()
 # contract). No rendering, no GL, no backend code -- GPU backends live behind
 # tgfx via the NEOFLUX_BACKEND compile-time selection.
 # ---------------------------------------------------------------------------
+# Hand-written assembly lives in src/native/asm/ (project policy: no inline
+# asm in C++ sources). Only non-MSVC x86_64 toolchains assemble it today:
+# MSVC covers xgetbv via the _xgetbv intrinsic instead.
+enable_language(ASM)
+if(NOT MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i[3-6]86)")
+  set(NEOFLUX_NATIVE_ASM_SRC src/native/asm/xgetbv.S)
+endif()
+
 if(WIN32)
-  target_sources(neoflux PRIVATE src/native/windows/platform_win32.cpp)
+  target_sources(neoflux PRIVATE
+    src/native/windows/platform_win32.cpp
+    src/native/windows/cache_topology_win32.cpp
+    ${NEOFLUX_NATIVE_ASM_SRC})
   # winmm: timeBeginPeriod (frame pacing timer resolution)
   # avrt:  MMCSS render-thread registration (AvSetMmThreadCharacteristicsW)
   target_link_libraries(neoflux PUBLIC winmm avrt)
 elseif(APPLE)
-  target_sources(neoflux PRIVATE src/native/apple/platform_apple.cpp)
+  target_sources(neoflux PRIVATE
+    src/native/apple/platform_apple.cpp
+    src/native/apple/cache_topology_apple.cpp
+    ${NEOFLUX_NATIVE_ASM_SRC})
 elseif(ANDROID OR UNIX)
-  target_sources(neoflux PRIVATE src/native/linux/platform_linux.cpp)
+  target_sources(neoflux PRIVATE
+    src/native/linux/platform_linux.cpp
+    src/native/linux/cache_topology_linux.cpp
+    ${NEOFLUX_NATIVE_ASM_SRC})
 else()
   target_sources(neoflux PRIVATE src/native/platform_common.cpp)
 endif()

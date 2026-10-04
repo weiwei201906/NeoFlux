@@ -16,12 +16,20 @@
 
 #include "native/native_tuning.h"
 
+#if defined(__x86_64__)
+// neoflux_read_xcr0() lives in asm/xgetbv.S (project policy: no inline asm in
+// C++ sources). The .S is only linked for non-MSVC x86_64 builds, which is
+// every x86_64 build on this platform.
+#include "native/asm/asm_symbols.h"
+#endif
+
 #include <pthread.h>
 #include <sched.h>
 #include <sys/resource.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -47,18 +55,15 @@
 
 #include <glog/logging.h>
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 namespace {
 
-#if defined(__x86_64__) || defined(__i386__)
-/// Reads XCR0 to confirm the OS enables YMM state (required for AVX2).
-unsigned long long ReadXcr0() {
-  unsigned int eax = 0, edx = 0;
-  __asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
-  return (static_cast<unsigned long long>(edx) << 32) | eax;
-}
-#endif
+// --- cpuid feature bits (CPUID leaf 1 ECX / leaf 7 EBX), named for clarity.
+constexpr unsigned int kSse42Bit = 1U << 20;    ///< leaf 1 ECX[20]
+constexpr unsigned int kOsxsaveBit = 1U << 27;  ///< leaf 1 ECX[27]: XGETBV ok
+constexpr unsigned int kAvx2Bit = 1U << 5;      ///< leaf 7 EBX[5]
+// XCR0 bits [2:1] must both be set for the OS to save/restore YMM state.
+constexpr std::uint64_t kXcr0XmmYmmMask = 0x6ULL;
 
 /// Attempts a one-notch priority bump; returns true on success. Negative
 /// nice values require CAP_SYS_NICE -- commonly absent in desktop sessions,
@@ -71,19 +76,18 @@ bool TryNiceBump() {
 /// vector when the sysfs tree is unavailable (containers, some VMs, x86
 /// servers with acpi-cpufreq disabled). Present on virtually all ARM SoCs
 /// (big.LITTLE) and modern Intel/AMD hybrid parts.
-std::vector<long> ReadCoreMaxFrequencies() {
-  std::vector<long> freqs;
+std::vector<std::int64_t> ReadCoreMaxFrequencies() {
+  static constexpr const char* kMaxFreqSuffix = "/cpufreq/cpuinfo_max_freq";
+  std::vector<std::int64_t> freqs;
   for (int cpu = 0;; ++cpu) {
-    char path[96];
-    std::snprintf(path, sizeof(path),
-                  "/sys/devices/system/cpu/cpu%d/cpufreq/"
-                  "cpuinfo_max_freq",
-                  cpu);
-    FILE* fp = std::fopen(path, "r");
+    // One-shot startup probe: readability beats the snprintf micro-cost.
+    const std::string path =
+        "/sys/devices/system/cpu/cpu" + std::to_string(cpu) + kMaxFreqSuffix;
+    FILE* fp = std::fopen(path.c_str(), "r");
     if (fp == nullptr) {
       break;  // cpuN does not exist (or no cpufreq): stop at first gap.
     }
-    long khz = 0;
+    std::int64_t khz = 0;
     const bool ok = std::fscanf(fp, "%ld", &khz) == 1;
     std::fclose(fp);
     if (!ok) {
@@ -96,7 +100,7 @@ std::vector<long> ReadCoreMaxFrequencies() {
 
 }  // namespace
 
-void TuneRenderThread() {
+void TuneRenderThread() noexcept {
   // Preferred: hard realtime FIFO scheduling (lowest RT priority: we want
   // deadline predictability, not to outrank kernel threads). Requires
   // CAP_SYS_NICE -- typically absent, so this is expected to fall through.
@@ -115,7 +119,7 @@ void TuneRenderThread() {
                "RT/nice privileges)";
 }
 
-void TuneUiThread() {
+void TuneUiThread() noexcept {
   // Linux/Android kernels run hrtimers; condition_variable::wait_for() is
   // already sub-millisecond accurate, so there is no timer-resolution work
   // to do here (unlike Windows). A gentle nice bump helps input latency when
@@ -125,12 +129,12 @@ void TuneUiThread() {
   }
 }
 
-void PinThreadToBigCores() {
-  const std::vector<long> freqs = ReadCoreMaxFrequencies();
+void PinThreadToBigCores() noexcept {
+  const std::vector<std::int64_t> freqs = ReadCoreMaxFrequencies();
   if (freqs.size() < 2) {
     return;  // No topology data or single core: nothing to do, silently.
   }
-  const long max_freq =
+  const std::int64_t max_freq =
       *std::max_element(freqs.begin(), freqs.end());
 
   // "Big" = every core within 5% of the top frequency. On big.LITTLE SoCs
@@ -139,8 +143,17 @@ void PinThreadToBigCores() {
   cpu_set_t big_set;
   CPU_ZERO(&big_set);
   int big_count = 0;
+  // Big core: within 5% of the top frequency (19/20 threshold). On
+  // big.LITTLE SoCs the LITTLE cluster sits at 60-80% of the big cluster's
+  // max clock, so this separates the clusters cleanly while tolerating
+  // turbo variance. Integer math avoids any float rounding.
+  constexpr std::int64_t kBigNum = 19;  // numerator of the 0.95 threshold
+  constexpr std::int64_t kBigDen = 20;  // denominator
   for (size_t cpu = 0; cpu < freqs.size(); ++cpu) {
-    if (freqs[cpu] * 20 >= max_freq * 19) {  // freq >= 0.95 * max
+    if (cpu >= CPU_SETSIZE) {
+      break;  // cpu_set_t is a fixed 1024-bit mask: never index out-of-bounds.
+    }
+    if (freqs[cpu] * kBigNum >= max_freq * kBigDen) {
       CPU_SET(static_cast<int>(cpu), &big_set);
       ++big_count;
     }
@@ -160,22 +173,24 @@ void PinThreadToBigCores() {
             << " core(s) of " << freqs.size();
 }
 
-CpuFeatures DetectCpuFeatures() {
+CpuFeatures DetectCpuFeaturesImpl() {
   CpuFeatures f;
 
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__)
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-  if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
-    return f;
+  if (__get_cpuid(1, &eax, &ebx, &ecx, &edx) == 0) {
+    return f;  // cpuid leaf 1 unsupported: keep the all-false snapshot.
   }
-  f.sse42 = (ecx & (1u << 20)) != 0;
-  const bool os_xsave = (ecx & (1u << 27)) != 0;
+  f.sse42 = (ecx & kSse42Bit) != 0;
+  const bool os_xsave = (ecx & kOsxsaveBit) != 0;
   unsigned int max_leaf = __get_cpuid_max(0, nullptr);
   if (os_xsave && max_leaf >= 7 &&
-      __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
-    if ((ebx & (1u << 5)) != 0) {  // AVX2
-      const unsigned long long xcr0 = ReadXcr0();
-      f.avx2 = ((xcr0 & 0x6ULL) == 0x6ULL);  // XMM+YMM state OS-enabled
+      __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0) {
+    if ((ebx & kAvx2Bit) != 0) {  // AVX2
+      // neoflux_read_xcr0() lives in asm/xgetbv.S: pure register read, no
+      // args, returns EDX:EAX as a 64-bit value (ABI-agnostic).
+      const std::uint64_t xcr0 = neoflux_read_xcr0();
+      f.avx2 = ((xcr0 & kXcr0XmmYmmMask) == kXcr0XmmYmmMask);
     }
   }
 #elif defined(__aarch64__) || defined(__arm__)
@@ -187,5 +202,11 @@ CpuFeatures DetectCpuFeatures() {
   return f;
 }
 
-}  // namespace native
-}  // namespace neoflux
+CpuFeatures DetectCpuFeatures() noexcept {
+  // CPU features are a process-lifetime invariant: probe once, then serve
+  // the cached snapshot. Magic static => thread-safe one-shot evaluation.
+  static const CpuFeatures kCached = DetectCpuFeaturesImpl();
+  return kCached;
+}
+
+}  // namespace neoflux::native

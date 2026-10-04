@@ -47,6 +47,9 @@ void EventLoop::Run(const FrameCallback& frame_callback) {
   // the ~15.6 ms default granularity otherwise, visibly jittering the
   // frame cadence. Best-effort everywhere; safe to no-op.
   native::TuneUiThread();
+  // One-shot sanity check: does the compile-time cache-line padding
+  // (config::kCacheLineSize) match what the running CPU actually has?
+  native::VerifyCacheLineConfig();
 
   should_stop_.store(false);
   frame_count_.store(0);

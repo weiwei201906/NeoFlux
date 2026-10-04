@@ -16,10 +16,9 @@
 
 #include <glog/logging.h>
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 
-void TuneRenderThread() {
+void TuneRenderThread() noexcept {
   // USER_INTERACTIVE is the top QoS tier: mapped by the scheduler to high
   // CPU priority with timers coalescing disabled. Exactly right for a
   // render thread pacing to the display refresh. Requires macOS 10.10+ /
@@ -32,14 +31,14 @@ void TuneRenderThread() {
   LOG(INFO) << "native: render thread QoS = USER_INTERACTIVE";
 }
 
-void TuneUiThread() {
+void TuneUiThread() noexcept {
   // The main thread on macOS/iOS already runs at USER_INTERACTIVE QoS by
   // default, and timer resolution is not controllable from userspace.
   // Nothing to improve; kept as an explicit no-op so callers stay uniform.
   LOG(INFO) << "native: ui thread keeps default QoS (already USER_INTERACTIVE)";
 }
 
-void PinThreadToBigCores() {
+void PinThreadToBigCores() noexcept {
   // Apple Silicon runs P/E clusters, but userspace has no stable API to
   // address them: thread affinity is not honoured on iOS and only has an
   // undocumented, App-Store-discouraged tag on macOS. The scheduler places
@@ -49,7 +48,7 @@ void PinThreadToBigCores() {
   LOG(INFO) << "native: core pinning handled by QoS on Apple platforms";
 }
 
-CpuFeatures DetectCpuFeatures() {
+CpuFeatures DetectCpuFeaturesImpl() {
   CpuFeatures f;
 
 #if defined(__aarch64__) || defined(__arm64__)
@@ -77,5 +76,11 @@ CpuFeatures DetectCpuFeatures() {
   return f;
 }
 
-}  // namespace native
-}  // namespace neoflux
+CpuFeatures DetectCpuFeatures() noexcept {
+  // CPU features are a process-lifetime invariant: probe once, then serve
+  // the cached snapshot. Magic static => thread-safe one-shot evaluation.
+  static const CpuFeatures kCached = DetectCpuFeaturesImpl();
+  return kCached;
+}
+
+}  // namespace neoflux::native

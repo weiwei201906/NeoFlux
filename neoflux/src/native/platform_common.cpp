@@ -9,16 +9,24 @@
 
 #include "native/native_tuning.h"
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 
-void TuneRenderThread() {}
+void TuneRenderThread() noexcept {}
 
-void TuneUiThread() {}
+void TuneUiThread() noexcept {}
 
-void PinThreadToBigCores() {}
+void PinThreadToBigCores() noexcept {}
 
-CpuFeatures DetectCpuFeatures() { return {}; }
+CpuFeatures DetectCpuFeatures() noexcept { return {}; }
 
-}  // namespace native
-}  // namespace neoflux
+CacheInfo DetectCacheTopology() noexcept {
+  return {};  // line_size=64 (safe default), capacities 0 = unknown.
+}
+
+void PrefetchForRead(const void* p) noexcept { (void)p; }
+
+void PrefetchForWrite(const void* p) noexcept { (void)p; }
+
+void VerifyCacheLineConfig() noexcept {}
+
+}  // namespace neoflux::native

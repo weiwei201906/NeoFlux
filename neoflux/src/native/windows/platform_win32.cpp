@@ -10,6 +10,12 @@
 
 #include "native/native_tuning.h"
 
+// neoflux_read_xcr0() (asm/xgetbv.S) is used by the non-MSVC x86_64 branches
+// below. MSVC uses the _xgetbv intrinsic instead and does not link the .S.
+#if !defined(_MSC_VER) && (defined(__x86_64__) || defined(_M_X64))
+#include "native/asm/asm_symbols.h"
+#endif
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -31,22 +37,28 @@
 
 #include <glog/logging.h>
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 namespace {
+
+// --- cpuid feature bits (CPUID leaf 1 ECX / leaf 7 EBX), named for clarity.
+constexpr unsigned int kSse42Bit = 1u << 20;    ///< leaf 1 ECX[20]
+constexpr unsigned int kOsxsaveBit = 1u << 27;  ///< leaf 1 ECX[27]: XGETBV ok
+constexpr unsigned int kAvx2Bit = 1u << 5;      ///< leaf 7 EBX[5]
+// XCR0 bits [2:1] must both be set for the OS to save/restore YMM state.
+constexpr unsigned long long kXcr0XmmYmmMask = 0x6ULL;
 
 /// Reads XCR0 (OS-enabled extended register state) portably across MSVC and
 /// GCC/Clang-on-Windows. Needed to confirm the OS saves/restores YMM before
 /// advertising AVX2.
 unsigned long long ReadXcr0() {
 #if defined(_MSC_VER) && !defined(__clang__)
+  // _xgetbv is a compiler intrinsic, not inline asm -- allowed by the asm
+  // policy (which only forbids __asm__/__asm in C++ sources).
   return _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
-#elif defined(__GNUC__) || defined(__clang__)
-  unsigned int eax = 0, edx = 0;
-  __asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
-  return (static_cast<unsigned long long>(edx) << 32) | eax;
 #else
-  return 0;
+  // GCC/Clang/MinGW (x86_64): the xgetbv instruction is implemented in
+  // asm/xgetbv.S; inline asm is forbidden by project policy.
+  return neoflux_read_xcr0();
 #endif
 }
 
@@ -60,7 +72,9 @@ struct MmcssRegistration {
 
   ~MmcssRegistration() {
     if (handle != nullptr) {
-      AvSetMmThreadPriority(handle, AVRT_PRIORITY_HIGH);
+      // Revert only: the priority request was made right after registration;
+      // the destructor's single job is to give the characteristics handle
+      // back exactly once.
       AvRevertMmThreadCharacteristics(handle);
     }
   }
@@ -68,15 +82,22 @@ struct MmcssRegistration {
 
 }  // namespace
 
-void TuneRenderThread() {
+void TuneRenderThread() noexcept {
   // Preferred: register with MMCSS ("Games" profile). This supersedes a
   // plain SetThreadPriority call: the scheduler treats MMCSS threads with
   // GPU-preemption awareness, which is exactly the render thread's job.
   static thread_local MmcssRegistration mmcss;
+  if (mmcss.handle != nullptr) {
+    return;  // Idempotent: re-entering TuneRenderThread must not leak a
+             // second characteristics handle by overwriting this one.
+  }
   mmcss.handle = AvSetMmThreadCharacteristicsW(L"Games", &mmcss.index);
   if (mmcss.handle != nullptr) {
+    // Request high MMCSS priority right away -- the destructor only reverts,
+    // so this is the one and only place the priority is chosen.
+    AvSetMmThreadPriority(mmcss.handle, AVRT_PRIORITY_HIGH);
     LOG(INFO) << "native: render thread registered with MMCSS profile "
-                 "'Games'";
+                 "'Games' (priority HIGH)";
     return;
   }
   // Fallback: ABOVE_NORMAL rather than THREAD_PRIORITY_TIME_CRITICAL -- the
@@ -91,7 +112,7 @@ void TuneRenderThread() {
                "unavailable)";
 }
 
-void TuneUiThread() {
+void TuneUiThread() noexcept {
   // Frame pacing: EventLoop::Run() waits on a condition_variable with a
   // frame_duration timeout. CV waits inherit the system timer resolution,
   // which defaults to ~15.6 ms -- fatal for 60 FPS pacing. Request the best
@@ -118,7 +139,7 @@ void TuneUiThread() {
                "ABOVE_NORMAL process class)";
 }
 
-void PinThreadToBigCores() {
+void PinThreadToBigCores() noexcept {
   // Ask for the full logical-processor topology in one shot.
   DWORD size = 0;
   GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &size);
@@ -170,7 +191,7 @@ void PinThreadToBigCores() {
             << " performance core(s)";
 }
 
-CpuFeatures DetectCpuFeatures() {
+CpuFeatures DetectCpuFeaturesImpl() {
   CpuFeatures f;
   int regs[4] = {0, 0, 0, 0};
 
@@ -183,21 +204,28 @@ CpuFeatures DetectCpuFeatures() {
 
   // Leaf 1: ECX bit 20 = SSE4.2, bit 27 = OSXSAVE (XGETBV usable).
   __cpuid(regs, 1);
-  f.sse42 = (regs[2] & (1 << 20)) != 0;
-  const bool os_xsave = (regs[2] & (1 << 27)) != 0;
+  f.sse42 = (regs[2] & kSse42Bit) != 0;
+  const bool os_xsave = (regs[2] & kOsxsaveBit) != 0;
 
   if (os_xsave && max_leaf >= 7) {
-    // Leaf 7 subleaf 0: EBX bit 5 = AVX2.
-    __cpuid(regs, 7);
-    if ((regs[1] & (1 << 5)) != 0) {
+    // Leaf 7 subleaf 0: EBX bit 5 = AVX2. __cpuidex pins ECX to subleaf 0
+    // instead of relying on whatever ECX the previous __cpuid left behind.
+    __cpuidex(regs, 7, 0);
+    if ((regs[1] & kAvx2Bit) != 0) {
       // The OS must save/restore YMM across context switches: XCR0 bits
       // [2:1] must both be set (XMM + YMM state enabled).
       const unsigned long long xcr0 = ReadXcr0();
-      f.avx2 = ((xcr0 & 0x6ULL) == 0x6ULL);
+      f.avx2 = ((xcr0 & kXcr0XmmYmmMask) == kXcr0XmmYmmMask);
     }
   }
   return f;
 }
 
-}  // namespace native
-}  // namespace neoflux
+CpuFeatures DetectCpuFeatures() noexcept {
+  // CPU features are a process-lifetime invariant: probe once, then serve
+  // the cached snapshot. Magic static => thread-safe one-shot evaluation.
+  static const CpuFeatures kCached = DetectCpuFeaturesImpl();
+  return kCached;
+}
+
+}  // namespace neoflux::native

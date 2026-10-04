@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 namespace neoflux {
 namespace native {
 
@@ -39,26 +41,59 @@ struct CpuFeatures {
 /// thread body, before any GPU work). Raises scheduling priority and/or
 /// registers with the platform multimedia scheduler (MMCSS on Windows,
 /// SCHED_FIFO on Linux, QoS class on Apple).
-void TuneRenderThread();
+void TuneRenderThread() noexcept;
 
 /// Tune the calling thread for UI/event-loop duty (call at the start of
 /// EventLoop::Run()). On Windows this also requests 1 ms timer resolution
 /// and raises the whole process priority class: condition_variable::wait_for()
 /// inherits the ~15.6 ms default timer granularity, which visibly jitters
 /// frame pacing at 60 FPS.
-void TuneUiThread();
+void TuneUiThread() noexcept;
 
 /// Attempt to pin the calling thread to "big"/performance cores when the
 /// platform exposes a big.LITTLE-style topology (Linux/Android via cpufreq
 /// data, Windows via EfficiencyClass). No-op on homogeneous topologies,
 /// when topology data is unavailable, or on Apple platforms where QoS
 /// already drives cluster placement and affinity APIs are not honoured.
-void PinThreadToBigCores();
+void PinThreadToBigCores() noexcept;
 
-/// Detect CPU SIMD features. Purely informational; callers must still
-/// provide a scalar fallback (results are not cached across CPUs, hotplug
-/// aside this is stable for the process lifetime).
-CpuFeatures DetectCpuFeatures();
+/// Detect CPU SIMD features. The result is a process-lifetime invariant, so
+/// the first call probes the CPU and every later call returns the cached
+/// snapshot (thread-safe: magic-static initialization). Callers must still
+/// provide a scalar fallback for unsupported features.
+CpuFeatures DetectCpuFeatures() noexcept;
+
+/// Snapshot of the CPU cache hierarchy relevant to hit-rate tuning.
+/// `line_size` is the L1D coherence line -- the number that governs false
+/// sharing (compare neoflux::config::kCacheLineSize, which is compile-time).
+/// Capacity fields are 0 when the platform does not expose them.
+struct CacheInfo {
+  std::size_t line_size{64};  ///< L1D coherence line in bytes.
+  std::size_t l1d_bytes{0};   ///< L1 data cache size, 0 = unknown.
+  std::size_t l2_bytes{0};    ///< Largest L2 size, 0 = unknown.
+  std::size_t l3_bytes{0};    ///< Largest L3 size, 0 = unknown.
+};
+
+/// Probe the runtime cache topology. Like DetectCpuFeatures(), the result is
+/// a process-lifetime invariant and is cached after the first call. Platforms
+/// without topology data yield line_size=64 and 0 capacities (safe defaults).
+CacheInfo DetectCacheTopology() noexcept;
+
+/// Prefetch one cache line for read into the innermost cache (locality 3).
+/// Compiler intrinsic based; a no-op hint on platforms without the builtin.
+/// Use sparingly, only where a measured stall dominates (e.g. right before
+/// consuming a batch from the render queue).
+void PrefetchForRead(const void* p) noexcept;
+
+/// Prefetch one cache line for write (requests exclusive / RFO line).
+void PrefetchForWrite(const void* p) noexcept;
+
+/// Cross-checks the runtime coherence line size against the compile-time
+/// neoflux::config::kCacheLineSize. Called once from TuneUiThread(): if the
+/// runtime line is WIDER than the compile-time padding, SPSC queue head/tail
+/// may still share a line (false sharing) and the warning tells the user the
+/// -DNEOFLUX_CACHE_LINE_SIZE=<n> override. Logs at most once per process.
+void VerifyCacheLineConfig() noexcept;
 
 }  // namespace native
 }  // namespace neoflux

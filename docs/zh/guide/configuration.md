@@ -140,6 +140,32 @@ VLOG(1) << "Detailed per-frame debug info";  // 配 --verbose_logging 显示
 | `config::kLongPressThresholdMs` | `500` | `Button` 长按检测阈值（毫秒）。 |
 | `config::kFlingStopThreshold` | `0.02` | 惯性滑动停止阈值（屏幕高度/秒）。 |
 
+### 缓存行定尺寸与运行时检测
+
+`config::kCacheLineSize` 是用于把 SPSC 渲染队列头/尾填充到不同缓存行的
+**编译期**对齐值（以避免伪共享）。它被编入二进制，运行时无法更改——但硬件
+缓存行未必是 64 字节。因此平台原生调优层会在启动时**校验**这一假设：
+`neoflux::native::DetectCacheTopology()` 报告真实的一致性行大小（Linux/Android
+读 sysfs、Windows 用 CPUID、Apple 用 `sysctl`），
+`neoflux::native::VerifyCacheLineConfig()` 将其与 `config::kCacheLineSize`
+比较，当硬件行比编入值更宽时**只告警一次**。
+
+最典型的失配出现在 **Apple M 系列**：其 L1 数据缓存一致性行为 **128 字节**。
+若构建停留在 64 字节默认值，队列头与尾各按 64 字节填充，相邻两个对象仍可能共占
+同一条真实的 128 字节行，于是生产者与消费者持续在核间弹跳该行，伪共享并未因
+填充而消除。若 `VerifyCacheLineConfig()` 打出该告警，请用检测到的尺寸重新构建：
+
+```bash
+# Apple Silicon（128 字节行）
+cmake -B build -DNEOFLUX_CACHE_LINE_SIZE=128
+cmake --build build
+```
+
+`-DNEOFLUX_CACHE_LINE_SIZE=N` 定义 `NEOFLUX_CACHE_LINE_SIZE` 宏，`config.h`
+读取它并赋给 `kCacheLineSize`——同一个符号，只是更宽，无需改动源码。在 64 字节
+机器上过度对齐无害但会浪费一点内存，因此请设为检测器报告的尺寸，而不要更大。
+完整的平台矩阵与自动启动钩子见 [平台原生调优层](./native-tuning.md)。
+
 ::: tip gflag 默认值跟随 config.h
 gflag 定义使用这些常量作为默认值。改 `config.h` 里的 `kDefaultTargetFps`
 为 30 并重新编译，`--target_fps` 的默认值自动变成 30，无需修改 flag 定义。

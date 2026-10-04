@@ -155,6 +155,38 @@ They live in `neoflux/include/neoflux/core/config.h` as `inline constexpr`:
 | `config::kLongPressThresholdMs` | `500` | Long-press detection threshold for `Button` (ms). |
 | `config::kFlingStopThreshold` | `0.02` | Minimum fling velocity (screen heights/sec) below which inertia stops. |
 
+### Cache-line sizing vs runtime detection
+
+`config::kCacheLineSize` is the **compile-time** alignment used to pad the SPSC
+render-queue head/tail onto separate cache lines (avoiding false sharing). It
+bakes into the binary, so nothing at runtime can change it — but the hardware
+line size is not necessarily 64. The native tuning layer therefore *verifies*
+the assumption at startup: `neoflux::native::DetectCacheTopology()` reports the
+real coherence line (from sysfs on Linux/Android, CPUID on Windows, `sysctl`
+on Apple), and `neoflux::native::VerifyCacheLineConfig()` compares it against
+`config::kCacheLineSize` and logs a **WARNING once** when the hardware line is
+wider than the compiled-in value.
+
+The classic mismatch is the **Apple M series**, whose L1 data-cache coherence
+line is **128 bytes**. A build left at the 64-byte default pads the queue head
+and tail to 64 bytes each; two adjacent objects can still share one real
+128-byte line, so the producer and consumer keep bouncing that line between
+cores and false sharing survives the padding. If `VerifyCacheLineConfig()` logs
+that warning, rebuild with the detected size:
+
+```bash
+# Apple Silicon (128-byte line)
+cmake -B build -DNEOFLUX_CACHE_LINE_SIZE=128
+cmake --build build
+```
+
+`-DNEOFLUX_CACHE_LINE_SIZE=N` defines the `NEOFLUX_CACHE_LINE_SIZE` macro, which
+`config.h` picks up and assigns to `kCacheLineSize` — the same symbol, just
+wider, with no source change. Over-aligning on a 64-byte machine is harmless
+but wastes a little memory, so set it to the size the detector reports, not
+higher. For the full platform matrix and the automatic startup hook, see
+[Native Tuning Layer](./native-tuning.md).
+
 ::: tip gflag defaults follow config.h
 The gflag definitions use these constants as their defaults. Change
 `kDefaultTargetFps` in `config.h` to `30`, rebuild, and `--target_fps` now
