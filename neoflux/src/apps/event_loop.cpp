@@ -13,11 +13,13 @@
 
 #include <chrono>
 #include <cstdint>
+#include <string>
 #include <utility>
 
 #include <glog/logging.h>
 
 #include "native/native_tuning.h"
+#include "neoflux/core/flags.h"
 
 namespace neoflux {
 
@@ -27,7 +29,7 @@ namespace neoflux {
 thread_local EventLoop* EventLoop::current_loop_ = nullptr;
 
 EventLoop::EventLoop()
-    : running_(false), should_stop_(false), frame_count_(0), target_fps_(60) {}
+    : running_(false), should_stop_(false), frame_count_(0) {}
 
 EventLoop::~EventLoop() { Stop(); }
 
@@ -53,11 +55,28 @@ void EventLoop::Run(const FrameCallback& frame_callback) {
 
   should_stop_.store(false);
   frame_count_.store(0);
+  // Re-read per Run(): SetTargetFps() before Run() already took effect via
+  // target_fps_; idle_fps_ is a plain read of the flag at loop entry so a
+  // restarted loop picks up a changed --idle_fps as well.
+  idle_fps_ = FLAGS_idle_fps;
 
-  LOG(INFO) << "EventLoop started at " << target_fps_ << " fps (CV-driven)";
+  LOG(INFO) << "EventLoop started at " << target_fps_ << " fps (CV-driven)"
+            << (idle_fps_ > 0 ? ", idle heart-beat " + std::to_string(idle_fps_) +
+                                    " fps"
+                              : "");
 
   const auto frame_duration = std::chrono::microseconds(
       static_cast<int64_t>(1'000'000.0 / static_cast<double>(target_fps_)));
+  const auto idle_frame_duration =
+      idle_fps_ > 0
+          ? std::chrono::microseconds(static_cast<int64_t>(
+                1'000'000.0 / static_cast<double>(idle_fps_)))
+          : frame_duration;
+  // Hysteresis: drop to the idle heart-beat only after this many consecutive
+  // frames with nothing to do; any render request, pending coroutine, yield
+  // or timer immediately restores the full --target_fps rate.
+  constexpr int kIdleFramesBeforeThrottle = 3;
+  int consecutive_idle = 0;
 
   while (!should_stop_.load()) {
     if (frame_callback) {
@@ -66,10 +85,41 @@ void EventLoop::Run(const FrameCallback& frame_callback) {
     RunReadyCoroutines();
     frame_count_.fetch_add(1);
 
-    // Block until woken by WakeUp() or until the frame interval elapses.
-    // This avoids busy-waiting when no work is pending.
+    // Idle means: nothing scheduled (coroutines, yields, timers) and no
+    // render request arrived. Frame callbacks still run every frame — the
+    // application's own dirty check inside OnFrame() skips layout/paint, and
+    // event polling (GLFW) must keep running regardless.
+    bool idle = false;
+    {
+      std::scoped_lock lock(coroutine_mutex_);
+      idle = pending_coroutines_.empty() && yield_handles_.empty() &&
+             timer_queue_.empty();
+    }
+    if (render_dirty_.exchange(false, std::memory_order_relaxed)) {
+      idle = false;
+    }
+    if (idle) {
+      ++consecutive_idle;
+    } else {
+      if (consecutive_idle > kIdleFramesBeforeThrottle) {
+        VLOG(1) << "EventLoop leaving idle heart-beat at frame "
+                << frame_count_.load();
+      }
+      consecutive_idle = 0;
+    }
+    if (idle_fps_ > 0 && consecutive_idle == kIdleFramesBeforeThrottle + 1) {
+      VLOG(1) << "EventLoop entering idle heart-beat (" << idle_fps_
+              << " fps)";
+    }
+
+    // Block until woken by WakeUp()/RequestRender() or until the (possibly
+    // throttled) frame interval elapses. No busy-waiting either way.
+    const auto wait_duration =
+        (idle_fps_ > 0 && consecutive_idle > kIdleFramesBeforeThrottle)
+            ? idle_frame_duration
+            : frame_duration;
     std::unique_lock<std::mutex> lock(frame_mutex_);
-    frame_cv_.wait_for(lock, frame_duration,
+    frame_cv_.wait_for(lock, wait_duration,
                        [this] { return should_stop_.load(); });
   }
 
@@ -97,6 +147,11 @@ void EventLoop::Stop() noexcept {
 }
 
 void EventLoop::WakeUp() noexcept { frame_cv_.notify_one(); }
+
+void EventLoop::RequestRender() noexcept {
+  render_dirty_.store(true, std::memory_order_relaxed);
+  frame_cv_.notify_one();
+}
 
 bool EventLoop::IsRunning() const noexcept { return running_.load(); }
 

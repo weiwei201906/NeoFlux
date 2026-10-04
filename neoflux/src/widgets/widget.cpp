@@ -21,6 +21,7 @@
 #include <string_view>
 
 #include "neoflux/apps/application.h"
+#include "neoflux/apps/event_loop.h"
 #include "neoflux/core/types.h"
 #include "neoflux/renderers/render_context.h"
 #include "taitank.h"
@@ -230,7 +231,17 @@ void Widget::SetDesiredSize(const Size& size) noexcept {
 
 const Size& Widget::GetDesiredSize() const noexcept { return desired_size_; }
 
-void Widget::MarkNeedsBuild() noexcept { needs_build_ = true; }
+void Widget::MarkNeedsBuild() noexcept {
+  needs_build_ = true;
+  // Wake the event loop so the rebuild is picked up THIS frame instead of at
+  // the next tick (State::SetState() may be called from an input callback or
+  // coroutine resume, both outside the OnFrame() window). No-op when no loop
+  // runs on this thread: Application::OnFrame() still sweeps NeedsBuild()
+  // every frame, so correctness never depended on the wake-up.
+  if (EventLoop* loop = EventLoop::Current(); loop != nullptr) {
+    loop->RequestRender();
+  }
+}
 
 bool Widget::NeedsBuild() const noexcept { return needs_build_; }
 

@@ -157,6 +157,12 @@ bool Application::Init(int argc, char** argv, int window_width,
     bridge->SetMouseMoveCallback([this](const Point& pos) {
       DispatchPointerMove(pos);
     });
+  } else {
+    // KNOWN LIMITATION (mobile): no PlatformBridge is constructed anywhere
+    // yet, so touch events have no path into the widget tree on mobile.
+    // Desktop (GLFW) is the only wired input path today; see README.md.
+    LOG(WARNING) << "No windowing bridge present: input events will not be "
+                    "delivered (mobile input bridge is not wired yet).";
   }
 
   initialized_ = true;
@@ -243,7 +249,9 @@ int Application::GetWindowHeight() const noexcept { return window_height_; }
 
 void Application::MarkFrameDirty() noexcept {
   frame_dirty_.store(true);
-  event_loop_.WakeUp();
+  // RequestRender() = WakeUp() + keeps the loop at full --target_fps rate
+  // (instead of throttling to the idle heart-beat) until this frame is done.
+  event_loop_.RequestRender();
 }
 
 void Application::OnFrame() {

@@ -44,6 +44,13 @@ class EventLoop : public NonCopyable {
   EventLoop();
   ~EventLoop();
 
+  // NonCopyable deletes the copy operations; move is also forbidden (the
+  // loop owns a running thread's state, a mutex and condition variable).
+  EventLoop(const EventLoop&) = delete;
+  EventLoop& operator=(const EventLoop&) = delete;
+  EventLoop(EventLoop&&) = delete;
+  EventLoop& operator=(EventLoop&&) = delete;
+
   // Runs the event loop until Stop() is called or the window closes.
   void Run(const FrameCallback& frame_callback);
 
@@ -53,6 +60,14 @@ class EventLoop : public NonCopyable {
   // Wakes the event loop immediately, causing a frame to be processed
   // without waiting for the next frame-rate timeout. Thread-safe.
   void WakeUp() noexcept;
+
+  // Marks the next frame as render-requested and wakes the loop. Besides
+  // waking immediately (like WakeUp()), this holds the loop at the full
+  // --target_fps rate: idle throttling only kicks in after several
+  // consecutive frames with no render request and no pending coroutine or
+  // timer work. Thread-safe. This is the low-level primitive behind
+  // Application::MarkFrameDirty() and Widget::MarkNeedsBuild().
+  void RequestRender() noexcept;
 
   // Returns true if the loop is currently running.
   [[nodiscard]] bool IsRunning() const noexcept;
@@ -92,24 +107,30 @@ class EventLoop : public NonCopyable {
   std::atomic<bool> running_{false};
   std::atomic<bool> should_stop_{false};
   std::atomic<uint64_t> frame_count_{0};
-  int target_fps_;
+  // Set by RequestRender(); consumed once per frame to decide whether the
+  // loop stays at full rate or is allowed to drop to the idle heart-beat.
+  std::atomic<bool> render_dirty_{false};
+  int target_fps_ = 60;
+  // Idle heart-beat rate in fps (from --idle_fps, default 15; 0 disables
+  // idle throttling). Read at the top of every Run().
+  int idle_fps_{15};
 
   // CV used to block the loop when idle and wake it on demand.
-  std::condition_variable frame_cv_{};
-  std::mutex frame_mutex_{};
+  std::condition_variable frame_cv_;
+  std::mutex frame_mutex_;
 
   // Pending coroutines to resume. Guarded by coroutine_mutex_.
   // Shared ownership: active_tasks_ also holds a reference for the lifetime
   // of the coroutine, preventing premature frame destruction while a timer
   // or yield-pending handle still references it.
-  std::mutex coroutine_mutex_{};
-  std::vector<std::shared_ptr<Task<void>>> pending_coroutines_{};
+  std::mutex coroutine_mutex_;
+  std::vector<std::shared_ptr<Task<void>>> pending_coroutines_;
 
   // All active (not-yet-completed) tasks, keyed by coroutine handle address.
   // This map is the authoritative owner: when a task completes, it is erased
   // here and the shared_ptr refcount drops, eventually destroying the frame.
   // Guarded by coroutine_mutex_.
-  std::unordered_map<void*, std::shared_ptr<Task<void>>> active_tasks_{};
+  std::unordered_map<void*, std::shared_ptr<Task<void>>> active_tasks_;
 
   // Handles that requested a one-frame yield (co_await Yield()).
   // Resumed at the start of the next frame. Guarded by coroutine_mutex_.
@@ -117,13 +138,13 @@ class EventLoop : public NonCopyable {
   // Raw (non-owning) handles: the frame is kept alive by the owning
   // shared_ptr in active_tasks_, keyed by the same address. Run() clears this
   // and the containers below on exit, so no handle outlives its run.
-  std::vector<std::coroutine_handle<>> yield_handles_{};
+  std::vector<std::coroutine_handle<>> yield_handles_;
 
   // Timer queue: wake-up time -> coroutine handle to resume.
   // Guarded by coroutine_mutex_. Raw handles; ownership via active_tasks_.
   std::multimap<std::chrono::steady_clock::time_point,
                 std::coroutine_handle<>>
-      timer_queue_{};
+      timer_queue_;
 
   // Thread-local pointer to the running event loop, set during Run().
   static thread_local EventLoop* current_loop_;
