@@ -50,11 +50,22 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 | Linux (x86-64) | ✅ Verified | CI build + headless tests via Xvfb |
 | Windows (MSVC x64) | ✅ Verified | CI build + tests |
 | macOS | 🚧 Adapted, not CI-verified | Uses the GLFW + OpenGL path |
-| Android | 🚧 Bridge only | `MobileBridge` is a stub; platform layer not wired up |
-| iOS | 🚧 Bridge only | `MobileBridge` is a stub; platform layer not wired up |
+| Android | 🚧 Bridge only | `MobileBridge` compiles but is not wired into the app; renderer/input/media paths are not connected |
+| iOS | 🚧 Bridge only | `MobileBridge` compiles but is not wired into the app; renderer/input/media paths are not connected |
 
 > "Verified" means the platform builds and passes tests in CI. Mobile currently
 > only reserves the `platform_surface` hook; see [Mobile Rendering](#mobile-rendering).
+> Concretely: `TgfxRenderer::Init` fails with an explicit log on mobile (no
+> device can be created), `CreateMediaPlayer()` returns `nullptr`, and touch
+> input has no bridge into the widget tree — each of these logs loudly rather
+> than silently no-op'ing.
+
+### Standalone verification suite
+
+[`verify/`](./verify) contains ten self-contained unit tests that build with a
+plain `g++` invocation — no CMake, tgfx, mpv or taitank required. See
+[verify/README.md](./verify/README.md) for the exact commands and expected
+results.
 
 ## Quick Start
 
@@ -91,8 +102,15 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--target_fps` | int | `60` | Target frame rate for the application event loop and render pacing. |
+| `--idle_fps` | int | `15` | Idle heart-beat rate. When no render request and no coroutine/timer work is pending for a few frames, the event loop drops to this rate to save CPU (input events wake it instantly). `0` disables idle throttling. |
 | `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Rounded up to the next power of two automatically. |
 | `--render_queue_drop_log_max` | int | `10` | Maximum number of "queue full, commands dropped" warnings emitted before drops are counted silently. |
+| `--native_tuning` | bool | `true` | Master switch for the platform-native tuning layer (thread scheduling, MMCSS, timer resolution, big-core pinning). `false` makes every native entry point a no-op. |
+| `--native_render_rt_priority` | int | `1` | Linux/Android: SCHED_FIFO priority attempted for the render thread (1 = lowest RT priority, range 1..99). |
+| `--native_thread_nice` | int | `-5` | Linux/Android: nice value attempted for the render (fallback) and UI threads (range -20..19). |
+| `--native_bigcore_threshold_permille` | int | `950` | Big-core detection threshold in permille of the fastest core's max frequency (500..1000). |
+| `--native_mmcss_profile` | string | `Games` | Windows: MMCSS profile used when registering the render thread. |
+| `--native_timer_period_ms` | int | `1` | Windows: timer resolution in ms requested via timeBeginPeriod (`0` disables). Fixes ~15.6 ms CV-wait granularity jitter. |
 | `--verbose_logging` | bool | `false` | Enable verbose VLOG(1) output and mirror logs to stderr. Useful for debugging. |
 | `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
 | `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |

@@ -153,7 +153,7 @@ class MpvMediaPlayer final : public MediaPlayer {
   // must not touch GL; its only job is to wake the render thread (e.g.
   // RenderLayer::Wake()). Set once at wiring time; never swap from inside a
   // callback.
-  void SetWakeCallback(std::function<void()> callback) override;
+  void SetWakeCallback(const std::function<void()>& callback) override;
 
   // Render thread. Must be called with a current OpenGL context. Creates the
   // mpv render context and installs the update callback.

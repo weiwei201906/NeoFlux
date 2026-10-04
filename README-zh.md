@@ -52,11 +52,14 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 | Linux (x86-64) | ✅ 已验证 | CI 构建 + Xvfb 无头测试 |
 | Windows (MSVC x64) | ✅ 已验证 | CI 构建 + 测试 |
 | macOS | 🚧 代码已适配，未经 CI 验证 | 走 GLFW + OpenGL 路径 |
-| Android | 🚧 仅桥接预留 | `MobileBridge` 为 stub，尚未接入平台层 |
-| iOS | 🚧 仅桥接预留 | `MobileBridge` 为 stub，尚未接入平台层 |
+| Android | 🚧 仅桥接预留 | `MobileBridge` 可编译但未接入应用；渲染器/输入/媒体路径均未连通 |
+| iOS | 🚧 仅桥接预留 | `MobileBridge` 可编译但未接入应用；渲染器/输入/媒体路径均未连通 |
 
 > 「已验证」指该平台的构建与测试在 CI 中通过。移动端目前只预留了
 > `platform_surface` 接口，详见 [移动端渲染](#移动端渲染)。
+> 具体而言：移动端 `TgfxRenderer::Init` 会打日志并显式失败（无法创建设备）、
+> `CreateMediaPlayer()` 返回 `nullptr`、触摸输入没有通往控件树的桥——
+> 以上每一处都会大声记录日志，而不是静默空转。
 
 ## 快速开始
 
@@ -104,8 +107,15 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 | 参数                          | 类型   | 默认值    | 说明                                                                 |
 |-------------------------------|--------|-----------|----------------------------------------------------------------------|
 | `--target_fps`                | int    | `60`      | 应用事件循环与渲染的目标帧率。                                       |
+| `--idle_fps`                  | int    | `15`      | 空闲心跳帧率。当连续数帧无渲染请求且无协程/定时器任务时，事件循环降至此帧率以省电（输入事件立即唤醒）。`0` 表示禁用空闲降频。 |
 | `--render_queue_capacity`     | int    | `2048`    | Application 层与 Render 层之间 SPSC 无锁环形队列容量，自动向上取整为 2 的幂。 |
 | `--render_queue_drop_log_max` | int    | `10`      | 命令队列满导致丢弃时的告警最大打印次数，超出后静默计数。             |
+| `--native_tuning`             | bool   | `true`    | 平台原生调优层总开关（线程调度、MMCSS、定时器精度、大核绑定）。`false` 时所有 native 入口均为 no-op。 |
+| `--native_render_rt_priority` | int    | `1`       | Linux/Android：渲染线程尝试的 SCHED_FIFO 实时优先级（1 为最低，范围 1..99）。 |
+| `--native_thread_nice`        | int    | `-5`      | Linux/Android：渲染线程（降级路径）与 UI 线程尝试的 nice 值（范围 -20..19）。 |
+| `--native_bigcore_threshold_permille` | int | `950`  | 大核判定阈值（相对最快核最大频率的千分比，500..1000）。             |
+| `--native_mmcss_profile`      | string | `Games`   | Windows：渲染线程注册 MMCSS 时使用的 profile 名称。                  |
+| `--native_timer_period_ms`    | int    | `1`       | Windows：通过 timeBeginPeriod 请求的定时器精度（毫秒，`0` 表示不请求）。修复 CV 等待 ~15.6ms 粒度导致的帧率抖动。 |
 | `--verbose_logging`           | bool   | `false`   | 启用详细 VLOG(1) 输出并将日志镜像到 stderr，用于调试。               |
 | `--logtostderr`               | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
 | `--log_dir`                   | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |

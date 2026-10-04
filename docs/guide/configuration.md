@@ -48,12 +48,35 @@ an OpenGL build, re-run CMake with `-DNEOFLUX_BACKEND=vulkan` and rebuild.
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
 | `--target_fps` | `int32` | `60` (from `config::kDefaultTargetFps`) | Target frames-per-second for the application event loop. |
+| `--idle_fps` | `int32` | `15` | Idle heart-beat rate: after a few frames with no render request and no pending coroutine/timer work, the loop drops to this rate (input events wake it instantly). `0` disables idle throttling. |
 | `--render_queue_capacity` | `uint64` | `2048` (from `config::kDefaultRenderQueueCapacity`) | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
 | `--render_queue_drop_log_max` | `int32` | `10` | Maximum number of "render command queue full, dropped commands" warnings emitted per process. After this many drops, subsequent overflows are counted silently. Raise this only when diagnosing back-pressure. |
+| `--native_tuning` | `bool` | `true` | Master switch for the platform-native tuning layer; `false` makes every entry point a no-op. |
+| `--native_render_rt_priority` | `int32` | `1` | Linux/Android: SCHED_FIFO priority attempted for the render thread (1..99). |
+| `--native_thread_nice` | `int32` | `-5` | Linux/Android: nice value attempted for the render (fallback) and UI threads (-20..19). |
+| `--native_bigcore_threshold_permille` | `int32` | `950` | Big-core frequency threshold in permille of the fastest core (500..1000). |
+| `--native_mmcss_profile` | `string` | `"Games"` | Windows: MMCSS profile for the render thread registration. |
+| `--native_timer_period_ms` | `int32` | `1` | Windows: timer resolution in ms requested via timeBeginPeriod (`0` = off). |
 | `--verbose_logging` | `bool` | `false` | Enables `VLOG(1)` output and mirrors INFO logs to stderr. |
 | `--logtostderr` | `bool` | `false` | When set, writes all logs to stderr instead of files. |
 | `--log_dir` | `string` | `"./logs"` | Directory for `.log` files (created automatically). Only used when `--logtostderr` is off. |
-| `--media_source` | `string` | `"./assets/media/sample.mp4"` | Path or URL for the demo `MediaWidget` on the `/media` route. |
+
+### `--idle_fps`
+
+Frame pacing has two rates. While the application keeps requesting work
+(pending coroutines, timers, or render requests from `Application::MarkFrameDirty()`),
+the loop runs at `--target_fps`. After three consecutive frames with nothing
+to do, it drops to `--idle_fps` so an idle window costs ~4x fewer wake-ups;
+the next render request (any input event) restores the full rate instantly.
+Set `--idle_fps=0` to keep the legacy constant-rate loop.
+
+### Native tuning flags
+
+`--native_*` configure what the platform tuning layer *attempts* (see
+[Native Tuning Layer](./native-tuning)). Out-of-range values are clamped and
+every attempt still degrades silently when the OS refuses — the flags never
+change correctness, only aggressiveness. `--native_tuning=false` is the
+one-line escape hatch for production issues.
 
 ### `--target_fps`
 
@@ -80,15 +103,6 @@ When the render command queue is full and commands are being dropped, NeoFlux
 emits a `WARNING` log. To avoid flooding the log under sustained backpressure,
 only the first `N` drop warnings per process are printed; later drops are
 counted silently. Default `10`. Set to `0` to silence drop warnings entirely.
-
-### `--media_source`
-
-Path or URL passed to the built-in demo `MediaWidget` on the `/media` route.
-Default `./assets/media/sample.mp4`. This flag exists solely so the quick-start
-app can point at a test video without rebuilding; real applications construct
-their own `MediaWidget` and call `SetSource()` directly. If the path does not
-exist on disk (and is not a URL like `http://`/`rtsp://`), NeoFlux logs a
-WARNING at startup.
 
 ### `--verbose_logging`
 

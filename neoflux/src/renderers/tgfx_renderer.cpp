@@ -230,6 +230,16 @@ bool TgfxRenderer::Init(int width, int height, void* native_handle) {
   }
   return true;
 #else
+  // KNOWN LIMITATION (mobile): the mobile rendering pipeline is NOT WIRED
+  // YET. tgfx's mobile device creation (ANativeWindow / CAMetalLayer) and
+  // the mobile bridge (platform_bridge.h / mobile_bridge.cpp) have no
+  // integration point in Application/RenderLayer, so there is no valid
+  // native_handle to build a device from. Fail loudly instead of silently:
+  // a silent stub would make the app start with a blank screen and no clue.
+  LOG(ERROR) << "TgfxRenderer::Init: mobile rendering pipeline is not wired "
+                "yet (desktop-only build path). Mobile support is tracked "
+                "for a future integration; refusing to start a renderer "
+                "that would render nothing.";
   (void)width;
   (void)height;
   (void)native_handle;
@@ -418,6 +428,12 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
       break;
   }
 #else
+  // KNOWN LIMITATION (mobile): commands are dropped, not rendered. Reachable
+  // only if a mobile caller constructs a TgfxRenderer directly despite
+  // Init() failing; logged so the drop is visible in the field.
+  LOG_FIRST_N(ERROR, 1) << "TgfxRenderer::Execute: dropping render command "
+                        << static_cast<int>(command.type)
+                        << " -- mobile rendering pipeline is not wired yet.";
   (void)command;
 #endif
 }

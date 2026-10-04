@@ -21,6 +21,8 @@
 #include "neoflux/media/media_player.h"
 #include "neoflux/media/mpv_media_player.h"
 
+#include <glog/logging.h>
+
 namespace neoflux {
 
 std::unique_ptr<MediaPlayer> CreateMediaPlayer() {
@@ -29,9 +31,14 @@ std::unique_ptr<MediaPlayer> CreateMediaPlayer() {
   // no-op stub unless NEOFLUX_HAS_MPV is defined by the build).
   return std::make_unique<MpvMediaPlayer>();
 #else
-  // Mobile: native player backends (Android MediaPlayer/ExoPlayer,
-  // iOS AVPlayer). These require platform-specific JNI/ObjC integration
-  // and are instantiated via the mobile bridge.
+  // KNOWN LIMITATION (mobile): no player backend exists on mobile yet. The
+  // native backends (Android MediaPlayer/ExoPlayer, iOS AVPlayer) require
+  // JNI/ObjC integration that has not been built; returning nullptr makes
+  // MediaWidget show its "No media loaded" placeholder, which is the honest
+  // degraded state. Logged so the gap is visible, not silent.
+  LOG(WARNING) << "CreateMediaPlayer: mobile media playback is not "
+                  "implemented yet (no JNI/ObjC player backend); returning "
+                  "nullptr -- MediaWidget will show its placeholder.";
   return nullptr;
 #endif
 }

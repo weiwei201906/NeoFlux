@@ -29,6 +29,23 @@ None of them can throw or abort. A failed OS call becomes a log line and a
 return to the default — you never need to guard a call site.
 :::
 
+## Runtime configuration (gflags)
+
+Every tuning attempt is configurable at runtime; the flags are defined in
+`neoflux/src/core/flags.cpp` and documented in the READMEs:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--native_tuning` | `true` | Master switch: `false` turns every entry point below into a no-op. |
+| `--native_render_rt_priority` | `1` | Linux/Android SCHED_FIFO priority for the render thread (1..99). |
+| `--native_thread_nice` | `-5` | Linux/Android nice value for the render (fallback) and UI threads. |
+| `--native_bigcore_threshold_permille` | `950` | Big-core frequency threshold in permille of the fastest core (500..1000). |
+| `--native_mmcss_profile` | `Games` | Windows MMCSS profile name. |
+| `--native_timer_period_ms` | `1` | Windows `timeBeginPeriod` resolution in ms (`0` = off). |
+
+Out-of-range values are clamped, and every flag still degrades silently when
+the OS refuses — the flags only change what is *attempted*, never correctness.
+
 ## Platform behaviour matrix
 
 `✓` = implemented; `no-op` = deliberately does nothing on that platform.

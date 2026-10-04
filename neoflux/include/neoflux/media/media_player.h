@@ -99,7 +99,7 @@ class MediaPlayer {
   // do not need external frame signalling may ignore it (default no-op). The
   // callback must not block and must not touch GL; its only purpose is to wake
   // the render thread.
-  virtual void SetWakeCallback(std::function<void()> callback) {
+  virtual void SetWakeCallback(const std::function<void()>& callback) {
     (void)callback;
   }
 

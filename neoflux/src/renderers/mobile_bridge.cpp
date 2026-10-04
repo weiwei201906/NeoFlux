@@ -13,6 +13,13 @@
 //
 // This file is compiled only on mobile platforms (ANDROID or __APPLE__ with
 // TARGET_OS_IPHONE). On desktop, glfw_bridge.cpp provides the implementation.
+//
+// STATUS (known limitation): this bridge is NOT WIRED into the application
+// yet -- CreateMobileBridge() currently has no call site (RenderLayer owns
+// a GlfwBridge on desktop; Application connects input via GetGlfwBridge()).
+// The EGL surface code below is a real implementation, but the Application/
+// RenderLayer integration that would construct it is future work. See the
+// platform support table in README.md before relying on mobile targets.
 // =============================================================================
 
 #include "neoflux/renderers/platform_bridge.h"

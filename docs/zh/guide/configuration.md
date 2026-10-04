@@ -44,12 +44,33 @@ SDK 的 D3D12 头文件、Apple Metal 框架等），且尚未在 CI 中跑过�
 | 参数 | 类型 | 默认值 | 含义 |
 |------|------|--------|------|
 | `--target_fps` | `int32` | `60`（来自 `config::kDefaultTargetFps`） | 应用事件循环的目标帧率。 |
+| `--idle_fps` | `int32` | `15` | 空闲心跳帧率：连续数帧无渲染请求且无协程/定时器任务后，循环降到此帧率（输入事件立即唤醒）；`0` 表示禁用空闲降频。 |
 | `--render_queue_capacity` | `uint64` | `2048`（来自 `config::kDefaultRenderQueueCapacity`） | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
 | `--render_queue_drop_log_max` | `int32` | `10` | 每个进程最多打印多少次"渲染队列已满、丢弃命令"警告。超过后静默统计，不再刷屏。仅在诊断背压时调大。 |
+| `--native_tuning` | `bool` | `true` | 平台原生调优层总开关；`false` 时所有入口均为 no-op。 |
+| `--native_render_rt_priority` | `int32` | `1` | Linux/Android：渲染线程尝试的 SCHED_FIFO 优先级（1..99）。 |
+| `--native_thread_nice` | `int32` | `-5` | Linux/Android：渲染线程（降级路径）与 UI 线程尝试的 nice 值（-20..19）。 |
+| `--native_bigcore_threshold_permille` | `int32` | `950` | 大核判定阈值（相对最快核频率的千分比，500..1000）。 |
+| `--native_mmcss_profile` | `string` | `"Games"` | Windows：渲染线程注册 MMCSS 使用的 profile。 |
+| `--native_timer_period_ms` | `int32` | `1` | Windows：timeBeginPeriod 请求的定时器精度（毫秒，`0` 表示不请求）。 |
 | `--verbose_logging` | `bool` | `false` | 开启 `VLOG(1)` 并把 INFO 日志镜像到 stderr。 |
 | `--logtostderr` | `bool` | `false` | 开启后所有日志写到 stderr 而非文件。 |
 | `--log_dir` | `string` | `"./logs"` | `.log` 文件目录（自动创建），仅在未开启 `--logtostderr` 时生效。 |
-| `--media_source` | `string` | `"./assets/media/sample.mp4"` | `/media` 路由中演示 `MediaWidget` 的视频路径或 URL。 |
+
+### `--idle_fps`
+
+帧节拍有两个速率。只要应用还在产生工作（待恢复协程、定时器，或
+`Application::MarkFrameDirty()` 发出的渲染请求），循环保持 `--target_fps`
+全速；连续三帧无事可做后降到 `--idle_fps`，让空闲窗口的唤醒次数降到约
+1/4；下一个渲染请求（任何输入事件）立即恢复全速。设 `--idle_fps=0`
+可回到旧的恒速行为。
+
+### 原生调优 flags
+
+`--native_*` 配置平台调优层**尝试**什么（见
+[平台原生调优层](./native-tuning)）。越界值会被钳制；OS 拒绝时一切尝试
+依旧静默降级——这些 flag 只改变"多激进"，绝不改变正确性。
+`--native_tuning=false` 是生产环境问题的单行逃生口。
 
 ### `--target_fps`
 
@@ -72,12 +93,6 @@ SDK 的 D3D12 头文件、Apple Metal 框架等），且尚未在 CI 中跑过�
 渲染命令队列满载丢帧时，NeoFlux 会打一条 `WARNING` 日志。为避免在持续
 背压下刷屏，每个进程最多打印前 `N` 条丢帧警告，之后的丢弃被静默计数。
 默认 `10`。设为 `0` 可完全关闭丢帧警告。
-
-### `--media_source`
-
-传给 `/media` 路由上内置 demo `MediaWidget` 的路径或 URL。默认
-`./sample.mp4`。这个参数仅用于让 quick-start 应用不用重编译就能指向测试
-视频；真实应用自己构造 `MediaWidget` 并直接调 `SetSource()`。
 
 ### `--verbose_logging`
 

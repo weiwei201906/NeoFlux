@@ -27,6 +27,23 @@ CPU 特性与缓存拓扑探测。这里的一切都是 **best-effort**：在受
 永远不会成为故障源。
 :::
 
+## 运行时配置（gflags）
+
+所有调优尝试都可在运行时配置；flag 定义在 `neoflux/src/core/flags.cpp`，
+文档见两份 README：
+
+| Flag | 默认值 | 作用 |
+|---|---|---|
+| `--native_tuning` | `true` | 总开关：`false` 时以下所有入口均变为 no-op。 |
+| `--native_render_rt_priority` | `1` | Linux/Android 渲染线程 SCHED_FIFO 优先级（1..99）。 |
+| `--native_thread_nice` | `-5` | Linux/Android 渲染线程（降级路径）与 UI 线程的 nice 值。 |
+| `--native_bigcore_threshold_permille` | `950` | 大核判定阈值（相对最快核频率的千分比，500..1000）。 |
+| `--native_mmcss_profile` | `Games` | Windows MMCSS profile 名称。 |
+| `--native_timer_period_ms` | `1` | Windows `timeBeginPeriod` 定时器精度（毫秒，`0` = 关闭）。 |
+
+越界值会被钳制；OS 拒绝时一切尝试依旧静默降级——flag 只改变"多激进"，
+绝不改变正确性。
+
 ## 平台行为矩阵
 
 `✓` = 已实现；`no-op` = 在该平台上刻意不做任何事。

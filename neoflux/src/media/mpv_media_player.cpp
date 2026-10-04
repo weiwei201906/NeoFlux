@@ -536,7 +536,7 @@ void MpvMediaPlayer::SetFrameCallback(FrameCallback callback) {
   impl_->frame_callback = std::move(callback);
 }
 
-void MpvMediaPlayer::SetWakeCallback(std::function<void()> callback) {
+void MpvMediaPlayer::SetWakeCallback(const std::function<void()>& callback) {
   std::scoped_lock lock(impl_->mutex);
   impl_->wake_callback = std::move(callback);
 }
@@ -728,7 +728,7 @@ int MpvMediaPlayer::GetVideoHeight() const noexcept { return 0; }
 std::uint32_t MpvMediaPlayer::GetRenderUpdateCount() const noexcept { return 0; }
 void MpvMediaPlayer::SetStateCallback(StateCallback callback) { (void)callback; }
 void MpvMediaPlayer::SetFrameCallback(FrameCallback callback) { (void)callback; }
-void MpvMediaPlayer::SetWakeCallback(std::function<void()> callback) {
+void MpvMediaPlayer::SetWakeCallback(const std::function<void()>& callback) {
   (void)callback;
 }
 void MpvMediaPlayer::InitRender() {}
