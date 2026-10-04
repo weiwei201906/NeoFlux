@@ -18,6 +18,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "native/native_tuning.h"
 #include "neoflux/renderers/glfw_bridge.h"
 #include "neoflux/core/config.h"
 #include "neoflux/core/flags.h"
@@ -301,6 +302,10 @@ void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
 }
 
 void RenderLayer::RenderLoop() {
+  // Platform-native scheduling tuning (priority / MMCSS / SCHED_FIFO / QoS).
+  // Best-effort: on restricted systems this silently keeps default priority.
+  native::TuneRenderThread();
+
   LOG(INFO) << "Render thread started";
 
 #ifdef NEOFLUX_PLATFORM_DESKTOP

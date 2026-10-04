@@ -17,6 +17,8 @@
 
 #include <glog/logging.h>
 
+#include "native/native_tuning.h"
+
 namespace neoflux {
 
 // Thread-local pointer to the active event loop. Set at the start of Run()
@@ -39,6 +41,12 @@ void EventLoop::Run(const FrameCallback& frame_callback) {
 
   // Set thread-local current pointer so Sleep() can find this loop.
   current_loop_ = this;
+
+  // Platform-native tuning for the loop's thread: on Windows this requests
+  // 1 ms timer resolution -- condition_variable::wait_for() below inherits
+  // the ~15.6 ms default granularity otherwise, visibly jittering the
+  // frame cadence. Best-effort everywhere; safe to no-op.
+  native::TuneUiThread();
 
   should_stop_.store(false);
   frame_count_.store(0);

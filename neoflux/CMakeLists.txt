@@ -54,6 +54,25 @@ else()
   target_sources(neoflux PRIVATE src/renderers/glfw_bridge.cpp)
 endif()
 
+# ---------------------------------------------------------------------------
+# Platform-native tuning layer (src/native/)
+#
+# Low-level per-platform tuning ONLY: thread scheduling/priority, timer
+# resolution, CPU feature detection (see src/native/README.md for the scope
+# contract). No rendering, no GL, no backend code -- GPU backends live behind
+# tgfx via the NEOFLUX_BACKEND compile-time selection.
+# ---------------------------------------------------------------------------
+if(WIN32)
+  target_sources(neoflux PRIVATE src/native/windows/platform_win32.cpp)
+  target_link_libraries(neoflux PUBLIC winmm)  # timeBeginPeriod (frame pacing)
+elseif(APPLE)
+  target_sources(neoflux PRIVATE src/native/apple/platform_apple.cpp)
+elseif(ANDROID OR UNIX)
+  target_sources(neoflux PRIVATE src/native/linux/platform_linux.cpp)
+else()
+  target_sources(neoflux PRIVATE src/native/platform_common.cpp)
+endif()
+
 target_include_directories(neoflux
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

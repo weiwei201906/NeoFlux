@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 NeoFlux Authors
+// =============================================================================
+// NeoFlux - platform_win32.cpp
+//
+// Windows tuning: thread priority shaping, 1 ms timer resolution for frame
+// pacing, and x86 CPU feature detection via cpuid/xgetbv.
+// =============================================================================
+
+#include "native/native_tuning.h"
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#include <intrin.h>
+
+#include <glog/logging.h>
+
+namespace neoflux {
+namespace native {
+namespace {
+
+/// Reads XCR0 (OS-enabled extended register state) portably across MSVC and
+/// GCC/Clang-on-Windows. Needed to confirm the OS saves/restores YMM before
+/// advertising AVX2.
+unsigned long long ReadXcr0() {
+#if defined(_MSC_VER) && !defined(__clang__)
+  return _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
+#elif defined(__GNUC__) || defined(__clang__)
+  unsigned int eax = 0, edx = 0;
+  __asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
+  return (static_cast<unsigned long long>(edx) << 32) | eax;
+#else
+  return 0;
+#endif
+}
+
+}  // namespace
+
+void TuneRenderThread() {
+  // ABOVE_NORMAL rather than THREAD_PRIORITY_TIME_CRITICAL: the render thread
+  // is latency-sensitive, but TIME_CRITICAL on a non-realtime OS can starve
+  // UI/input threads and cause worse perceived stutter.
+  if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL)) {
+    LOG(WARNING) << "native: SetThreadPriority(render) failed, err="
+                 << GetLastError();
+    return;
+  }
+  LOG(INFO) << "native: render thread priority = ABOVE_NORMAL";
+  // TODO(platform): register the thread with MMCSS via
+  // AvSetMmThreadCharacteristicsW(L"Games", ...) once avrt.lib availability
+  // across our supported toolchains (MSVC + MinGW) is vetted in CI.
+}
+
+void TuneUiThread() {
+  // Frame pacing: EventLoop::Run() waits on a condition_variable with a
+  // frame_duration timeout. CV waits inherit the system timer resolution,
+  // which defaults to ~15.6 ms -- fatal for 60 FPS pacing. Request the best
+  // resolution the platform grants us. On Windows 10 2004+ this call is
+  // automatically scoped to the calling process (pre-Win10 it is global, so
+  // keep the request at exactly 1 ms and never lower it).
+  const MMRESULT mmres = timeBeginPeriod(1);
+  if (mmres != TIMERR_NOERROR) {
+    LOG(WARNING) << "native: timeBeginPeriod(1) failed, err=" << mmres;
+  }
+  if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL)) {
+    LOG(WARNING) << "native: SetThreadPriority(ui) failed, err="
+                 << GetLastError();
+    return;
+  }
+  LOG(INFO) << "native: ui thread tuned (1 ms timer resolution requested)";
+}
+
+CpuFeatures DetectCpuFeatures() {
+  CpuFeatures f;
+  int regs[4] = {0, 0, 0, 0};
+
+  // Highest CPUID leaf.
+  __cpuid(regs, 0);
+  const int max_leaf = regs[0];
+  if (max_leaf < 1) {
+    return f;  // Should be impossible on any x86 that boots Windows.
+  }
+
+  // Leaf 1: ECX bit 20 = SSE4.2, bit 27 = OSXSAVE (XGETBV usable).
+  __cpuid(regs, 1);
+  f.sse42 = (regs[2] & (1 << 20)) != 0;
+  const bool os_xsave = (regs[2] & (1 << 27)) != 0;
+
+  if (os_xsave && max_leaf >= 7) {
+    // Leaf 7 subleaf 0: EBX bit 5 = AVX2.
+    __cpuid(regs, 7);
+    if ((regs[1] & (1 << 5)) != 0) {
+      // The OS must save/restore YMM across context switches: XCR0 bits
+      // [2:1] must both be set (XMM + YMM state enabled).
+      const unsigned long long xcr0 = ReadXcr0();
+      f.avx2 = ((xcr0 & 0x6ULL) == 0x6ULL);
+    }
+  }
+  return f;
+}
+
+}  // namespace native
+}  // namespace neoflux
