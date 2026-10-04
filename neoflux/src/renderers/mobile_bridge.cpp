@@ -5,21 +5,21 @@
 //
 // Platform bridge implementation for mobile (Android / iOS). Unlike the
 // desktop GLFW bridge, mobile does not create its own window; the platform
-// provides a native surface (ANativeWindow on Android, CAMetalLayer /
-// CAEAGLLayer on iOS) that the renderer draws into.
+// provides a native surface (ANativeWindow on Android, CAEAGLLayer on iOS)
+// that the renderer draws into.
 //
-// Input events are forwarded from the platform's touch system via
-// DispatchTouchEvent().
+// OWNERSHIP (important): the rendering context and swapchain belong to tgfx —
+// TgfxRenderer wraps the native surface in a tgfx::EGLWindow (Android) /
+// EAGLWindow (iOS), which creates the EGL/EAGL display, context and surface
+// and presents on context->submit(). This bridge deliberately does NOT create
+// any EGL/EAGL objects; it only:
+//   - carries the native window handle for TgfxRenderer::Init(),
+//   - dispatches touch events from the platform shell into the widget tree
+//     via DispatchTouchEvent() (called from JNI / the UI thread),
+//   - reports surface size changes and destruction (Resize/SetShouldClose).
 //
 // This file is compiled only on mobile platforms (ANDROID or __APPLE__ with
 // TARGET_OS_IPHONE). On desktop, glfw_bridge.cpp provides the implementation.
-//
-// STATUS (known limitation): this bridge is NOT WIRED into the application
-// yet -- CreateMobileBridge() currently has no call site (RenderLayer owns
-// a GlfwBridge on desktop; Application connects input via GetGlfwBridge()).
-// The EGL surface code below is a real implementation, but the Application/
-// RenderLayer integration that would construct it is future work. See the
-// platform support table in README.md before relying on mobile targets.
 // =============================================================================
 
 #include "neoflux/renderers/platform_bridge.h"
@@ -30,61 +30,52 @@
 
 #if defined(ANDROID)
 #include <android/native_window.h>
-#include <EGL/egl.h>
 #endif
 
 namespace neoflux {
 namespace {
 
-// Mobile platform bridge. Owns the EGL context (Android) or references the
-// UIKit-provided context (iOS). The native surface handle is provided by the
-// platform at construction time.
+// Mobile platform bridge. Holds a reference to the platform-provided native
+// surface; the GPU context/surface itself lives inside tgfx (EGLWindow /
+// EAGLWindow). See the file header for the ownership split.
 class MobileBridge final : public PlatformBridge {
  public:
   // Constructs a mobile bridge from a native surface handle.
   //   Android: ANativeWindow* obtained from the NativeActivity or SurfaceView.
-  //   iOS:     UIView* or CAMetalLayer* from the view hierarchy.
+  //   iOS:     CAEAGLLayer* from the view hierarchy (via the ObjC++ shell).
   explicit MobileBridge(void* native_surface, int width, int height)
       : native_surface_(native_surface), width_(width), height_(height) {
+    if (native_surface_ == nullptr) {
+      LOG(ERROR) << "MobileBridge: null native surface from the app shell";
+    }
 #if defined(ANDROID)
-    InitializeEGL();
+    auto* window = static_cast<ANativeWindow*>(native_surface_);
+    if (window != nullptr) {
+      // Keep the surface dimensions in sync with what the shell reported.
+      width_ = ANativeWindow_getWidth(window);
+      height_ = ANativeWindow_getHeight(window);
+    }
 #endif
+    LOG(INFO) << "MobileBridge created for " << width_ << "x" << height_
+              << " surface (rendering context owned by tgfx)";
   }
 
-  ~MobileBridge() override {
-#if defined(ANDROID)
-    if (egl_surface_ != EGL_NO_SURFACE) {
-      eglDestroySurface(egl_display_, egl_surface_);
-    }
-    if (egl_context_ != EGL_NO_CONTEXT) {
-      eglDestroyContext(egl_display_, egl_context_);
-    }
-    if (egl_display_ != EGL_NO_DISPLAY) {
-      eglTerminate(egl_display_);
-    }
-#endif
-  }
+  ~MobileBridge() override = default;
 
-  void MakeContextCurrent() override {
-#if defined(ANDROID)
-    if (egl_display_ != EGL_NO_DISPLAY && egl_surface_ != EGL_NO_SURFACE) {
-      eglMakeCurrent(egl_display_, egl_surface_, egl_surface_, egl_context_);
-    }
-#endif
-    // iOS: the EAGL/Metal context is made current by the platform view.
-  }
+  // No-op: the EGL/EAGL context is created, made current, and presented by
+  // tgfx (EGLWindow / EAGLWindow) on the render thread. Kept for interface
+  // uniformity with the desktop bridge.
+  void MakeContextCurrent() override {}
 
-  void SwapBuffers() override {
-#if defined(ANDROID)
-    if (egl_display_ != EGL_NO_DISPLAY && egl_surface_ != EGL_NO_SURFACE) {
-      eglSwapBuffers(egl_display_, egl_surface_);
-    }
-#endif
-    // iOS: present is handled by tgfx or the Metal drawable.
-  }
+  // No-op: presentation happens inside tgfx's context->submit() (which runs
+  // eglSwapBuffers on the Window's surface).
+  void SwapBuffers() override {}
 
   [[nodiscard]] int GetWidth() const noexcept override { return width_; }
   [[nodiscard]] int GetHeight() const noexcept override { return height_; }
+
+  // The native window handle (ANativeWindow* / CAEAGLLayer*) handed to
+  // TgfxRenderer::Init(), which wraps it in the tgfx Window.
   [[nodiscard]] void* GetNativeHandle() const noexcept override {
     return native_surface_;
   }
@@ -94,16 +85,17 @@ class MobileBridge final : public PlatformBridge {
   }
 
   void PollEvents() override {
-    // Mobile events are delivered asynchronously via DispatchTouchEvent;
-    // no polling is needed.
+    // Touch events are pushed asynchronously via DispatchTouchEvent() from
+    // the platform shell (JNI / UI thread); nothing to poll.
   }
 
   [[nodiscard]] bool ShouldClose() const noexcept override {
     return should_close_;
   }
 
-  // Called by the platform (JNI / UIKit) when a touch event occurs.
-  // Converts the platform touch into a NeoFlux input event and dispatches it.
+  // Called by the platform shell (JNI / UIKit) when a touch event occurs.
+  // Converts the platform touch into a NeoFlux input event and dispatches it
+  // to the callback wired by Application::Init().
   void DispatchTouchEvent(MouseButton button, InputAction action,
                           float x, float y) {
     if (input_callback_) {
@@ -115,83 +107,13 @@ class MobileBridge final : public PlatformBridge {
   void SetShouldClose(bool value) noexcept { should_close_ = value; }
 
   // Called by the platform when the window size changes (rotation, etc.).
+  // The tgfx Window picks the new swapchain size up on the next frame.
   void Resize(int width, int height) noexcept {
     width_ = width;
     height_ = height;
   }
 
  private:
-#if defined(ANDROID)
-  // Creates an EGL context and surface for the ANativeWindow.
-  void InitializeEGL() {
-    auto* window = static_cast<ANativeWindow*>(native_surface_);
-    if (window == nullptr) {
-      LOG(ERROR) << "MobileBridge: null native window";
-      return;
-    }
-
-    egl_display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (egl_display_ == EGL_NO_DISPLAY) {
-      LOG(ERROR) << "MobileBridge: eglGetDisplay failed";
-      return;
-    }
-
-    EGLint major = 0;
-    EGLint minor = 0;
-    if (!eglInitialize(egl_display_, &major, &minor)) {
-      LOG(ERROR) << "MobileBridge: eglInitialize failed";
-      return;
-    }
-
-    const EGLint config_attribs[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_BLUE_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_RED_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_DEPTH_SIZE, 16,
-        EGL_NONE,
-    };
-    EGLConfig config = nullptr;
-    EGLint num_configs = 0;
-    eglChooseConfig(egl_display_, config_attribs, &config, 1, &num_configs);
-    if (config == nullptr) {
-      LOG(ERROR) << "MobileBridge: eglChooseConfig failed";
-      return;
-    }
-
-    egl_surface_ = eglCreateWindowSurface(egl_display_, config, window, nullptr);
-    if (egl_surface_ == EGL_NO_SURFACE) {
-      LOG(ERROR) << "MobileBridge: eglCreateWindowSurface failed";
-      return;
-    }
-
-    const EGLint context_attribs[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 3,
-        EGL_NONE,
-    };
-    egl_context_ = eglCreateContext(egl_display_, config, EGL_NO_CONTEXT,
-                                    context_attribs);
-    if (egl_context_ == EGL_NO_CONTEXT) {
-      LOG(ERROR) << "MobileBridge: eglCreateContext failed (GLES 3.0)";
-      // Fall back to GLES 2.0.
-      const EGLint ctx2_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
-      egl_context_ = eglCreateContext(egl_display_, config, EGL_NO_CONTEXT,
-                                      ctx2_attribs);
-    }
-
-    if (egl_context_ != EGL_NO_CONTEXT) {
-      LOG(INFO) << "MobileBridge: EGL context created ("
-                << major << "." << minor << ")";
-    }
-  }
-
-  EGLDisplay egl_display_ = EGL_NO_DISPLAY;
-  EGLSurface egl_surface_ = EGL_NO_SURFACE;
-  EGLContext egl_context_ = EGL_NO_CONTEXT;
-#endif  // ANDROID
-
   void* native_surface_ = nullptr;
   int width_ = 0;
   int height_ = 0;
@@ -201,8 +123,8 @@ class MobileBridge final : public PlatformBridge {
 
 }  // namespace
 
-// Factory function used by the application layer to create a mobile bridge.
-// This is the mobile equivalent of GlfwBridge::Create().
+// Factory used by RenderLayer::Start() on mobile builds (the mobile
+// equivalent of the desktop GlfwBridge).
 std::unique_ptr<PlatformBridge> CreateMobileBridge(void* native_surface,
                                                     int width, int height) {
   return std::make_unique<MobileBridge>(native_surface, width, height);

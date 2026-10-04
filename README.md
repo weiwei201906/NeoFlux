@@ -50,15 +50,16 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 | Linux (x86-64) | ✅ Verified | CI build + headless tests via Xvfb |
 | Windows (MSVC x64) | ✅ Verified | CI build + tests |
 | macOS | 🚧 Adapted, not CI-verified | Uses the GLFW + OpenGL path |
-| Android | 🚧 Bridge only | `MobileBridge` compiles but is not wired into the app; renderer/input/media paths are not connected |
-| iOS | 🚧 Bridge only | `MobileBridge` compiles but is not wired into the app; renderer/input/media paths are not connected |
+| Android | 🚧 Renderer + input wired, no app shell | tgfx `EGLWindow` owns the EGL context and renders into the `ANativeWindow`; `MobileBridge` dispatches touch input into the widget tree. An Android app shell (NativeActivity/JNI) that creates the surface and forwards touch events is still needed. |
+| iOS | 🚧 Shell required | The `EAGLWindow::MakeFrom(CAEAGLLayer*)` path is defined but the ObjC++ app shell (view hierarchy) does not exist in this repository; `TgfxRenderer::Init` fails with an explicit log. |
 
-> "Verified" means the platform builds and passes tests in CI. Mobile currently
-> only reserves the `platform_surface` hook; see [Mobile Rendering](#mobile-rendering).
-> Concretely: `TgfxRenderer::Init` fails with an explicit log on mobile (no
-> device can be created), `CreateMediaPlayer()` returns `nullptr`, and touch
-> input has no bridge into the widget tree — each of these logs loudly rather
-> than silently no-op'ing.
+> "Verified" means the platform builds and passes tests in CI. Mobile rendering
+> and touch input are wired through tgfx's own platform abstractions (EGL/EAGL
+> Window) and the `PlatformBridge` input bridge; what is missing is the
+> platform application shell (an Android NativeActivity/JNI project, an iOS
+> ObjC++ app project) that owns the lifecycle and hands over the native
+> surface — see [Mobile Rendering](#mobile-rendering). Media playback on
+> mobile returns `nullptr` from `CreateMediaPlayer()` with a loud warning.
 
 ### Standalone verification suite
 
@@ -115,25 +116,35 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 | `--logtostderr` | bool | `false` | Write log messages to stderr instead of log files. |
 | `--log_dir` | string | `./logs` | Directory where log files are stored. Created automatically if it does not exist. |
 
-The render backend is **not** a runtime flag: tgfx allows only one GPU backend
-per build, so it is chosen at CMake configure time via `-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>` (default `gl`). See [Render backend](#render-backend-compile-time).
+The GPU backend is **not** a runtime flag and not a NeoFlux concept: the
+renderer is built entirely on tgfx, and the backend is tgfx's own
+`TGFX_USE_*` CMake switch (exactly one per build, default `TGFX_USE_OPENGL=ON`).
+See [Render backend](#render-backend-compile-time).
 
 By default, logs are written to files in `./logs/` and no console window appears on Windows (`CMAKE_WIN32_EXECUTABLE`). To debug, pass `--logtostderr --verbose_logging`.
 
 ### Render backend (compile-time selection)
 
-The render backend is also selectable at **configure time** via a CMake variable; keep it consistent with the runtime flag:
+The GPU backend is tgfx's own concern. Pick one of tgfx's native switches at
+configure time; `thirdparty/CMakeLists.txt` mirrors tgfx's own resolution
+(fixed priority: VULKAN > D3D12 > METAL > OPENGL) and exports a single
+`TGFX_USE_*=1` define so NeoFlux sources agree with what tgfx compiled:
 
 ```bash
-cmake -S . -B build -G Ninja -DNEOFLUX_BACKEND=gl   # one of gl / vulkan / d3d12 / metal
+cmake -S . -B build -G Ninja                                # default: OpenGL
+cmake -S . -B build -G Ninja -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF   # Apple
+cmake -S . -B build -G Ninja -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   # Windows
 ```
 
-| Backend | Status |
+| tgfx backend | Status |
 |---------|--------|
-| `gl` | ✅ Implemented (default) |
-| `vulkan` / `d3d12` / `metal` | 🚧 Switch points reserved, not implemented |
+| `TGFX_USE_OPENGL` | ✅ Implemented (default): desktop WGL/GLX + Android EGL (`tgfx::EGLWindow`) + iOS EAGL path |
+| `TGFX_USE_VULKAN` / `TGFX_USE_D3D12` / `TGFX_USE_METAL` | 🚧 Code paths exist (tgfx `Window` abstraction), not exercised in CI |
 
-> Use the default `gl` for now. `thirdparty/CMakeLists.txt` validates `NEOFLUX_BACKEND` at configure time.
+> Keep the default OpenGL unless you have a specific reason to experiment;
+> `tgfx`'s CMake validates platform support (e.g. D3D12 requires Windows) and
+> NeoFlux's `thirdparty/CMakeLists.txt` fails configure with an actionable
+> message on unsupported combinations.
 
 ## Font System
 
@@ -382,3 +393,27 @@ neoflux/
 ├── examples/               # Example applications
 └── docs/                   # Documentation
 ```
+## Mobile Rendering
+
+Mobile builds do not use GLFW. tgfx renders directly into the platform-provided
+surface, and the GPU context is owned entirely by tgfx:
+
+- **Android**: the app shell hands over an `ANativeWindow*` as
+  `platform_surface`; `TgfxRenderer` wraps it in a `tgfx::EGLWindow`, which
+  creates the EGL display/context/surface and presents on `context->submit()`.
+- **iOS**: the equivalent `tgfx::EAGLWindow::MakeFrom(CAEAGLLayer*)` path
+  requires the ObjC++ app shell (not yet in this repository).
+
+Touch input is dispatched by `MobileBridge` (the mobile implementation of
+`PlatformBridge`): the shell calls its `DispatchTouchEvent()` from the JNI/UI
+thread, and `Application::Init` wires the callback into
+`DispatchPointerEvent()` — the same hit-test pipeline as the desktop mouse
+path, with `MouseButton::kTouch`.
+
+```cpp
+// Mobile initialization example (from the app shell):
+app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
+```
+
+On desktop, pass `nullptr` for `platform_surface` and the framework creates
+the GLFW window itself.

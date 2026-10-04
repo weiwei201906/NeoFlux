@@ -32,6 +32,7 @@ namespace neoflux {
 // Forward declarations.
 class TgfxRenderer;
 class GlfwBridge;
+class PlatformBridge;
 
 // The render layer owns the render thread and executes render commands.
 class RenderLayer : public NonCopyable {
@@ -92,6 +93,10 @@ class RenderLayer : public NonCopyable {
   // Returns the GLFW bridge (desktop only, may be nullptr before Start).
   [[nodiscard]] GlfwBridge* GetGlfwBridge() const noexcept;
 
+  // Returns the mobile platform bridge (mobile only, may be nullptr on
+  // desktop or before Start). Touch input arrives via its SetInputCallback.
+  [[nodiscard]] PlatformBridge* GetPlatformBridge() const noexcept;
+
   // Returns the actual window/framebuffer size in pixels (may differ from
   // the requested size due to DPI scaling).
   void GetWindowSize(int& width, int& height) const noexcept;
@@ -131,6 +136,9 @@ class RenderLayer : public NonCopyable {
 
   std::unique_ptr<TgfxRenderer> renderer_;
   std::unique_ptr<GlfwBridge> glfw_bridge_;
+  // Mobile only: input/surface bridge (Android: ANativeWindow; the rendering
+  // context itself is owned by tgfx::EGLWindow). Null on desktop builds.
+  std::unique_ptr<PlatformBridge> mobile_bridge_;
 
   int window_width_ = 800;
   int window_height_ = 600;

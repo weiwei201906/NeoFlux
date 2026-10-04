@@ -16,22 +16,16 @@
 
 #include "neoflux/core/noncopyable.h"
 #include "neoflux/core/types.h"
+#include "neoflux/renderers/platform_bridge.h"
 
 // Forward declaration of GLFW window to avoid including GLFW headers here.
 struct GLFWwindow;
 
 namespace neoflux {
 
-// Mouse button identifiers (matches GLFW constants).
-enum class MouseButton : std::uint8_t { kLeft = 0, kRight = 1, kMiddle = 2 };
-
-// Input action identifiers (matches GLFW constants).
-enum class InputAction : std::uint8_t { kPress = 1, kRelease = 0, kRepeat = 2 };
-
-// Callback type for input events. Receives button, action, and cursor position
-// in window coordinates (pixels, origin at top-left).
-using InputEventCallback =
-    std::function<void(MouseButton button, InputAction action, const Point& pos)>;
+// MouseButton / InputAction / InputEventCallback come from platform_bridge.h
+// (single definition shared with the mobile bridge). NOTE: the GLFW numeric
+// constants are NOT the enum values -- glfw_bridge.cpp maps them explicitly.
 
 // Callback type for mouse scroll events.
 using ScrollEventCallback = std::function<void(double xoffset, double yoffset)>;

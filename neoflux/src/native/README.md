@@ -16,8 +16,8 @@
 
 ## 不放什么（历史教训）
 
-- **任何渲染 / GPU API**——GPU 后端代码全部位于 tgfx 之后，由
-  `NEOFLUX_BACKEND` 编译期宏分发（见 `thirdparty/CMakeLists.txt`）。
+- **任何渲染 / GPU API**——GPU 后端代码全部位于 tgfx 之后，后端选择是
+  tgfx 自己的 `TGFX_USE_*` 编译期开关（见 `thirdparty/CMakeLists.txt`）。
   曾经出现在这里的 `gl/gl_functions.{h,cpp}`（自管 GL 加载器）是
   架构错位的死代码，已在 `refactor_strip-gl-from-core` 中删除。
 - **媒体解码 / 视频互操作**——属于 GL 后端模块（`src/media/`）。

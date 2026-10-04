@@ -60,7 +60,7 @@ endif()
 # Low-level per-platform tuning ONLY: thread scheduling/priority, timer
 # resolution, CPU feature detection (see src/native/README.md for the scope
 # contract). No rendering, no GL, no backend code -- GPU backends live behind
-# tgfx via the NEOFLUX_BACKEND compile-time selection.
+# tgfx (the GPU backend is tgfx's own TGFX_USE_* compile-time choice; see thirdparty/CMakeLists.txt).
 # ---------------------------------------------------------------------------
 # Hand-written assembly lives in src/native/asm/ (project policy: no inline
 # asm in C++ sources). Only non-MSVC x86_64 toolchains assemble it today:
@@ -110,7 +110,7 @@ target_include_directories(neoflux
 # OpenGL backend build, where the window bridge and tgfx's GL device need it.
 # Vulkan/D3D12/Metal builds carry zero OpenGL dependency.
 # ---------------------------------------------------------------------------
-if(NEOFLUX_BACKEND STREQUAL "gl")
+if(TGFX_USE_OPENGL)
   find_package(OpenGL REQUIRED)
 endif()
 
@@ -121,7 +121,7 @@ endif()
 # into OpenGL textures (via its render API) which TgfxRenderer imports through
 # tgfx's GL texture interop (kDrawTexture). That interop path does not exist on
 # the vulkan/d3d12/metal backends, so mpv is only probed and linked when
-# NEOFLUX_BACKEND=gl. Other backends get a no-op MpvMediaPlayer stub and a
+# TGFX_USE_OPENGL builds. Other backends get a no-op MpvMediaPlayer stub and a
 # placeholder MediaWidget -- zero mpv coupling, zero GL dependency in media
 # code paths that cannot run.
 #
@@ -133,7 +133,7 @@ endif()
 # When mpv is present, NEOFLUX_HAS_MPV is defined.
 # ---------------------------------------------------------------------------
 set(NEOFLUX_MPV_FOUND FALSE CACHE INTERNAL "libmpv availability")
-if(NEOFLUX_BACKEND STREQUAL "gl")
+if(TGFX_USE_OPENGL)
   include("${CMAKE_SOURCE_DIR}/cmake/DownloadMPV.cmake")
 
   set(MPV_DEF "${MPV_BUNDLE_DIR}/mpv.def")
@@ -192,7 +192,7 @@ else()
   # (NEOFLUX_HAS_MPV undefined) and MediaWidget renders its placeholder.
   message(STATUS
     "libmpv media backend disabled: media is bound to the OpenGL backend "
-    "(NEOFLUX_BACKEND='${NEOFLUX_BACKEND}')")
+    "(tgfx backend: OpenGL interop)")
 endif()
 
 target_link_libraries(neoflux
@@ -205,7 +205,7 @@ target_link_libraries(neoflux
 
 # The system OpenGL library is part of the GL backend module only (see the
 # comment above); other backends must not inherit it.
-if(NEOFLUX_BACKEND STREQUAL "gl")
+if(TGFX_USE_OPENGL)
   target_link_libraries(neoflux PUBLIC OpenGL::GL)
 endif()
 

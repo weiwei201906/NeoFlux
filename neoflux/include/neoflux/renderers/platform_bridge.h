@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 
 #include "neoflux/core/types.h"
 
@@ -29,6 +30,7 @@ enum class InputAction : std::uint8_t {
   kPress = 0,
   kRelease = 1,
   kMove = 2,
+  kRepeat = 3,  // Desktop only: GLFW keyboard/mouse auto-repeat.
 };
 
 // Mouse / touch button identifiers.
@@ -77,6 +79,16 @@ class PlatformBridge {
   // Returns true if the window has been closed by the user.
   [[nodiscard]] virtual bool ShouldClose() const noexcept = 0;
 };
+
+// Creates the mobile platform bridge (Android/iOS). |native_surface| is the
+// ANativeWindow* (Android) or CAEAGLLayer*/UIView* (iOS) handed over by the
+// platform shell. The rendering context itself is NOT owned by the bridge:
+// tgfx::EGLWindow / EAGLWindow create and own the EGL/EAGL context and
+// surface for |native_surface| (see TgfxRenderer). The bridge only carries
+// the native handle and dispatches touch input into the widget tree.
+// Returns nullptr on unsupported platforms.
+std::unique_ptr<PlatformBridge> CreateMobileBridge(void* native_surface,
+                                                   int width, int height);
 
 }  // namespace neoflux
 

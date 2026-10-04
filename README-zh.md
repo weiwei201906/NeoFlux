@@ -52,14 +52,14 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 | Linux (x86-64) | ✅ 已验证 | CI 构建 + Xvfb 无头测试 |
 | Windows (MSVC x64) | ✅ 已验证 | CI 构建 + 测试 |
 | macOS | 🚧 代码已适配，未经 CI 验证 | 走 GLFW + OpenGL 路径 |
-| Android | 🚧 仅桥接预留 | `MobileBridge` 可编译但未接入应用；渲染器/输入/媒体路径均未连通 |
-| iOS | 🚧 仅桥接预留 | `MobileBridge` 可编译但未接入应用；渲染器/输入/媒体路径均未连通 |
+| Android | 🚧 渲染与输入已接线，缺应用壳 | tgfx `EGLWindow` 持有 EGL 上下文并渲染到 `ANativeWindow`；`MobileBridge` 把触摸输入分发进控件树。仍需一个创建 Surface 并转发触摸事件的 Android 应用壳（NativeActivity/JNI）。 |
+| iOS | 🚧 需要应用壳 | `EAGLWindow::MakeFrom(CAEAGLLayer*)` 路径已定义，但本仓库尚无 ObjC++ 应用壳（视图层级）；`TgfxRenderer::Init` 会打日志并显式失败。 |
 
-> 「已验证」指该平台的构建与测试在 CI 中通过。移动端目前只预留了
-> `platform_surface` 接口，详见 [移动端渲染](#移动端渲染)。
-> 具体而言：移动端 `TgfxRenderer::Init` 会打日志并显式失败（无法创建设备）、
-> `CreateMediaPlayer()` 返回 `nullptr`、触摸输入没有通往控件树的桥——
-> 以上每一处都会大声记录日志，而不是静默空转。
+> 「已验证」指该平台的构建与测试在 CI 中通过。移动端渲染与触摸输入已通过
+> tgfx 自身的平台抽象（EGL/EAGL Window）与 `PlatformBridge` 输入桥接入；
+> 缺少的是平台应用壳（Android NativeActivity/JNI 工程、iOS ObjC++ 工程），
+> 由它持有生命周期并交出原生 Surface——详见 [移动端渲染](#移动端渲染)。
+> 移动端媒体播放 `CreateMediaPlayer()` 返回 `nullptr` 并带响亮告警。
 
 ## 快速开始
 
@@ -120,24 +120,26 @@ NeoFlux 使用 gflags 进行运行时配置，所有参数均为可选。
 | `--logtostderr`               | bool   | `false`   | 将日志输出到 stderr 而非日志文件。                                   |
 | `--log_dir`                   | string | `./logs`  | 日志文件存放目录，不存在时自动创建。                                 |
 
-渲染后端**不是**运行时参数：tgfx 每次构建只允许启用一个 GPU 后端，因此后端在 CMake configure 期通过 `-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>`（默认 `gl`）选定，详见 [渲染后端](#渲染后端编译期选择)。
+GPU 后端**不是**运行时参数，也不是 NeoFlux 的概念：渲染层完全构建在 tgfx 之上，后端由 tgfx 自己的 `TGFX_USE_*` CMake 开关选定（每次构建恰好一个，默认 `TGFX_USE_OPENGL=ON`），详见 [渲染后端](#渲染后端编译期选择)。
 
 默认日志输出到 `./logs/` 文件，Windows 下不显示控制台窗口（`CMAKE_WIN32_EXECUTABLE`）。调试时使用 `--logtostderr --verbose_logging`。
 
 ### 渲染后端（编译期选择）
 
-除运行时参数外，渲染后端还可在 **configure 阶段**通过 CMake 变量选定，二者需保持一致：
+GPU 后端由 tgfx 负责。configure 阶段使用 tgfx 的原生开关；`thirdparty/CMakeLists.txt` 复刻 tgfx 的消解规则（固定优先级：VULKAN > D3D12 > METAL > OPENGL）并导出唯一的 `TGFX_USE_*=1` 宏，保证 NeoFlux 源码与 tgfx 实际编译的后端一致：
 
 ```bash
-cmake -S . -B build -G Ninja -DNEOFLUX_BACKEND=gl   # 可选 gl / vulkan / d3d12 / metal
+cmake -S . -B build -G Ninja                                # 默认：OpenGL
+cmake -S . -B build -G Ninja -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF   # Apple
+cmake -S . -B build -G Ninja -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   # Windows
 ```
 
-| 后端 | 状态 |
+| tgfx 后端 | 状态 |
 |------|------|
-| `gl` | ✅ 已实现（默认） |
-| `vulkan` / `d3d12` / `metal` | 🚧 已预留切换点，尚未实现 |
+| `TGFX_USE_OPENGL` | ✅ 已实现（默认）：桌面 WGL/GLX + Android EGL（`tgfx::EGLWindow`）+ iOS EAGL 路径 |
+| `TGFX_USE_VULKAN` / `TGFX_USE_D3D12` / `TGFX_USE_METAL` | 🚧 代码路径已存在（tgfx `Window` 抽象），尚未在 CI 中验证 |
 
-> 当前请使用默认的 `gl`。`thirdparty/CMakeLists.txt` 在 configure 期即会校验 `NEOFLUX_BACKEND` 的合法性。
+> 没有特殊需求请保持默认的 OpenGL；tgfx 的 CMake 会校验平台支持（如 D3D12 仅限 Windows），NeoFlux 的 `thirdparty/CMakeLists.txt` 也会在不支持的组合上给出可操作的 configure 期报错。
 
 ## 字体系统
 
@@ -329,13 +331,21 @@ neoflux/
 
 ## 移动端渲染
 
-移动端不使用 GLFW，tgfx 直接渲染到平台提供的 Surface：
+移动端不使用 GLFW。tgfx 直接渲染到平台提供的 Surface，GPU 上下文完全由 tgfx 持有：
 
-- **Android**：传入 `ANativeWindow*` 作为 `platform_surface`
-- **iOS**：传入 `CAMetalLayer*` 或 `CAEAGLLayer*` 作为 `platform_surface`
+- **Android**：应用壳传入 `ANativeWindow*` 作为 `platform_surface`；
+  `TgfxRenderer` 用 `tgfx::EGLWindow` 包装它——EGL display/context/surface
+  的创建与呈现（`context->submit()` 触发 `eglSwapBuffers`）都在 tgfx 内部。
+- **iOS**：等价路径 `tgfx::EAGLWindow::MakeFrom(CAEAGLLayer*)` 需要 ObjC++
+  应用壳（本仓库暂未包含）。
+
+触摸输入由 `MobileBridge`（`PlatformBridge` 的移动端实现）分发：应用壳在
+JNI/UI 线程调用其 `DispatchTouchEvent()`，`Application::Init` 把回调接到
+`DispatchPointerEvent()`——与桌面鼠标路径共用同一套命中测试管线，按钮类型
+为 `MouseButton::kTouch`。
 
 ```cpp
-// 移动端初始化示例
+// 移动端初始化示例（应用壳内）
 app.Init(argc, argv, width, height, "NeoFlux", platform_surface);
 ```
 

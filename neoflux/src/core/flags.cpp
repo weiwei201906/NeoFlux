@@ -98,9 +98,8 @@ DEFINE_int32(native_timer_period_ms, 1,
              "condition_variable wait granularity that jitters 60 FPS frame "
              "pacing. Ignored on other platforms.");
 
-// NOTE: there is deliberately no --render_backend flag. tgfx permits exactly
-// one GPU backend per build, so the backend is selected at CMake configure time
-// via -DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal> (see thirdparty/CMakeLists.txt)
-// and cannot be changed at runtime.
+// NOTE: there is deliberately no --render_backend flag. The GPU backend is
+// tgfx's own compile-time choice (TGFX_USE_* switches, resolved to exactly one
+// in thirdparty/CMakeLists.txt) and cannot be changed at runtime.
 
 }  // namespace neoflux

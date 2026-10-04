@@ -11,7 +11,8 @@ and requires libmpv development files at build time. Without it, the media
 APIs are not compiled in and the rest of the framework works unchanged.
 
 Media is part of the **OpenGL backend module**: the build probes and links
-libmpv only when `NEOFLUX_BACKEND=gl`. On `vulkan`/`d3d12`/`metal` builds mpv
+libmpv only when `TGFX_USE_OPENGL` is the active tgfx backend. On
+`Vulkan`/`D3D12`/`Metal` builds mpv
 is not downloaded, linked, or compiled (`MpvMediaPlayer` becomes a no-op stub)
 and `MediaWidget` renders its placeholder. This is deliberate: the mpv-to-GL
 texture interop has no equivalent on those backends yet, so the module stays
@@ -138,8 +139,8 @@ visible in the terminal (the app is otherwise GUI-subsystem with no console).
 ## Requirements
 
 - libmpv (`mpv/client.h`, `mpv/render_gl.h`) available at build time.
-- The desktop GL path (`--render_backend=gl`), since the render context wraps
-  an OpenGL context.
+- An OpenGL build (`TGFX_USE_OPENGL`, the default), since the render context
+  wraps an OpenGL context.
 - A decode path for the container/codecs your files use (system ffmpeg/libav
   bundled with your mpv build).
 

@@ -157,12 +157,20 @@ bool Application::Init(int argc, char** argv, int window_width,
     bridge->SetMouseMoveCallback([this](const Point& pos) {
       DispatchPointerMove(pos);
     });
+  } else if (auto* mobile = render_layer_->GetPlatformBridge();
+             mobile != nullptr) {
+    // Mobile (Android/iOS): touch events arrive from the platform shell via
+    // the bridge's DispatchTouchEvent() (JNI/UI thread), which invokes this
+    // callback. Coordinates are surface pixels, same as the desktop path.
+    mobile->SetInputCallback([this](MouseButton button, InputAction action,
+                                    const Point& pos) {
+      DispatchPointerEvent(button, action, pos);
+      MarkFrameDirty();
+    });
+    LOG(INFO) << "Mobile input bridge connected";
   } else {
-    // KNOWN LIMITATION (mobile): no PlatformBridge is constructed anywhere
-    // yet, so touch events have no path into the widget tree on mobile.
-    // Desktop (GLFW) is the only wired input path today; see README.md.
-    LOG(WARNING) << "No windowing bridge present: input events will not be "
-                    "delivered (mobile input bridge is not wired yet).";
+    LOG(WARNING) << "No windowing or platform bridge present: input events "
+                    "will not be delivered.";
   }
 
   initialized_ = true;
@@ -367,7 +375,9 @@ void Application::PaintWidgetRecursive(Widget& widget,
 
 void Application::DispatchPointerEvent(
     MouseButton button, InputAction action, const Point& pos) {
-  if (button != MouseButton::kLeft) {
+  // kTouch (mobile single-finger) follows the same press/release/move
+  // protocol as the desktop left button.
+  if (button != MouseButton::kLeft && button != MouseButton::kTouch) {
     return;
   }
   Widget* root = GetRootWidget();

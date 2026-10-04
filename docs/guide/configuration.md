@@ -10,37 +10,37 @@ flag below is optional and passed on the command line:
 
 ## Render backend (compile-time)
 
-The tgfx render backend is selected at **CMake configure time**, not at
-runtime. There is no gflag for it: rebuilding with a different
-`-DNEOFLUX_BACKEND=...` is the only way to switch.
+The GPU backend is tgfx's own compile-time choice, not a NeoFlux concept.
+Select it with tgfx's native `TGFX_USE_*` CMake switches (exactly one per
+build); `thirdparty/CMakeLists.txt` resolves them with tgfx's own priority
+(VULKAN > D3D12 > METAL > OPENGL) and exports a single `TGFX_USE_*=1` define
+so NeoFlux sources agree with what tgfx compiled.
 
-| Value | Platform | Notes |
+| tgfx switch | Platform | Notes |
 |-------|----------|-------|
-| `gl` (default) | Desktop + mobile | OpenGL via WGL / CGL / GLX on desktop and EGL on mobile. The only fully-tested backend. |
-| `vulkan` | Desktop | Requires the Vulkan SDK and a Vulkan-capable driver; tgfx is built with shaderc. |
-| `d3d12` | Windows only | Requires the Windows SDK D3D12 headers. |
-| `metal` | macOS only | Requires the Apple Metal framework. |
+| `TGFX_USE_OPENGL` (default ON) | Desktop + mobile | OpenGL via WGL / CGL / GLX on desktop, `tgfx::EGLWindow` (EGL) on Android, EAGL path on iOS. The only fully-tested backend. |
+| `TGFX_USE_VULKAN` | Desktop | Requires the Vulkan SDK and a Vulkan-capable driver; tgfx is built with shaderc. |
+| `TGFX_USE_D3D12` | Windows only | Requires the Windows SDK D3D12 headers. |
+| `TGFX_USE_METAL` | Apple only | Requires the Apple Metal framework. |
 
 Configure and build with the backend you want:
 
 ```bash
-cmake -B build -DNEOFLUX_BACKEND=vulkan
+cmake -B build -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF
 cmake --build build
 ```
-
-The chosen backend is propagated into C++ as a `NEOFLUX_BACKEND_*`
-preprocessor define and baked into the binary.
 
 ::: tip OpenGL is the only fully-tested backend
 Vulkan, D3D12, and Metal require additional system dependencies (shaderc,
 Vulkan SDK, Windows SDK D3D12 headers, Apple Metal framework, etc.) and are
-not yet exercised in CI. Use `gl` unless you have a specific reason to
-experiment.
+not yet exercised in CI. Keep `TGFX_USE_OPENGL` on unless you have a specific
+reason to experiment.
 :::
 
 ::: warning This is a compile-time choice
 There is no runtime flag to switch backends. If you want to try Vulkan after
-an OpenGL build, re-run CMake with `-DNEOFLUX_BACKEND=vulkan` and rebuild.
+an OpenGL build, re-run CMake with `-DTGFX_USE_VULKAN=ON -DTGFX_USE_OPENGL=OFF`
+and rebuild.
 :::
 
 ## Full flag reference

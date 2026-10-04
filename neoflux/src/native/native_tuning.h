@@ -12,8 +12,8 @@
 //   - CPU feature detection for future SIMD paths
 //
 // Out of scope (what must NOT go here):
-//   - any rendering or GPU API use (that lives behind tgfx; see the
-//     NEOFLUX_BACKEND compile-time selection in thirdparty/CMakeLists.txt)
+//   - any rendering or GPU API use (that lives behind tgfx; the GPU backend
+//     is tgfx's own TGFX_USE_* compile-time choice, see thirdparty/CMakeLists.txt)
 //   - media decoding / interop (that is the GL backend's media module)
 //   - windowing (GLFW bridge / mobile bridge in src/renderers/)
 //

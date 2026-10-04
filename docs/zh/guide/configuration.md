@@ -9,34 +9,34 @@ NeoFlux 使用 [gflags](https://github.com/gflags/gflags) 做运行时配置，�
 
 ## 渲染后端（编译期）
 
-tgfx 渲染后端在 **CMake 配置期** 选定，而非运行期。它没有对应的 gflag：
-要切换后端，只能用不同的 `-DNEOFLUX_BACKEND=...` 重新编译。
+GPU 后端是 tgfx 自己的编译期选择，不是 NeoFlux 的概念。用 tgfx 原生的
+`TGFX_USE_*` CMake 开关选定（每次构建恰好一个）；`thirdparty/CMakeLists.txt`
+按 tgfx 的固定优先级（VULKAN > D3D12 > METAL > OPENGL）消解，并导出唯一的
+`TGFX_USE_*=1` 宏，保证 NeoFlux 源码与 tgfx 实际编译的后端一致。
 
-| 取值 | 平台 | 说明 |
+| tgfx 开关 | 平台 | 说明 |
 |------|------|------|
-| `gl`（默认） | 桌面 + 移动端 | 桌面通过 WGL / CGL / GLX，移动端通过 EGL 走 OpenGL。唯一经过完整测试的后端。 |
-| `vulkan` | 桌面 | 需要 Vulkan SDK 和支持 Vulkan 的驱动；tgfx 以 shaderc 构建。 |
-| `d3d12` | 仅 Windows | 需要 Windows SDK 的 D3D12 头文件。 |
-| `metal` | 仅 macOS | 需要 Apple Metal 框架。 |
+| `TGFX_USE_OPENGL`（默认 ON） | 桌面 + 移动端 | 桌面通过 WGL / CGL / GLX，Android 走 `tgfx::EGLWindow`（EGL），iOS 走 EAGL 路径。唯一经过完整测试的后端。 |
+| `TGFX_USE_VULKAN` | 桌面 | 需要 Vulkan SDK 和支持 Vulkan 的驱动；tgfx 以 shaderc 构建。 |
+| `TGFX_USE_D3D12` | 仅 Windows | 需要 Windows SDK 的 D3D12 头文件。 |
+| `TGFX_USE_METAL` | 仅 Apple | 需要 Apple Metal 框架。 |
 
 用想要的后端配置并编译：
 
 ```bash
-cmake -B build -DNEOFLUX_BACKEND=vulkan
+cmake -B build -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF
 cmake --build build
 ```
-
-所选后端会以 `NEOFLUX_BACKEND_*` 预定义宏的形式传入 C++，并编入二进制。
 
 ::: tip OpenGL 是唯一经过完整测试的后端
 Vulkan、D3D12、Metal 还需要额外的系统依赖（shaderc、Vulkan SDK、Windows
 SDK 的 D3D12 头文件、Apple Metal 框架等），且尚未在 CI 中跑过。除非你有
-明确的实验需求，否则使用 `gl`。
+明确的实验需求，否则保持 `TGFX_USE_OPENGL` 开启。
 :::
 
 ::: warning 这是编译期选择
 没有运行时参数可以切换后端。如果想在 OpenGL 构建之后试试 Vulkan，需要重新
-用 `-DNEOFLUX_BACKEND=vulkan` 跑 CMake 并重新编译。
+用 `-DTGFX_USE_VULKAN=ON -DTGFX_USE_OPENGL=OFF` 跑 CMake 并重新编译。
 :::
 
 ## 完整参数表

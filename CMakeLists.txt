@@ -165,7 +165,7 @@ add_custom_command(TARGET neoflux_app POST_BUILD
 # targets the OpenGL backend -- media is bound to the GL backend module, so
 # other backends neither need nor get the DLL.
 if(WIN32
-   AND NEOFLUX_BACKEND STREQUAL "gl"
+   AND TGFX_USE_OPENGL
    AND EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/mpv-bundle/libmpv-2.dll")
   add_custom_command(TARGET neoflux_app POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

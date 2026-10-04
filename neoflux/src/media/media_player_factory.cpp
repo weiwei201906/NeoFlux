@@ -7,9 +7,10 @@
 //
 // ARCHITECTURE: media playback is bound to the OpenGL backend module. libmpv
 // decodes frames into GL textures and TgfxRenderer composites them via tgfx's
-// GL texture interop (kDrawTexture) -- a path that exists only on the gl
+// GL texture interop (kDrawTexture) -- a path that exists only on the OpenGL
 // backend. The build therefore defines NEOFLUX_HAS_MPV only when
-// NEOFLUX_BACKEND=gl (see neoflux/CMakeLists.txt). On any other backend:
+// TGFX_USE_OPENGL is the active tgfx backend (see neoflux/CMakeLists.txt).
+// On any other backend:
 //   - mpv is not probed, downloaded, or linked;
 //   - MpvMediaPlayer compiles as a no-op stub (UpdateTexture() returns 0);
 //   - MediaWidget::Paint() draws its "No media loaded" placeholder.

@@ -73,62 +73,46 @@ add_subdirectory(freetype)
 # OpenGL backend which does NOT need shaderc, so we drop an empty placeholder
 # directory to skip the network sync on CI.
 # ---------------------------------------------------------------------------
-# tgfx backend selection (compile-time). Pick exactly one:
-#   -DNEOFLUX_BACKEND=gl       (default, desktop + mobile OpenGL/EGL)
-#   -DNEOFLUX_BACKEND=vulkan   (Windows / macOS / OHOS / Android; requires shaderc)
-#   -DNEOFLUX_BACKEND=d3d12    (Windows only)
-#   -DNEOFLUX_BACKEND=metal    (Apple only)
+# tgfx GPU backend selection (compile-time, owned by tgfx).
 #
-# tgfx itself allows exactly ONE GPU backend per build: enabling one turns the
-# others off in tgfx/CMakeLists.txt. The backend is therefore baked into the
-# binary and cannot be changed at runtime -- there is deliberately no
-# --render_backend flag. To switch backends, reconfigure and rebuild.
+# The GPU backend is tgfx's own concept. Pick exactly one of tgfx's native
+# options at configure time, e.g.:
+#   -DTGFX_USE_METAL=ON -DTGFX_USE_OPENGL=OFF   (Apple)
+#   -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   (Windows)
+#   -DTGFX_USE_VULKAN=ON -DTGFX_USE_OPENGL=OFF  (Windows/macOS/OHOS/Android)
+# tgfx itself validates platform support and enforces single-backend builds;
+# there is deliberately no runtime backend flag (tgfx permits exactly one GPU
+# backend per build). Switching backends = reconfigure + rebuild.
+#
+# NeoFlux code contains NO backend branching of its own: the renderer only
+# consumes tgfx's Device/Window/Surface abstractions. The one mirrored macro
+# below exists because tgfx defines TGFX_USE_* PRIVATE (consumers cannot see
+# them); the media module's GL interop and the renderer's surface acquisition
+# need the same knowledge in NeoFlux sources, under tgfx's own naming.
 # ---------------------------------------------------------------------------
-set(NEOFLUX_BACKEND "gl" CACHE STRING "tgfx rendering backend (compile-time)")
-set_property(CACHE NEOFLUX_BACKEND PROPERTY STRINGS gl vulkan d3d12 metal)
+set(TGFX_USE_OPENGL ON CACHE BOOL "tgfx OpenGL/EGL backend (desktop + Android)")
+set(TGFX_USE_METAL OFF CACHE BOOL "tgfx Metal backend (Apple only)")
+set(TGFX_USE_D3D12 OFF CACHE BOOL "tgfx D3D12 backend (Windows only)")
+set(TGFX_USE_VULKAN OFF CACHE BOOL "tgfx Vulkan backend")
+set(TGFX_USE_WEBGPU OFF CACHE BOOL "tgfx WebGPU backend (web only)")
 
-set(TGFX_USE_OPENGL OFF)
-set(TGFX_USE_D3D12 OFF)
-set(TGFX_USE_METAL OFF)
-set(TGFX_USE_VULKAN OFF)
-set(TGFX_USE_WEBGPU OFF)
-
-if(NEOFLUX_BACKEND STREQUAL "gl")
-  set(TGFX_USE_OPENGL ON)
-elseif(NEOFLUX_BACKEND STREQUAL "vulkan")
-  set(TGFX_USE_VULKAN ON)
-elseif(NEOFLUX_BACKEND STREQUAL "d3d12")
-  set(TGFX_USE_D3D12 ON)
-elseif(NEOFLUX_BACKEND STREQUAL "metal")
-  set(TGFX_USE_METAL ON)
+set(NEOFLUX_ACTIVE_BACKEND "")
+if(TGFX_USE_VULKAN)
+  add_compile_definitions(TGFX_USE_VULKAN=1)
+  set(NEOFLUX_ACTIVE_BACKEND "vulkan")
+elseif(TGFX_USE_D3D12)
+  add_compile_definitions(TGFX_USE_D3D12=1)
+  set(NEOFLUX_ACTIVE_BACKEND "d3d12")
+elseif(TGFX_USE_METAL)
+  add_compile_definitions(TGFX_USE_METAL=1)
+  set(NEOFLUX_ACTIVE_BACKEND "metal")
+elseif(TGFX_USE_OPENGL)
+  add_compile_definitions(TGFX_USE_OPENGL=1)
+  set(NEOFLUX_ACTIVE_BACKEND "opengl")
 else()
-  message(FATAL_ERROR "Unknown NEOFLUX_BACKEND='${NEOFLUX_BACKEND}'. Choose: gl, vulkan, d3d12, metal.")
-endif()
-
-# Validate the platform constraints here so the failure carries a clear,
-# actionable message instead of surfacing from deep inside tgfx.
-if(NEOFLUX_BACKEND STREQUAL "d3d12" AND NOT WIN32)
   message(FATAL_ERROR
-    "NEOFLUX_BACKEND=d3d12 requires Windows: tgfx's D3D12 backend is implemented "
-    "on top of IDXGISwapChain3 and is Windows-only.")
-endif()
-if(NEOFLUX_BACKEND STREQUAL "metal" AND NOT APPLE)
-  message(FATAL_ERROR
-    "NEOFLUX_BACKEND=metal requires Apple platforms: tgfx's Metal backend "
-    "targets CAMetalLayer / MTKView.")
-endif()
-if(NEOFLUX_BACKEND STREQUAL "vulkan" AND NOT (WIN32 OR APPLE OR ANDROID))
-  message(FATAL_ERROR
-    "NEOFLUX_BACKEND=vulkan is unsupported on this platform: tgfx's Vulkan "
-    "backend supports Windows, macOS, OHOS and Android only (not Linux).")
-endif()
-
-# Self-check the option's cache entry so an invalid value stored in
-# CMakeCache.txt is reported here rather than silently ignored.
-if(NOT NEOFLUX_BACKEND MATCHES "^(gl|vulkan|d3d12|metal)$")
-  message(FATAL_ERROR
-    "Stale/invalid NEOFLUX_BACKEND='${NEOFLUX_BACKEND}' in the CMake cache. "
-    "Re-run configure in a clean build directory.")
+    "No tgfx GPU backend enabled: turn on exactly one of TGFX_USE_OPENGL / "
+    "TGFX_USE_VULKAN / TGFX_USE_D3D12 / TGFX_USE_METAL.")
 endif()
 
 set(TGFX_USE_FREETYPE ON CACHE BOOL "" FORCE)
@@ -136,14 +120,6 @@ set(TGFX_BUILD_SVG OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_PDF OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_LAYERS OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
-
-# Propagate the chosen backend to our sources. Two forms are exported:
-#   NEOFLUX_BACKEND_gl / _vulkan / _d3d12 / _metal  -> for #ifdef branching
-#   NEOFLUX_BACKEND_NAME="gl"                       -> for log/version strings
-# The quoted definition needs escaping to survive CMake's command-line handling
-# on every generator (Ninja, Makefiles, MSBuild).
-add_compile_definitions(NEOFLUX_BACKEND_${NEOFLUX_BACKEND})
-add_compile_definitions(NEOFLUX_BACKEND_NAME=\"${NEOFLUX_BACKEND}\")
 
 # Placeholder to skip tgfx's unconditional shaderc glslang network sync.
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")

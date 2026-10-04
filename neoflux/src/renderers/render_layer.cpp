@@ -20,6 +20,7 @@
 
 #include "native/native_tuning.h"
 #include "neoflux/renderers/glfw_bridge.h"
+#include "neoflux/renderers/platform_bridge.h"
 #include "neoflux/core/config.h"
 #include "neoflux/core/flags.h"
 #include "neoflux/renderers/render_command.h"
@@ -28,25 +29,24 @@
 // render_queue_capacity and render_queue_drop_log_max are defined in
 // core/flags.cpp and declared in core/flags.h.
 //
-// The render backend is NOT a runtime flag. tgfx permits exactly one GPU
-// backend per build (see thirdparty/CMakeLists.txt), so the backend is baked in
-// at configure time via -DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>. It is
-// reflected here by the NEOFLUX_BACKEND_NAME macro purely for logging; switching
-// backends requires a rebuild, not a command-line option.
+// The GPU backend is NOT a runtime flag and NOT a NeoFlux concept: it is
+// tgfx's own TGFX_USE_* compile-time choice, resolved to exactly one backend
+// at configure time (see thirdparty/CMakeLists.txt). Switching backends
+// requires a reconfigure + rebuild, not a command-line option.
 
 namespace neoflux {
 
-// Name of the tgfx backend compiled into this binary.
-#if defined(NEOFLUX_BACKEND_NAME)
-static constexpr const char kBackendName[] = NEOFLUX_BACKEND_NAME;
-#elif defined(NEOFLUX_BACKEND_gl)
-static constexpr const char kBackendName[] = "gl";
-#elif defined(NEOFLUX_BACKEND_vulkan)
-static constexpr const char kBackendName[] = "vulkan";
-#elif defined(NEOFLUX_BACKEND_d3d12)
-static constexpr const char kBackendName[] = "d3d12";
-#elif defined(NEOFLUX_BACKEND_metal)
-static constexpr const char kBackendName[] = "metal";
+// Name of the tgfx backend compiled into this binary. thirdparty/
+// CMakeLists.txt resolves tgfx's options to a single TGFX_USE_*=1 definition
+// that mirrors what tgfx actually compiled.
+#if defined(TGFX_USE_OPENGL)
+static constexpr const char kBackendName[] = "OpenGL";
+#elif defined(TGFX_USE_VULKAN)
+static constexpr const char kBackendName[] = "Vulkan";
+#elif defined(TGFX_USE_D3D12)
+static constexpr const char kBackendName[] = "D3D12";
+#elif defined(TGFX_USE_METAL)
+static constexpr const char kBackendName[] = "Metal";
 #else
 static constexpr const char kBackendName[] = "unknown";
 #endif
@@ -125,16 +125,22 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
   // Resize() here with the framebuffer size -- that would corrupt u_resolution
   // and make layout coordinates mismatch the shader.
 #else
-  // Mobile: tgfx renders directly into the platform surface provided by
-  // the OS (ANativeWindow / CAMetalLayer). No windowing bridge is needed;
-  // the platform manages surface lifecycle and display refresh.
+  // Mobile: tgfx owns the EGL context and swapchain (tgfx::EGLWindow); the
+  // platform bridge only carries the native window and touch input.
   if (platform_surface == nullptr) {
     LOG(ERROR) << "Mobile platform surface is required for tgfx initialization";
     return false;
   }
 
+  mobile_bridge_ = CreateMobileBridge(platform_surface, width, height);
+  if (mobile_bridge_ == nullptr) {
+    LOG(ERROR) << "Failed to create the mobile platform bridge";
+    return false;
+  }
+
   if (!renderer_->Init(width, height, platform_surface)) {
     LOG(ERROR) << "Failed to initialize tgfx renderer (mobile)";
+    mobile_bridge_.reset();
     return false;
   }
 #endif
@@ -184,6 +190,7 @@ void RenderLayer::Stop() {
   // destroyed below.
   renderer_.release();
 
+  mobile_bridge_.reset();
   if (glfw_bridge_ != nullptr) {
     glfw_bridge_->Shutdown();
     glfw_bridge_.reset();
@@ -275,6 +282,11 @@ bool RenderLayer::ShouldClose() const {
     return glfw_bridge_->ShouldClose();
   }
 #endif
+  // Mobile: the app shell sets the close flag via the bridge (surface
+  // destroyed / app paused), which PlatformBridge::ShouldClose() reports.
+  if (mobile_bridge_ != nullptr) {
+    return mobile_bridge_->ShouldClose();
+  }
   return should_close_.load();
 }
 
@@ -283,11 +295,22 @@ void RenderLayer::PollEvents() {
   if (glfw_bridge_ != nullptr) {
     glfw_bridge_->PollEvents();
   }
+#else
+  // Mobile: touch events are pushed asynchronously through the bridge's
+  // input callback (JNI/UI thread); polling is a no-op but keeps the frame
+  // loop uniform across platforms.
+  if (mobile_bridge_ != nullptr) {
+    mobile_bridge_->PollEvents();
+  }
 #endif
 }
 
 GlfwBridge* RenderLayer::GetGlfwBridge() const noexcept {
   return glfw_bridge_.get();
+}
+
+PlatformBridge* RenderLayer::GetPlatformBridge() const noexcept {
+  return mobile_bridge_.get();
 }
 
 void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {

@@ -77,8 +77,8 @@ DECLARE_string(native_mmcss_profile);
 // Windows: timeBeginPeriod resolution in ms (0 = do not request).
 DECLARE_int32(native_timer_period_ms);
 
-// No backend flag: the tgfx backend is a compile-time choice
-// (-DNEOFLUX_BACKEND=<gl|vulkan|d3d12|metal>).
+// No backend flag: the GPU backend is tgfx's own compile-time choice
+// (TGFX_USE_* switches, resolved in thirdparty/CMakeLists.txt).
 
 }  // namespace neoflux
 

@@ -46,13 +46,14 @@ GlfwBridge::GlfwBridge() : impl_(std::make_unique<Impl>()) {}
 
 GlfwBridge::~GlfwBridge() { Shutdown(); }
 
-// The render backend is a compile-time choice (see thirdparty/CMakeLists.txt).
+// The GPU backend is tgfx's own compile-time choice (see thirdparty/
+// CMakeLists.txt, which resolves tgfx's TGFX_USE_* switches to exactly one).
 // The OpenGL path needs a GL context created by GLFW; the other tgfx backends
-// (vulkan/d3d12/metal) create their own swapchain/surface from the native
+// (Vulkan/D3D12/Metal) create their own swapchain/surface from the native
 // window handle, so GLFW must be told to create the window WITHOUT a client API
 // context (GLFW_NO_API). Creating a GL context there would be useless and, on
 // some drivers, conflict with the backend's own device creation.
-#if defined(NEOFLUX_BACKEND_gl)
+#if defined(TGFX_USE_OPENGL)
 #define NEOFLUX_GLFW_WANTS_GL_CONTEXT 1
 #else
 #define NEOFLUX_GLFW_WANTS_GL_CONTEXT 0
@@ -248,8 +249,14 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
   glfwGetCursorPos(window, &cursor_x, &cursor_y);
   bridge->impl_->last_cursor_x = cursor_x;
   bridge->impl_->last_cursor_y = cursor_y;
+  // Map GLFW constants explicitly: they do NOT share numeric values with
+  // InputAction (GLFW_PRESS==1, GLFW_RELEASE==0 -- the shared enum is the
+  // other way around, plus the mobile kTouch/kMove entries).
   const auto btn = static_cast<MouseButton>(button);
-  const auto act = static_cast<InputAction>(action);
+  const auto act = (action == GLFW_PRESS)
+                       ? InputAction::kPress
+                       : ((action == GLFW_REPEAT) ? InputAction::kRepeat
+                                                  : InputAction::kRelease);
   bridge->impl_->input_callback(btn, act,
                                 {.x = static_cast<float>(cursor_x),
                                  .y = static_cast<float>(cursor_y)});
