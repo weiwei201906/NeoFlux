@@ -45,7 +45,6 @@ add_library(neoflux STATIC
   src/widgets/media_widget.cpp
   src/media/mpv_media_player.cpp
   src/media/media_player_factory.cpp
-  src/native/gl/gl_functions.cpp
 )
 
 # Platform-specific bridge implementations.
@@ -64,11 +63,18 @@ target_include_directories(neoflux
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# OpenGL is required by the GLFW bridge and the OpenGL renderer path. The other
-# tgfx backends (vulkan/d3d12/metal) do not use it, but a broad range of widget,
-# font, and media code currently links OpenGL::GL unconditionally, so it stays a
-# hard dependency for now. Making it conditional is tracked as follow-up work.
-find_package(OpenGL REQUIRED)
+# ---------------------------------------------------------------------------
+# OpenGL link dependency -- GL backend module only
+#
+# All drawing goes through tgfx; the framework itself contains no GL calls
+# (the former self-managed GL loader under src/native/gl was dead code and has
+# been removed). The system OpenGL library is therefore linked only for the
+# OpenGL backend build, where the window bridge and tgfx's GL device need it.
+# Vulkan/D3D12/Metal builds carry zero OpenGL dependency.
+# ---------------------------------------------------------------------------
+if(NEOFLUX_BACKEND STREQUAL "gl")
+  find_package(OpenGL REQUIRED)
+endif()
 
 # ---------------------------------------------------------------------------
 # libmpv (optional desktop media backend) -- BOUND TO THE OPENGL BACKEND
@@ -157,8 +163,13 @@ target_link_libraries(neoflux
     glog::glog
     gflags
     freetype
-    OpenGL::GL
 )
+
+# The system OpenGL library is part of the GL backend module only (see the
+# comment above); other backends must not inherit it.
+if(NEOFLUX_BACKEND STREQUAL "gl")
+  target_link_libraries(neoflux PUBLIC OpenGL::GL)
+endif()
 
 # tgfx is the required rendering backend: it performs all 2D rasterization,
 # text layout, and GPU dispatch. GLFW remains only a window/context bridge.
