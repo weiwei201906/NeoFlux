@@ -91,7 +91,9 @@
 // -----------------------------------------------------------------------------
     .globl SYMBOL_NAME(neoflux_premultiply_rgba8)
     .p2align 4                                     // 16-byte align: clean decode
+#if defined(__ELF__)
     .type  SYMBOL_NAME(neoflux_premultiply_rgba8), @function
+#endif
 SYMBOL_NAME(neoflux_premultiply_rgba8):
     // ---- Constants, built with ALU ops so the file stays position
     // ---- independent and needs no .rodata section.
@@ -155,9 +157,10 @@ SYMBOL_NAME(neoflux_premultiply_rgba8):
 
 .Ldone:
     ret                                            // rax = floor(pixels / 4) * 4
-    .size   SYMBOL_NAME(neoflux_premultiply_rgba8), .-SYMBOL_NAME(neoflux_premultiply_rgba8)
 
-// Mark the stack non-executable (ELF toolchains). Harmless elsewhere.
-#if !defined(__APPLE__)
+// Symbol metadata and the non-executable-stack note are ELF-only: Mach-O and
+// COFF assemblers reject .type/@function, .size and @progbits outright.
+#if defined(__ELF__)
+    .size   SYMBOL_NAME(neoflux_premultiply_rgba8), .-SYMBOL_NAME(neoflux_premultiply_rgba8)
     .section .note.GNU-stack, "", @progbits
 #endif

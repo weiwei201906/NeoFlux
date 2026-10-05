@@ -55,7 +55,9 @@
 // -----------------------------------------------------------------------------
     .globl SYMBOL_NAME(neoflux_read_xcr0)
     .p2align 4                                     // 16-byte align: clean decode
+#if defined(__ELF__)
     .type  SYMBOL_NAME(neoflux_read_xcr0), @function
+#endif
 SYMBOL_NAME(neoflux_read_xcr0):
     movl    $0, %ecx                               // ECX = 0 selects XCR0
     xgetbv                                         // EDX:EAX = XCR0 (low 64 bits)
@@ -63,9 +65,10 @@ SYMBOL_NAME(neoflux_read_xcr0):
     shlq    $32, %rdx                              // move XCR0[63:32] into RDX[63:32]
     orq     %rdx, %rax                             // assemble (EDX << 32) | EAX
     ret                                            // return in RAX (SysV & Win64)
-    .size   SYMBOL_NAME(neoflux_read_xcr0), .-SYMBOL_NAME(neoflux_read_xcr0)
 
-// Mark the stack non-executable (ELF toolchains). Harmless elsewhere.
-#if !defined(__APPLE__)
+// Symbol metadata and the non-executable-stack note are ELF-only: Mach-O and
+// COFF assemblers reject .type/@function, .size and @progbits outright.
+#if defined(__ELF__)
+    .size   SYMBOL_NAME(neoflux_read_xcr0), .-SYMBOL_NAME(neoflux_read_xcr0)
     .section .note.GNU-stack, "", @progbits
 #endif

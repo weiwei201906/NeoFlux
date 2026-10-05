@@ -70,7 +70,9 @@
 // -----------------------------------------------------------------------------
     .globl SYMBOL_NAME(neoflux_premultiply_rgba8)
     .p2align 2                                     // 4-byte align (instruction alignment)
+#if defined(__ELF__)
     .type  SYMBOL_NAME(neoflux_premultiply_rgba8), @function
+#endif
 SYMBOL_NAME(neoflux_premultiply_rgba8):
     movi     v16.8h, #127                          // v16 = rounding term, 8 lanes of 127
 
@@ -123,9 +125,10 @@ SYMBOL_NAME(neoflux_premultiply_rgba8):
 .Ldone:
     mov      x0, x3                                // return floor(pixels / 8) * 8
     ret
-    .size   SYMBOL_NAME(neoflux_premultiply_rgba8), .-SYMBOL_NAME(neoflux_premultiply_rgba8)
 
-// Mark the stack non-executable (ELF toolchains). Harmless elsewhere.
-#if !defined(__APPLE__)
+// Symbol metadata and the non-executable-stack note are ELF-only: Mach-O and
+// COFF assemblers reject .type/@function, .size and @progbits outright.
+#if defined(__ELF__)
+    .size   SYMBOL_NAME(neoflux_premultiply_rgba8), .-SYMBOL_NAME(neoflux_premultiply_rgba8)
     .section .note.GNU-stack, "", @progbits
 #endif
