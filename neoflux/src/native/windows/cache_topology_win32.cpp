@@ -48,6 +48,7 @@
 #include <intrin.h>
 
 #include <cstddef>
+#include <cstdint>
 
 #include "neoflux/core/config.h"
 
@@ -57,11 +58,15 @@ namespace neoflux::native {
 namespace {
 
 /// CPUID leaf-4 cache-type encodings (Intel SDM Vol.2, CPUID leaf 04H).
-enum : int {
-  kCacheTypeNull = 0,     // "no more caches" sentinel / leaves the loop.
-  kCacheTypeData = 1,     // data cache
-  kCacheTypeInstruction = 2,  // instruction cache
-  kCacheTypeUnified = 3,  // unified (data + instruction)
+///
+/// The field these come from is EAX[4:0], so an underlying type of one byte is
+/// all the value can ever need; `int` only made the constants 4x wider than the
+/// register field they name.
+enum : std::uint8_t {
+  kCacheTypeNull = 0,           // "no more caches" sentinel / leaves the loop.
+  kCacheTypeData = 1,           // data cache
+  kCacheTypeInstruction = 2,    // instruction cache
+  kCacheTypeUnified = 3,        // unified (data + instruction)
 };
 
 /// True for the cache types that carry data and therefore count toward the
