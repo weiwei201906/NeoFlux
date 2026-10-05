@@ -66,10 +66,10 @@ void EventLoop::Run(const FrameCallback& frame_callback) {
                               : "");
 
   const auto frame_duration = std::chrono::microseconds(
-      static_cast<int64_t>(1'000'000.0 / static_cast<double>(target_fps_)));
+      static_cast<std::int64_t>(1'000'000.0 / static_cast<double>(target_fps_)));
   const auto idle_frame_duration =
       idle_fps_ > 0
-          ? std::chrono::microseconds(static_cast<int64_t>(
+          ? std::chrono::microseconds(static_cast<std::int64_t>(
                 1'000'000.0 / static_cast<double>(idle_fps_)))
           : frame_duration;
   // Hysteresis: drop to the idle heart-beat only after this many consecutive
@@ -166,7 +166,7 @@ void EventLoop::SetTargetFps(int fps) noexcept {  // NOLINT(bugprone-exception-e
 
 int EventLoop::GetTargetFps() const noexcept { return target_fps_; }
 
-uint64_t EventLoop::GetFrameCount() const noexcept {
+std::uint64_t EventLoop::GetFrameCount() const noexcept {
   return frame_count_.load();
 }
 

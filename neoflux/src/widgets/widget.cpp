@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <ranges>
@@ -175,7 +176,7 @@ void Widget::AddChild(std::shared_ptr<Widget> child) {
   if (taitank_node_ != nullptr) {
     const auto& added = children_.back();
     taitank::InsertChild(taitank_node_, added->GetTaitankNode(),
-                         static_cast<uint32_t>(children_.size() - 1));
+                         static_cast<std::uint32_t>(children_.size() - 1));
   }
 }
 
@@ -285,7 +286,7 @@ void Widget::SyncTaitankChildren() {
       auto* child_node = children_[i]->GetTaitankNode();  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop
       if (child_node != nullptr) {
         taitank::InsertChild(taitank_node_, child_node,
-                             static_cast<uint32_t>(i));
+                             static_cast<std::uint32_t>(i));
       }
     }
   }

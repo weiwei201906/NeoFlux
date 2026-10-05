@@ -46,16 +46,16 @@ struct Rect {
 
 // RGBA color with 8-bit per channel.
 struct Color {
-  uint8_t r = 0;
-  uint8_t g = 0;
-  uint8_t b = 0;
-  uint8_t a = 255;
+  std::uint8_t r = 0;
+  std::uint8_t g = 0;
+  std::uint8_t b = 0;
+  std::uint8_t a = 255;
 
   // Creates a color from 32-bit ARGB integer.
-  [[nodiscard]] static Color FromArgb(uint32_t argb) noexcept;
+  [[nodiscard]] static Color FromArgb(std::uint32_t argb) noexcept;
 
   // Converts to 32-bit ARGB integer.
-  [[nodiscard]] uint32_t ToArgb() const noexcept;
+  [[nodiscard]] std::uint32_t ToArgb() const noexcept;
 };
 
 // Edge insets for padding/margin.

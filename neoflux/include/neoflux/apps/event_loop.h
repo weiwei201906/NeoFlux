@@ -79,7 +79,7 @@ class EventLoop : public NonCopyable {
   [[nodiscard]] int GetTargetFps() const noexcept;
 
   // Returns the number of frames processed since Run() started.
-  [[nodiscard]] uint64_t GetFrameCount() const noexcept;
+  [[nodiscard]] std::uint64_t GetFrameCount() const noexcept;
 
   // Schedules a coroutine task to be resumed on the event-loop thread.
   // The task is moved into the loop and resumed on the next frame tick.
@@ -106,7 +106,7 @@ class EventLoop : public NonCopyable {
 
   std::atomic<bool> running_{false};
   std::atomic<bool> should_stop_{false};
-  std::atomic<uint64_t> frame_count_{0};
+  std::atomic<std::uint64_t> frame_count_{0};
   // Set by RequestRender(); consumed once per frame to decide whether the
   // loop stays at full rate or is allowed to drop to the idle heart-beat.
   std::atomic<bool> render_dirty_{false};

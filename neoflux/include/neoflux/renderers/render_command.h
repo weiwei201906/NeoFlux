@@ -21,7 +21,7 @@
 namespace neoflux {
 
 // Enumeration of render command types.
-enum class RenderCommandType : uint8_t {
+enum class RenderCommandType : std::uint8_t {
   kNoop,
   kDrawRect,
   kDrawRoundedRect,
