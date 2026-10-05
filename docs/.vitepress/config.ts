@@ -59,6 +59,7 @@ export default defineConfig({
             { text: 'Font System', link: '/guide/fonts' },
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Native Tuning Layer', link: '/guide/native-tuning' },
+            { text: 'Native Assembly Kernels', link: '/guide/native-asm' },
             { text: 'Media Playback', link: '/guide/media' },
             { text: 'Debugging & Tuning', link: '/guide/debugging' },
             { text: 'Cross-Platform', link: '/guide/cross-platform' },
