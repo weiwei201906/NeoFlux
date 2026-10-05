@@ -18,17 +18,31 @@
 //     via DispatchTouchEvent() (called from JNI / the UI thread),
 //   - reports surface size changes and destruction (Resize/SetShouldClose).
 //
-// This file is compiled only on mobile platforms (ANDROID or __APPLE__ with
-// TARGET_OS_IPHONE). On desktop, glfw_bridge.cpp provides the implementation.
+// This file is compiled only on mobile platforms. The whole translation unit
+// therefore uses the single platform predicate CMake owns: when the target is
+// configured for mobile it defines NEOFLUX_PLATFORM_MOBILE and compiles this
+// file; otherwise it defines NEOFLUX_PLATFORM_DESKTOP and compiles
+// glfw_bridge.cpp instead. See neoflux/CMakeLists.txt.
+//
+// Do NOT reintroduce raw platform probing here. TARGET_OS_IPHONE comes from
+// <TargetConditionals.h>, which this file does not include, so an
+// `#if defined(__APPLE__) && defined(TARGET_OS_IPHONE)` guard silently
+// compiled this translation unit empty on iOS: CreateMobileBridge() is
+// declared in the public platform_bridge.h but never defined, and the link
+// failed. Deriving the guard from the CMake definition makes it impossible
+// for "which bridge is compiled" and "is this bridge compiled" to disagree.
+// Android-only code below keys off __ANDROID__, the macro the NDK defines for
+// the compiler itself (as in tgfx_renderer.cpp), not off the CMake ANDROID
+// variable.
 // =============================================================================
 
 #include "neoflux/renderers/platform_bridge.h"
 
-#if defined(ANDROID) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE))
+#ifdef NEOFLUX_PLATFORM_MOBILE
 
 #include <glog/logging.h>
 
-#if defined(ANDROID)
+#if defined(__ANDROID__)
 #include <android/native_window.h>
 #endif
 
@@ -48,7 +62,7 @@ class MobileBridge final : public PlatformBridge {
     if (native_surface_ == nullptr) {
       LOG(ERROR) << "MobileBridge: null native surface from the app shell";
     }
-#if defined(ANDROID)
+#if defined(__ANDROID__)
     auto* window = static_cast<ANativeWindow*>(native_surface_);
     if (window != nullptr) {
       // Keep the surface dimensions in sync with what the shell reported.
@@ -123,4 +137,4 @@ std::unique_ptr<PlatformBridge> CreateMobileBridge(void* native_surface,
 
 }  // namespace neoflux
 
-#endif  // ANDROID || TARGET_OS_IPHONE
+#endif  // NEOFLUX_PLATFORM_MOBILE
