@@ -60,12 +60,18 @@ namespace {
 
 // Minimal GL function loader for FBO/texture operations (same pattern as
 // tgfx_renderer.cpp). Loaded via glfwGetProcAddress on the render thread.
+//
+// The GL ABI fixes these widths for every platform: GLenum, GLuint and
+// GLbitfield are 32-bit unsigned, GLint and GLsizei are 32-bit signed. Spelling
+// them with <cstdint> types keeps the hand-rolled signatures from drifting with
+// the host's `unsigned int` / `int`, which is the whole reason these aliases
+// exist instead of including GL.h.
 struct MpvGlLoader {
-  using GlEnum = unsigned int;
-  using GlUint = unsigned int;
-  using GlInt = int;
-  using GlSizei = int;
-  using GlBitfield = unsigned int;
+  using GlEnum = std::uint32_t;
+  using GlUint = std::uint32_t;
+  using GlInt = std::int32_t;
+  using GlSizei = std::int32_t;
+  using GlBitfield = std::uint32_t;
 
   void(APIENTRY* GenFramebuffers)(GlSizei, GlUint*) = nullptr;
   void(APIENTRY* DeleteFramebuffers)(GlSizei, const GlUint*) = nullptr;
@@ -106,17 +112,19 @@ MpvGlLoader& GetGlLoader() {
 }
 
 // GL constants (avoid including GL.h which conflicts with our custom loader).
-constexpr unsigned int kGlTexture2d = 0x0DE1;
-constexpr unsigned int kGlTextureMinFilter = 0x2801;
-constexpr unsigned int kGlTextureMagFilter = 0x2800;
-constexpr unsigned int kGlTextureWrapS = 0x2802;
-constexpr unsigned int kGlTextureWrapT = 0x2803;
-constexpr int kGlLinear = 0x2601;
-constexpr int kGlClampToEdge = 0x812F;
-constexpr unsigned int kGlFramebuffer = 0x8D40;
-constexpr int kGlRgba = 0x1908;
-constexpr unsigned int kGlUnsignedByte = 0x1401;
-constexpr unsigned int kGlColorAttachment0 = 0x8CE0;
+// Typed to match the parameter each one is passed to: GLenum (u32) vs GLint
+// (i32). Every value below fits comfortably in the signed range that matters.
+constexpr std::uint32_t kGlTexture2d = 0x0DE1;
+constexpr std::uint32_t kGlTextureMinFilter = 0x2801;
+constexpr std::uint32_t kGlTextureMagFilter = 0x2800;
+constexpr std::uint32_t kGlTextureWrapS = 0x2802;
+constexpr std::uint32_t kGlTextureWrapT = 0x2803;
+constexpr std::int32_t kGlLinear = 0x2601;
+constexpr std::int32_t kGlClampToEdge = 0x812F;
+constexpr std::uint32_t kGlFramebuffer = 0x8D40;
+constexpr std::int32_t kGlRgba = 0x1908;
+constexpr std::uint32_t kGlUnsignedByte = 0x1401;
+constexpr std::uint32_t kGlColorAttachment0 = 0x8CE0;
 
 // OpenGL get_proc_address callback for mpv render context.
 void* GetProcAddress(void* /*ctx*/, const char* name) {
