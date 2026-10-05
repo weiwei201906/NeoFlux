@@ -86,7 +86,7 @@ void EventLoop::Run(const FrameCallback& frame_callback) {
     frame_count_.fetch_add(1);
 
     // Idle means: nothing scheduled (coroutines, yields, timers) and no
-    // render request arrived. Frame callbacks still run every frame — the
+    // render request arrived. Frame callbacks still run every frame; the
     // application's own dirty check inside OnFrame() skips layout/paint, and
     // event polling (GLFW) must keep running regardless.
     bool idle = false;

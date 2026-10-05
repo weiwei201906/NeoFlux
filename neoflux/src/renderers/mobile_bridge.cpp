@@ -8,7 +8,7 @@
 // provides a native surface (ANativeWindow on Android, CAEAGLLayer on iOS)
 // that the renderer draws into.
 //
-// OWNERSHIP (important): the rendering context and swapchain belong to tgfx —
+// OWNERSHIP (important): the rendering context and swapchain belong to tgfx:
 // TgfxRenderer wraps the native surface in a tgfx::EGLWindow (Android) /
 // EAGLWindow (iOS), which creates the EGL/EAGL display, context and surface
 // and presents on context->submit(). This bridge deliberately does NOT create

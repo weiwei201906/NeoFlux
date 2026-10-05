@@ -139,11 +139,16 @@ jobs:
           fi
           echo "clang-tidy: no errors"
 
+      # Assembly is part of the source tree and is easy to overlook: a .S file
+      # that picks up a non-ASCII dash in a comment would otherwise ship
+      # unnoticed, and some assemblers choke on non-ASCII bytes. Cover every
+      # compiled extension, including the standalone verify/ suite.
       - name: Enforce ASCII-only source
         run: |
           violations=$(grep -rPn '[^\x00-\x7F]' \
-            --include='*.h' --include='*.cpp' --include='*.hpp' \
-            neoflux/include neoflux/src src 2>/dev/null || true)
+            --include='*.h' --include='*.hpp' --include='*.c' --include='*.cc' \
+            --include='*.cpp' --include='*.S' --include='*.asm' \
+            neoflux/include neoflux/src verify 2>/dev/null || true)
           if [ -n "$violations" ]; then
             echo "::error::Non-ASCII characters found in source:"
             echo "$violations"

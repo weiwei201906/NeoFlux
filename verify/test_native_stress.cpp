@@ -4,7 +4,7 @@
 // Concurrency stress test for the NeoFlux platform tuning layer.
 // 8 threads x 5000 iterations each call a randomly chosen tuning API. The run
 // must be clean under ThreadSanitizer (no data races, no deadlocks) and
-// DetectCpuFeatures() must return the same value on every thread — a runtime
+// DetectCpuFeatures() must return the same value on every thread, a runtime
 // invariant, since CPU features do not change during the process lifetime.
 #if defined(__linux__) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
@@ -34,7 +34,7 @@ static constexpr int kIters = 5000;
 // first timestamped LOG() of the process; concurrent first-logs therefore race
 // inside the LOGGING LIBRARY (strdup/free in LogMessageTime::CalcGmtOffset).
 // That is third-party code, outside the translation unit under test, so we
-// suppress it — any race in the native tuning layer still fails the run.
+// suppress it; any race in the native tuning layer still fails the run.
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
 #define NEOFLUX_TSAN 1
@@ -58,7 +58,7 @@ static bool SameFeatures(const CpuFeatures& a, const CpuFeatures& b) {
 
 int main(int argc, char** argv) {
   (void)argc;
-  // glog must be initialised before any worker thread calls LOG() — otherwise
+  // glog must be initialised before any worker thread calls LOG(), otherwise
   // its lazy global setup (timezone string caching in LogMessageTime) races
   // across threads. This is a glog contract, not a tuning-layer issue.
   google::InitGoogleLogging(argv[0]);

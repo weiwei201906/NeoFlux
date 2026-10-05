@@ -272,8 +272,8 @@ bool TgfxRenderer::Init(int width, int height, void* native_handle) {
   impl_->width = width;
   impl_->height = height;
   // Desktop: the GLFWwindow* (created with GLFW_NO_API). Mobile: the native
-  // window (ANativeWindow* on Android). The tgfx Window — and through it the
-  // device/context/surface — is created lazily in EnsureDevice() on the
+  // window (ANativeWindow* on Android). The tgfx Window (and through it the
+  // device/context/surface) is created lazily in EnsureDevice() on the
   // render thread.
   if (native_handle == nullptr) {
     LOG(ERROR) << "TgfxRenderer::Init: null native window from the platform "
