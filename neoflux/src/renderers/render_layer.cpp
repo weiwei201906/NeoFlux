@@ -308,6 +308,18 @@ void RenderLayer::GetWindowSize(int& width, int& height) const noexcept {
     return;
   }
 #endif
+  // Mobile: the app shell owns the surface and pushes size changes into the
+  // bridge with PlatformBridge::Resize() (rotation, new surface after the app
+  // resumes), so the bridge is authoritative. Reporting the snapshot taken at
+  // Start() instead would hand every consumer stale dimensions: notably the
+  // touch-coordinate scaling in Application::DispatchPointerEvent(), which
+  // would map taps outside the tree after a rotation. Desktop never reaches
+  // this branch because mobile_bridge_ stays null there.
+  if (mobile_bridge_ != nullptr) {
+    width = mobile_bridge_->GetWidth();
+    height = mobile_bridge_->GetHeight();
+    return;
+  }
   width = window_width_;
   height = window_height_;
 }
