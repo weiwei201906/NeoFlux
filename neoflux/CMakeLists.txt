@@ -102,6 +102,51 @@ else()
   target_sources(neoflux PRIVATE src/native/platform_common.cpp)
 endif()
 
+# ---------------------------------------------------------------------------
+# SIMD kernels (src/native/asm/premultiply_rgba_*.S)
+#
+# Selected by TARGET ARCHITECTURE, not by OS: SSE2 is an architectural
+# baseline of x86-64 and Advanced SIMD (NEON) is one of AArch64, so neither
+# needs a runtime CPU feature probe (unlike xgetbv.S, which exists precisely
+# because AVX2 is NOT a baseline). See src/native/simd_kernels.h.
+#
+# MSVC is excluded: it assembles MASM (.asm), not GAS (.S). Shipping a MASM
+# translation we cannot verify here would be worse than falling back, and the
+# portable scalar kernel in simd_kernels.cpp is always compiled in, so the
+# build simply degrades to kScalar.
+#
+# The macro is PRIVATE because native/asm/asm_symbols.h and native/
+# simd_kernels.h are both internal headers (src/ is a PRIVATE include dir);
+# nothing outside the neoflux target can form a reference to the C ABI symbol
+# anyway.
+# ---------------------------------------------------------------------------
+if(NOT MSVC)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64)")
+    target_sources(neoflux PRIVATE
+      src/native/asm/premultiply_rgba_x86_64.S)
+    target_compile_definitions(neoflux PRIVATE
+      NEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64=1)
+    message(STATUS "Native SIMD kernel: SSE2 premultiply (x86-64 assembly)")
+  elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
+    target_sources(neoflux PRIVATE
+      src/native/asm/premultiply_rgba_aarch64.S)
+    target_compile_definitions(neoflux PRIVATE
+      NEOFLUX_NATIVE_ASM_PREMULTIPLY_AARCH64=1)
+    message(STATUS "Native SIMD kernel: NEON premultiply (AArch64 assembly)")
+  else()
+    message(STATUS "Native SIMD kernel: none for "
+                   "${CMAKE_SYSTEM_PROCESSOR}; using the portable scalar path")
+  endif()
+else()
+  message(STATUS "MSVC toolchain: native SIMD kernel disabled "
+                 "(MASM source not shipped), using the portable scalar path")
+endif()
+
+# The dispatch layer is ALWAYS compiled in: it is also what finishes the tail
+# the kernel leaves behind, and the whole implementation when no assembly was
+# linked.
+target_sources(neoflux PRIVATE src/native/simd_kernels.cpp)
+
 target_include_directories(neoflux
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
