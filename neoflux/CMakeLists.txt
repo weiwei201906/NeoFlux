@@ -48,7 +48,17 @@ add_library(neoflux STATIC
 )
 
 # Platform-specific bridge implementations.
-if(ANDROID OR (APPLE AND IOS))
+#
+# This predicate MUST stay identical to the one deciding NEOFLUX_PLATFORM_MOBILE
+# vs NEOFLUX_PLATFORM_DESKTOP below. The two answer different questions -- which
+# bridge .cpp gets compiled, and which of them is allowed to be non-empty -- but
+# they must never disagree: RenderLayer::Start() calls CreateMobileBridge() for
+# every non-desktop build, so compiling glfw_bridge.cpp while defining
+# NEOFLUX_PLATFORM_DESKTOP is the only other consistent combination. Mixing them
+# yields an empty mobile bridge translation unit and an undefined symbol at link
+# time. APPLE is deliberately not tested: whether it is set for an iOS
+# toolchain depends on CMP0025, whereas IOS is set by every iOS toolchain.
+if(ANDROID OR IOS)
   target_sources(neoflux PRIVATE src/renderers/mobile_bridge.cpp)
 else()
   target_sources(neoflux PRIVATE src/renderers/glfw_bridge.cpp)
