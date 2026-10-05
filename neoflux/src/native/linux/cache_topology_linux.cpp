@@ -51,7 +51,7 @@ constexpr const char* kCacheRoot = "/sys/devices/system/cpu/cpu0/cache";
 /// Reads a small text file into `out` (NUL-terminated), trimming trailing
 /// whitespace/newline. Returns false when the file cannot be opened.
 bool ReadSysfsFile(const char* path, char* out, std::size_t out_size) {
-  FILE* fp = std::fopen(path, "r");
+  FILE* const fp = std::fopen(path, "r");
   if (fp == nullptr) {
     return false;
   }

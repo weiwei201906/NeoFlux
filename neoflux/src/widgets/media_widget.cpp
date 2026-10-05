@@ -114,7 +114,7 @@ MediaWidget::~MediaWidget() {
     if (impl_->render_layer != nullptr) {
       // Non-owning observer only: the player unique_ptr below outlives this
       // synchronous call (RunOnRenderThread blocks until the lambda returns).
-      MediaPlayer* player = impl_->player.get();
+      MediaPlayer* const player = impl_->player.get();
       impl_->render_layer->RunOnRenderThread(
           [player]() { player->TeardownRender(); });
     }
@@ -146,9 +146,9 @@ std::shared_ptr<Widget> MediaWidget::Build(BuildContext& context) {
       // mpv internal thread: a new frame is decoded -> wake the render thread
       // to upload it AND wake the App thread to repaint. Both are non-blocking
       // and touch no GL.
-      MediaPlayer* player = impl_->player.get();
-      Application* app = impl_->app;
-      RenderLayer* layer = impl_->render_layer;
+      MediaPlayer* const player = impl_->player.get();
+      Application* const app = impl_->app;
+      RenderLayer* const layer = impl_->render_layer;
       player->SetWakeCallback([app, layer]() {
         if (layer != nullptr) {
           layer->Wake();

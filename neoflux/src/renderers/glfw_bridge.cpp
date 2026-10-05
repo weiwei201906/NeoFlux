@@ -78,7 +78,7 @@ bool GlfwBridge::Init(int width, int height, std::string_view title) {
     return false;
   }
 
-  auto* user_data = new WindowUserData{this};
+  auto* const user_data = new WindowUserData{this};
   glfwSetWindowUserPointer(impl_->window, user_data);
 
   glfwSetFramebufferSizeCallback(impl_->window, FramebufferSizeCallback);
@@ -98,7 +98,7 @@ void GlfwBridge::Shutdown() noexcept {  // NOLINT(bugprone-exception-escape): gl
   }
 
   if (impl_->window != nullptr) {
-    auto* user_data =
+    auto* const user_data =
         static_cast<WindowUserData*>(glfwGetWindowUserPointer(impl_->window));
     delete user_data;
 
@@ -176,7 +176,7 @@ void GlfwBridge::ErrorCallback(int error, const char* description) {
 
 void GlfwBridge::FramebufferSizeCallback(GLFWwindow* window, int width,
                                          int height) {
-  auto* user_data =
+  auto* const user_data =
       static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
   if (user_data == nullptr || user_data->bridge == nullptr) {
     return;
@@ -194,12 +194,12 @@ void GlfwBridge::KeyCallback(GLFWwindow* /*window*/, int key,
 
 void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
                                      int action, int /*mods*/) {
-  auto* user_data =
+  auto* const user_data =
       static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
   if (user_data == nullptr || user_data->bridge == nullptr) {
     return;
   }
-  auto* bridge = user_data->bridge;
+  auto* const bridge = user_data->bridge;
   if (!bridge->impl_->input_callback) {
     return;
   }
@@ -225,7 +225,7 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
 
 void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,
                                    double ypos) {
-  auto* user_data =
+  auto* const user_data =
       static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
   if (user_data == nullptr || user_data->bridge == nullptr) {
     return;
@@ -240,7 +240,7 @@ void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,
 
 void GlfwBridge::ScrollCallback(GLFWwindow* window, double xoffset,
                                 double yoffset) {
-  auto* user_data =
+  auto* const user_data =
       static_cast<WindowUserData*>(glfwGetWindowUserPointer(window));
   if (user_data == nullptr || user_data->bridge == nullptr) {
     return;

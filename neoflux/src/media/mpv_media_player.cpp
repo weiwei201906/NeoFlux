@@ -510,7 +510,7 @@ std::uint32_t MpvMediaPlayer::GetRenderUpdateCount() const noexcept {
 // GL and MUST NOT block. The actual frame pickup (GL) happens in UpdateTexture
 // on the render thread.
 void MpvMediaPlayer::OnRenderUpdate(void* ctx) {
-  auto* self = static_cast<MpvMediaPlayer*>(ctx);
+  auto* const self = static_cast<MpvMediaPlayer*>(ctx);
   if (self == nullptr) {
     return;
   }

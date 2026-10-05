@@ -87,7 +87,7 @@ std::vector<std::int64_t> ReadCoreMaxFrequencies() {
     // One-shot startup probe: readability beats the snprintf micro-cost.
     const std::string path =
         "/sys/devices/system/cpu/cpu" + std::to_string(cpu) + kMaxFreqSuffix;
-    FILE* fp = std::fopen(path.c_str(), "r");
+    FILE* const fp = std::fopen(path.c_str(), "r");
     if (fp == nullptr) {
       break;  // cpuN does not exist (or no cpufreq): stop at first gap.
     }

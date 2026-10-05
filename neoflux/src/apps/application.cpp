@@ -497,7 +497,7 @@ void Application::DispatchScrollEvent(
   if (root == nullptr || render_layer_ == nullptr) {
     return;
   }
-  auto* bridge = render_layer_->GetGlfwBridge();
+  auto* const bridge = render_layer_->GetGlfwBridge();
   if (bridge == nullptr) {
     return;
   }

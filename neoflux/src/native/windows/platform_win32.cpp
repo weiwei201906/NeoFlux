@@ -172,7 +172,7 @@ void PinThreadToBigCores() noexcept {
     return;  // API unavailable / failed: stay unpinned.
   }
   std::vector<char> buffer(size);
-  auto* info =
+  auto* const info =
       reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data());
   if (!GetLogicalProcessorInformationEx(RelationProcessorCore, info, &size)) {
     return;
@@ -185,7 +185,7 @@ void PinThreadToBigCores() noexcept {
   DWORD offset = 0;
   bool any_big = false;
   while (offset < size) {
-    auto* entry =
+    auto* const entry =
         reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(
             buffer.data() + offset);
     if (entry->Relationship == RelationProcessorCore &&

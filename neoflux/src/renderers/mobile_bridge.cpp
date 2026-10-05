@@ -63,7 +63,7 @@ class MobileBridge final : public PlatformBridge {
       LOG(ERROR) << "MobileBridge: null native surface from the app shell";
     }
 #if defined(__ANDROID__)
-    auto* window = static_cast<ANativeWindow*>(native_surface_);
+    auto* const window = static_cast<ANativeWindow*>(native_surface_);
     if (window != nullptr) {
       // Keep the surface dimensions in sync with what the shell reported.
       width_ = ANativeWindow_getWidth(window);

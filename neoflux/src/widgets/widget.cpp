@@ -40,7 +40,7 @@ taitank::TaitankSize MeasureTrampoline(taitank::TaitankNodeRef node,
                                        float height,
                                        taitank::MeasureMode height_mode,
                                        void* /*layout_context*/) {
-  auto* widget = static_cast<Widget*>(taitank::GetContext(node));
+  auto* const widget = static_cast<Widget*>(taitank::GetContext(node));
   if (widget == nullptr) {
     return {.width = 0.0F, .height = 0.0F};
   }
@@ -283,7 +283,7 @@ void Widget::SyncTaitankChildren() {
   }
   for (std::size_t i = 0; i < children_.size(); ++i) {
     if (children_[i] != nullptr) {  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop
-      auto* child_node = children_[i]->GetTaitankNode();  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop
+      auto* const child_node = children_[i]->GetTaitankNode();  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop
       if (child_node != nullptr) {
         taitank::InsertChild(taitank_node_, child_node,
                              static_cast<std::uint32_t>(i));

@@ -139,7 +139,7 @@ struct TgfxRenderer::Impl {
     // Desktop OpenGL: tgfx creates and owns the EGL/WGL context and surface
     // for the native window; NeoFlux holds no GL context of its own.
 #if defined(_WIN32)
-    auto* hwnd = glfwGetWin32Window(static_cast<GLFWwindow*>(native_window));
+    auto* const hwnd = glfwGetWin32Window(static_cast<GLFWwindow*>(native_window));
     if (hwnd == nullptr) {
       LOG(ERROR) << "glfwGetWin32Window() returned nullptr";
       return false;
@@ -225,7 +225,7 @@ struct TgfxRenderer::Impl {
 #endif  // TGFX_USE_OPENGL / VULKAN / D3D12 / METAL
 #else   // mobile
 #if defined(__ANDROID__)
-    auto* anw = static_cast<ANativeWindow*>(native_window);
+    auto* const anw = static_cast<ANativeWindow*>(native_window);
     if (anw == nullptr) {
       LOG(ERROR) << "EnsureDevice: null ANativeWindow from the app shell";
       return false;
@@ -315,7 +315,7 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
   int win_w = impl_->width;
   int win_h = impl_->height;
 #if defined(NEOFLUX_PLATFORM_DESKTOP)
-  auto* window = static_cast<GLFWwindow*>(impl_->native_window);
+  auto* const window = static_cast<GLFWwindow*>(impl_->native_window);
   glfwGetFramebufferSize(window, &fb_w, &fb_h);
   int queried_w = 0;
   int queried_h = 0;
@@ -327,7 +327,7 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
     impl_->height = win_h;
   }
 #elif defined(__ANDROID__)
-  auto* anw = static_cast<ANativeWindow*>(impl_->native_window);
+  auto* const anw = static_cast<ANativeWindow*>(impl_->native_window);
   if (anw != nullptr) {
     fb_w = ANativeWindow_getWidth(anw);
     fb_h = ANativeWindow_getHeight(anw);

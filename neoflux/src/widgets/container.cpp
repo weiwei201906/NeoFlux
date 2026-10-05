@@ -68,7 +68,7 @@ taitank::FlexAlign ToTaitankVAlign(VAlign align) {
 }  // namespace
 
 Container::Container() {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     taitank::SetFlexDirection(node, taitank::FLEX_DIRECTION_COLUMN);
     taitank::SetAlignItems(node, taitank::FLEX_ALIGN_STRETCH);
@@ -101,7 +101,7 @@ Container& Container::SetMargin(const EdgeInsets& margin) noexcept {
 
 Container& Container::SetWidth(float width) noexcept {
   fixed_width_ = width;
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     taitank::SetWidth(node, width > 0.0F ? width : NAN);
   }
@@ -110,7 +110,7 @@ Container& Container::SetWidth(float width) noexcept {
 
 Container& Container::SetHeight(float height) noexcept {
   fixed_height_ = height;
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     taitank::SetHeight(node, height > 0.0F ? height : NAN);
   }
@@ -137,7 +137,7 @@ Container& Container::children(
 }
 
 Container& Container::SetFlexDirection(FlexDirection direction) noexcept {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     taitank::SetFlexDirection(node, ToTaitankDirection(direction));
   }
@@ -145,7 +145,7 @@ Container& Container::SetFlexDirection(FlexDirection direction) noexcept {
 }
 
 Container& Container::SetJustifyContent(HAlign align) noexcept {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     taitank::SetJustifyContent(node, ToTaitankAlign(align));
   }
@@ -153,7 +153,7 @@ Container& Container::SetJustifyContent(HAlign align) noexcept {
 }
 
 Container& Container::SetAlignItems(VAlign align) noexcept {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     taitank::SetAlignItems(node, ToTaitankVAlign(align));
   }
@@ -161,7 +161,7 @@ Container& Container::SetAlignItems(VAlign align) noexcept {
 }
 
 Container& Container::SetFlexGrow(float grow) noexcept {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     taitank::SetFlexGrow(node, grow);
   }
@@ -196,7 +196,7 @@ void Container::Paint(RenderContext& context) {
 }
 
 void Container::ApplyPaddingToTaitank() noexcept {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node == nullptr) {
     return;
   }
@@ -207,7 +207,7 @@ void Container::ApplyPaddingToTaitank() noexcept {
 }
 
 void Container::ApplyMarginToTaitank() noexcept {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node == nullptr) {
     return;
   }

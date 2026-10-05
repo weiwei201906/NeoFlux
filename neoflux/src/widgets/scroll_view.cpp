@@ -33,7 +33,7 @@ constexpr float kFlingGain = 0.5F;
 }  // namespace
 
 ScrollView::ScrollView() {
-  auto* node = GetTaitankNode();
+  auto* const node = GetTaitankNode();
   if (node != nullptr) {
     // Fill available space in the parent by default. Flex shrink must be
     // non-zero so the viewport is clamped to the parent's remaining space
@@ -53,7 +53,7 @@ std::string_view ScrollView::GetWidgetName() const noexcept {
 ScrollView& ScrollView::SetContent(std::shared_ptr<Widget> content) {
   ClearChildren();
   if (content != nullptr) {
-    auto* node = content->GetTaitankNode();
+    auto* const node = content->GetTaitankNode();
     if (node != nullptr) {
       // Prevent content from being shrunk to fit the viewport; it should
       // keep its natural size and be clipped/scrollable instead.
