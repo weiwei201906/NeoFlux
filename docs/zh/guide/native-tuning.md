@@ -61,6 +61,10 @@ CPU 特性与缓存拓扑探测。这里的一切都是 **best-effort**：在受
 全部基于 intrinsic 实现：本层任何地方都不使用手写内联汇编（cpuid 用
 `__cpuid`/`__cpuidex`，预取用 `__builtin_prefetch` / `_mm_prefetch`）。
 
+这句话只针对**本层**。框架确实带有少量手写 SIMD 内核——它们在下一级目录
+`src/native/asm/` 里，通过 C ABI 接入，而不是从这里调用。参见
+[手写汇编内核](./native-asm.md)。
+
 ## 自动接入点
 
 正常路径下调优是免费获得的：
@@ -149,6 +153,8 @@ Apple 上的大核绑定，那里 QoS 已经驱动集群放置）。
 - [配置](./configuration.md) —— `config::kCacheLineSize` 及其他编译时常量。
 - [调试与调优](./debugging.md) —— 日志参数与渲染队列背压问题。
 - [跨平台](./cross-platform.md) —— 各平台翻译单元如何在配置期被选择。
+- [手写汇编内核](./native-asm.md) —— `src/native/asm/` 下的汇编 SIMD 内核，
+  以及它们为什么不用 intrinsic 写。
 
 ---
 
