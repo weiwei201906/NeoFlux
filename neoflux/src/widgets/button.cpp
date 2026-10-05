@@ -36,10 +36,11 @@ float EstimateLabelWidth(std::string_view label, float font_size) {
   float width = 0.0F;
   for (std::size_t i = 0; i < label.size();) {
     const auto byte = static_cast<unsigned char>(label.at(i));
+    // A leading byte never needs an explicit ASCII case: char_len starts at 1
+    // and none of the multibyte patterns below can match a byte with its high
+    // bit clear, so ASCII falls through to the initial value on its own.
     std::size_t char_len = 1;
-    if ((byte & 0x80U) == 0U) {
-      char_len = 1;
-    } else if ((byte & 0xE0U) == 0xC0U) {
+    if ((byte & 0xE0U) == 0xC0U) {
       char_len = 2;
     } else if ((byte & 0xF0U) == 0xE0U) {
       char_len = 3;

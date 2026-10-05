@@ -32,10 +32,10 @@ float EstimateTextWidth(std::string_view text, float font_size) {
   float width = 0.0F;
   for (std::size_t i = 0; i < text.size();) {
     const auto byte = static_cast<unsigned char>(text[i]);  // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access): i bounded by loop condition
+    // No explicit ASCII case: char_len starts at 1 and no multibyte pattern
+    // below can match a byte whose high bit is clear.
     std::size_t char_len = 1;
-    if ((byte & 0x80U) == 0U) {
-      char_len = 1;  // ASCII
-    } else if ((byte & 0xE0U) == 0xC0U) {
+    if ((byte & 0xE0U) == 0xC0U) {
       char_len = 2;
     } else if ((byte & 0xF0U) == 0xE0U) {
       char_len = 3;  // CJK BMP
