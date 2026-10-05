@@ -33,6 +33,7 @@
 #include <intrin.h>
 
 #include <bit>
+#include <cstdint>
 #include <vector>
 
 #include <glog/logging.h>
@@ -43,16 +44,19 @@ namespace neoflux::native {
 namespace {
 
 // --- cpuid feature bits (CPUID leaf 1 ECX / leaf 7 EBX), named for clarity.
-constexpr unsigned int kSse42Bit = 1u << 20;    ///< leaf 1 ECX[20]
-constexpr unsigned int kOsxsaveBit = 1u << 27;  ///< leaf 1 ECX[27]: XGETBV ok
-constexpr unsigned int kAvx2Bit = 1u << 5;      ///< leaf 7 EBX[5]
+// A CPUID GPR is architecturally 32 bits wide, so these spell std::uint32_t
+// instead of inheriting whatever width this compiler gives `unsigned int`.
+constexpr std::uint32_t kSse42Bit = 1u << 20;    ///< leaf 1 ECX[20]
+constexpr std::uint32_t kOsxsaveBit = 1u << 27;  ///< leaf 1 ECX[27]: XGETBV ok
+constexpr std::uint32_t kAvx2Bit = 1u << 5;      ///< leaf 7 EBX[5]
 // XCR0 bits [2:1] must both be set for the OS to save/restore YMM state.
-constexpr unsigned long long kXcr0XmmYmmMask = 0x6ULL;
+// XCR0 is a 64-bit MSR, which is why this one is not 32 bits like the rest.
+constexpr std::uint64_t kXcr0XmmYmmMask = 0x6ULL;
 
 /// Reads XCR0 (OS-enabled extended register state) portably across MSVC and
 /// GCC/Clang-on-Windows. Needed to confirm the OS saves/restores YMM before
 /// advertising AVX2.
-unsigned long long ReadXcr0() {
+std::uint64_t ReadXcr0() {
 #if defined(_MSC_VER) && !defined(__clang__)
   // _xgetbv is a compiler intrinsic, not inline asm -- allowed by the asm
   // policy (which only forbids __asm__/__asm in C++ sources).
@@ -208,7 +212,7 @@ void PinThreadToBigCores() noexcept {
     return;
   }
   LOG(INFO) << "native: thread pinned to "
-            << std::popcount(static_cast<unsigned long long>(big_mask))
+            << std::popcount(static_cast<std::uint64_t>(big_mask))
             << " performance core(s)";
 }
 
@@ -235,7 +239,7 @@ CpuFeatures DetectCpuFeaturesImpl() {
     if ((regs[1] & kAvx2Bit) != 0) {
       // The OS must save/restore YMM across context switches: XCR0 bits
       // [2:1] must both be set (XMM + YMM state enabled).
-      const unsigned long long xcr0 = ReadXcr0();
+      const std::uint64_t xcr0 = ReadXcr0();
       f.avx2 = ((xcr0 & kXcr0XmmYmmMask) == kXcr0XmmYmmMask);
     }
   }

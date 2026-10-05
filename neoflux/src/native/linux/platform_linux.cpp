@@ -61,9 +61,11 @@ namespace neoflux::native {
 namespace {
 
 // --- cpuid feature bits (CPUID leaf 1 ECX / leaf 7 EBX), named for clarity.
-constexpr unsigned int kSse42Bit = 1U << 20;    ///< leaf 1 ECX[20]
-constexpr unsigned int kOsxsaveBit = 1U << 27;  ///< leaf 1 ECX[27]: XGETBV ok
-constexpr unsigned int kAvx2Bit = 1U << 5;      ///< leaf 7 EBX[5]
+// Every CPUID GPR is architecturally 32 bits wide, so these say std::uint32_t
+// rather than relying on how wide this host's `unsigned int` happens to be.
+constexpr std::uint32_t kSse42Bit = 1U << 20;    ///< leaf 1 ECX[20]
+constexpr std::uint32_t kOsxsaveBit = 1U << 27;  ///< leaf 1 ECX[27]: XGETBV ok
+constexpr std::uint32_t kAvx2Bit = 1U << 5;      ///< leaf 7 EBX[5]
 // XCR0 bits [2:1] must both be set for the OS to save/restore YMM state.
 constexpr std::uint64_t kXcr0XmmYmmMask = 0x6ULL;
 
@@ -164,7 +166,7 @@ void PinThreadToBigCores() noexcept {
   cpu_set_t big_set;
   CPU_ZERO(&big_set);
   int big_count = 0;
-  for (size_t cpu = 0; cpu < freqs.size(); ++cpu) {
+  for (std::size_t cpu = 0; cpu < freqs.size(); ++cpu) {
     if (cpu >= CPU_SETSIZE) {
       break;  // cpu_set_t is a fixed 1024-bit mask: never index out-of-bounds.
     }
@@ -192,13 +194,18 @@ CpuFeatures DetectCpuFeaturesImpl() {
   CpuFeatures f;
 
 #if defined(__x86_64__)
-  unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+  // One GPR per CPUID output register; __get_cpuid() takes unsigned int*, and
+  // std::uint32_t is that same type on every x86-64 SysV target.
+  std::uint32_t eax = 0;
+  std::uint32_t ebx = 0;
+  std::uint32_t ecx = 0;
+  std::uint32_t edx = 0;
   if (__get_cpuid(1, &eax, &ebx, &ecx, &edx) == 0) {
     return f;  // cpuid leaf 1 unsupported: keep the all-false snapshot.
   }
   f.sse42 = (ecx & kSse42Bit) != 0;
   const bool os_xsave = (ecx & kOsxsaveBit) != 0;
-  unsigned int max_leaf = __get_cpuid_max(0, nullptr);
+  const std::uint32_t max_leaf = __get_cpuid_max(0, nullptr);
   if (os_xsave && max_leaf >= 7 &&
       __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0) {
     if ((ebx & kAvx2Bit) != 0) {  // AVX2
