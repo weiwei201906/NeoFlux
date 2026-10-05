@@ -72,6 +72,45 @@ class PlatformBridge {
 
   // Returns true if the window has been closed by the user.
   [[nodiscard]] virtual bool ShouldClose() const noexcept = 0;
+
+  // --- Shell-driven hooks (mobile) ---------------------------------------
+  // On mobile there is no windowing system to poll: the surface is owned by
+  // the app shell, which pushes state into the bridge from its own thread.
+  // These three entry points must therefore live on this interface, because
+  // CreateMobileBridge() hands callers a PlatformBridge* (via
+  // RenderLayer::GetPlatformBridge()) and nothing else could reach them.
+  //
+  // They are pure virtual rather than defaulted no-ops: silently dropping
+  // shell input is exactly how the mobile path became unusable, and there is
+  // one implementation in this project (MobileBridge) plus no desktop one --
+  // GlfwBridge is NOT a PlatformBridge -- so nothing else needs updating.
+  // DispatchTouchEvent() in particular is deliberately not noexcept, since it
+  // runs the callback registered by SetInputCallback(), i.e. application code.
+  //
+  // Threading contract: the shell drives these and this class has no internal
+  // locking, so they must be called from the same thread that runs the
+  // application event loop. That is the thread the platform delivers touch on
+  // (the JNI / UIKit thread), which is also the thread Application::Init()
+  // and Application::Run() are expected to run on.
+
+  // Delivers a touch (or other pointer) event from the platform shell to the
+  // widget tree. |pos| is in surface pixel coordinates relative to the
+  // surface's top-left corner; the desktop path uses the same convention for
+  // cursor positions, so Application::DispatchPointerEvent() scales them
+  // identically. No-op when no input callback is registered.
+  virtual void DispatchTouchEvent(MouseButton button, InputAction action,
+                                  const Point& pos) = 0;
+
+  // Called by the shell when the surface is resized or destroyed, typically
+  // on rotation or when the app is backgrounded. The renderer picks the new
+  // swapchain size up on the next frame; RenderLayer::GetWindowSize() reports
+  // these new values from then on.
+  virtual void Resize(int width, int height) noexcept = 0;
+
+  // Called by the shell when the surface goes away (app paused, surface
+  // destroyed). Reported by ShouldClose(), which makes Application::OnFrame()
+  // stop the run loop.
+  virtual void SetShouldClose(bool value) noexcept = 0;
 };
 
 // Creates the mobile platform bridge (Android/iOS). |native_surface| is the

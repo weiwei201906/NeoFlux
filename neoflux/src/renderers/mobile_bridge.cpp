@@ -99,21 +99,25 @@ class MobileBridge final : public PlatformBridge {
   }
 
   // Called by the platform shell (JNI / UIKit) when a touch event occurs.
-  // Converts the platform touch into a NeoFlux input event and dispatches it
-  // to the callback wired by Application::Init().
+  // Forwards the platform touch to the callback wired by Application::Init(),
+  // which sends it down the widget tree. Overriding PlatformBridge so the
+  // shell can drive this through the base pointer returned by
+  // RenderLayer::GetPlatformBridge(). Only a thread that owns the event loop
+  // may call this -- see the threading contract on the base class.
   void DispatchTouchEvent(MouseButton button, InputAction action,
-                          float x, float y) {
+                          const Point& pos) override {
     if (input_callback_) {
-      input_callback_(button, action, Point{.x = x, .y = y});
+      input_callback_(button, action, pos);
     }
   }
 
   // Called by the platform when the surface is destroyed (e.g. app paused).
-  void SetShouldClose(bool value) noexcept { should_close_ = value; }
+  void SetShouldClose(bool value) noexcept override { should_close_ = value; }
 
   // Called by the platform when the window size changes (rotation, etc.).
-  // The tgfx Window picks the new swapchain size up on the next frame.
-  void Resize(int width, int height) noexcept {
+  // RenderLayer::GetWindowSize() reports the new size from here on, and the
+  // tgfx Window picks the new swapchain size up on the next frame.
+  void Resize(int width, int height) noexcept override {
     width_ = width;
     height_ = height;
   }
