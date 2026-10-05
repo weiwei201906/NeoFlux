@@ -55,8 +55,31 @@ g++ -std=c++20 -O1 -fsanitize=address "${INC[@]}" "$V/test_native_death.cpp" \
 # [10] Native tuning: concurrent stress (TSAN, 8 threads x 5000 iters)
 g++ -std=c++20 -O1 -fsanitize=thread "${INC[@]}" "$V/test_native_stress.cpp" \
     "${NATIVE_SRC[@]}" -lglog -lgflags -lpthread -o /tmp/t10 && /tmp/t10
+
+# [11] Native SIMD kernels: premultiply RGBA8 (smoke / death / stress /
+#      assembly-vs-scalar-vs-intrinsics)
+#
+# Pass the macro and the .S that match the host to exercise the hand-written
+# kernel, e.g. on x86-64 Linux:
+#   -DNEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64=1 ... asm/premultiply_rgba_x86_64.S
+# and on arm64:
+#   -DNEOFLUX_NATIVE_ASM_PREMULTIPLY_AARCH64=1 ... asm/premultiply_rgba_aarch64.S
+#
+# Omit both and the same test still runs: the assembly cases report SKIP and
+# the portable scalar path is fully exercised. That is the MSVC configuration
+# in the CMake build, which ships no MASM source and therefore has no kernel.
+#
+# This is the one verify/ file allowed to include an intrinsic header
+# (<emmintrin.h>), used as a SECOND oracle so a bug in the dispatch layer
+# cannot hide by being compared against a copy of its own arithmetic.
+SIMD_ASM="$REPO/neoflux/src/native/asm/premultiply_rgba_x86_64.S"
+g++ -std=c++20 -O1 -DNEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64=1 "${INC[@]}" \
+    "$V/test_native_simd.cpp" \
+    "$REPO/neoflux/src/native/simd_kernels.cpp" "$SIMD_ASM" \
+    -o /tmp/t11 && /tmp/t11
 ```
 
-All ten must pass (or print PASS) on any x86_64 Linux box. Windows/Apple
-sources are syntax-checked with platform stub headers and are exercised by CI
-on native runners.
+All eleven must pass (or print PASS) on any x86_64 Linux box, and [11] also
+passes on arm64 with the AArch64 macro and `.S`. Windows/Apple sources are
+syntax-checked with platform stub headers and are exercised by CI on native
+runners.
