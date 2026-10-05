@@ -87,13 +87,19 @@
 
 ## 如何被 CMake 选用（简述）
 
-- 本目录 **不** 由 `src/native/CMakeLists.txt` 之外的 glob 自动收集。
-  新增 `.S` 时需在 `neoflux/CMakeLists.txt` 的 **"Platform-native tuning layer"**
-  块里按平台/处理器显式 `target_sources(...)`，并确保工程已
-  `enable_language(ASM)`。
-- 选用条件由**平台 + 处理器 + 编译器**共同决定。以 `xgetbv.S` 为例：
-  仅在 **x86_64 且非 MSVC**（Linux/macOS GCC/Clang、MinGW/Clang-on-Windows）
-  时加入编译；MSVC 走 `_xgetbv` intrinsic，不链接本文件。
+- 本目录 **不** 用 glob 自动收集；仓库里也没有 `src/native/CMakeLists.txt`，
+  所有接线都在 `neoflux/CMakeLists.txt`。`enable_language(ASM)` 已在那里调用，
+  新增 `.S` 时按用途放进对应的一个块，用 `target_sources(...)` 显式加入：
+  - **"Platform-native tuning layer" 块**（如 `xgetbv.S`）：按**平台 + 处理器 +
+    编译器**选择。xgetbv 仅在 **x86_64 且非 MSVC**（Linux/macOS GCC/Clang、
+    MinGW/Clang-on-Windows）时编译；MSVC 走 `_xgetbv` intrinsic，不链接本文件。
+  - **"SIMD kernels" 块**（如 `premultiply_rgba_*.S`）：按**目标架构**选择，
+    不看操作系统——SSE2 是 x86-64 架构基线、NEON 是 AArch64 架构基线，因此
+    无需运行时探测。MSVC（需 MASM 而非 GAS 语法）不编译，由
+    `src/native/simd_kernels.cpp` 的可移植标量内核兜底。
+- 选定了 `.S` 必须**同时**在 `neoflux/CMakeLists.txt` 里
+  `target_compile_definitions(neoflux PRIVATE NEOFLUX_NATIVE_ASM_*=1)`，让
+  `asm_symbols.h` 只在符号真的被链接时才声明它。
 - CMake 集成由构建维护者负责；新增例程请同步更新 `asm_symbols.h` 注释
   与本节说明。
 
