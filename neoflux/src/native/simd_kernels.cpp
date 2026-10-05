@@ -41,6 +41,10 @@ constexpr std::size_t kGroupX86_64 = 4;
 constexpr std::size_t kGroupAarch64 = 8;
 #endif
 
+// RGBA8 layout: four 8-bit channels per pixel, alpha in the last one. Used
+// unguarded because the scalar kernel below is always compiled in.
+constexpr std::size_t kChannelsPerPixel = 4;
+
 // Exact division by 255 with the round-half-up term 127:
 //   t = x + 127;  result = (t + (t >> 8)) >> 8
 // Identical to what both assembly kernels compute, so all three paths are
@@ -60,7 +64,7 @@ constexpr std::uint8_t PremultiplyChannel(std::uint8_t channel,
 void PremultiplyScalar(std::uint8_t* dst, const std::uint8_t* src,
                        std::size_t pixels) noexcept {
   for (std::size_t i = 0; i < pixels; ++i) {
-    const std::size_t base = i * 4;
+    const std::size_t base = i * kChannelsPerPixel;
     const std::uint8_t alpha = src[base + 3];
     dst[base + 0] = PremultiplyChannel(src[base + 0], alpha);
     dst[base + 1] = PremultiplyChannel(src[base + 1], alpha);
