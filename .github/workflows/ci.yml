@@ -154,3 +154,118 @@ jobs:
             echo "$violations"
             exit 1
           fi
+
+  policy:
+    name: Policy gates (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # Project rule: C++ never contains inline asm. Every hand-written
+      # routine is a standalone .S under src/native/asm reached through the C
+      # ABI, which is what keeps the kernels independent of any one
+      # compiler's inline-asm or intrinsic model.
+      #
+      # Line comments are stripped before matching: the rule is documented in
+      # comments that necessarily spell out the very tokens being banned
+      # (see src/native/windows/platform_win32.cpp), and matching those would
+      # make the gate reject the code that explains it.
+      - name: No inline asm in C++ sources
+        run: |
+          status=0
+          for f in $(find neoflux/include neoflux/src verify \
+                       -name '*.h' -o -name '*.hpp' -o -name '*.cpp'); do
+            bad=$(sed 's|//.*||' "$f" \
+              | grep -nP '\b__asm__\b|\b__asm\b|\basm\s+volatile\b' || true)
+            if [ -n "$bad" ]; then
+              echo "::error::inline asm in $f; move it to src/native/asm:"
+              echo "$bad"
+              status=1
+            fi
+          done
+          exit $status
+
+      # Business, render-pipeline and scheduling code must never include an
+      # intrinsic header. Two trees are exempt and both are deliberate:
+      #   src/native/  the platform / dispatch / feature-detect layer, which
+      #                is exactly where an intrinsic is allowed to land
+      #   tests, verify/  correctness regression and asm cross-checks only,
+      #                never part of a shipped binary
+      - name: No intrinsic headers outside the platform layer and tests
+        run: |
+          status=0
+          matches=""
+          for f in $(find neoflux/include neoflux/src verify \
+                       -name '*.h' -o -name '*.hpp' -o -name '*.cpp'); do
+            hit=$(sed 's|//.*||' "$f" \
+              | grep -nP '#\s*include\s*<(immintrin|arm_neon|xmmintrin|emmintrin|pmmintrin|tmmintrin|smmintrin|nmmintrin|wmmintrin|avxintrin|avx2intrin|intrin)\.h>' || true)
+            if [ -n "$hit" ]; then
+              matches="$matches$(printf '%s\n' "$hit" | sed "s|^|$f:|")
+"
+            fi
+          done
+          violations=$(printf '%s' "$matches" \
+            | grep -v '/native/' | grep -v '/tests/' | grep -v '^verify/' \
+            | grep -v '^$' || true)
+          if [ -n "$violations" ]; then
+            echo "::error::intrinsic header outside src/native/, tests/ and verify/:"
+            echo "$violations"
+            status=1
+          fi
+          exit $status
+
+      # Two things, both cheap and both catching failures that are otherwise
+      # only visible on one platform:
+      #   1. every .S exports a neoflux_-prefixed symbol that is actually
+      #      declared in asm_symbols.h (an unregistered .S is invisible to
+      #      reviewers and can silently never be linked)
+      #   2. register discipline -- the classic "passes on Linux, corrupts
+      #      the caller on Windows" bug:
+      #        Win64:   xmm6-xmm15 are callee-saved  -> x86-64 kernels may
+      #                 only touch xmm0-xmm5
+      #        AAPCS64: v8-v15 low 64 bits are callee-saved -> AArch64
+      #                 kernels may only touch v0-v7 and v16-v31
+      #      Comments are stripped first so the prose describing the rule
+      #      does not trip the very check that enforces it.
+      - name: Hand-written assembly follows the ABI contract
+        run: |
+          status=0
+          for f in neoflux/src/native/asm/*.S; do
+            [ -e "$f" ] || continue
+            body=$(sed 's|//.*||; s/#.*//' "$f")
+
+            sym=$(printf '%s\n' "$body" | grep -oE 'neoflux_[a-z0-9_]+' | head -1)
+            if [ -z "$sym" ]; then
+              echo "::error::$f exports no neoflux_-prefixed symbol"
+              status=1
+              continue
+            fi
+            if ! grep -q "$sym" neoflux/src/native/asm/asm_symbols.h; then
+              echo "::error::$f exports $sym but asm_symbols.h does not declare it"
+              status=1
+            fi
+
+            case "$f" in
+              *_x86_64.S)
+                bad=$(printf '%s\n' "$body" \
+                  | grep -nE '%?xmm(6|7|8|9|1[0-5])\b' || true)
+                if [ -n "$bad" ]; then
+                  echo "::error::$f touches a Win64 callee-saved xmm register:"
+                  echo "$bad"
+                  status=1
+                fi
+                ;;
+              *_aarch64.S)
+                bad=$(printf '%s\n' "$body" \
+                  | grep -nE '\bv(8|9|1[0-5])\b' || true)
+                if [ -n "$bad" ]; then
+                  echo "::error::$f touches an AAPCS64 callee-saved v register:"
+                  echo "$bad"
+                  status=1
+                fi
+                ;;
+            esac
+          done
+          exit $status
