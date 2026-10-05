@@ -151,6 +151,7 @@ export default defineConfig({
             { text: '字体系统', link: '/zh/guide/fonts' },
             { text: '配置', link: '/zh/guide/configuration' },
             { text: '平台原生调优层', link: '/zh/guide/native-tuning' },
+            { text: '手写汇编内核', link: '/zh/guide/native-asm' },
             { text: '媒体播放', link: '/zh/guide/media' },
             { text: '调试与调优', link: '/zh/guide/debugging' },
             { text: '跨平台', link: '/zh/guide/cross-platform' },
