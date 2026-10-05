@@ -64,6 +64,11 @@ Every method is intrinsic-based: no hand-written inline assembly is used
 anywhere in this layer (cpuid is `__cpuid`/`__cpuidex`, prefetch is
 `__builtin_prefetch` / `_mm_prefetch`).
 
+That statement is about *this* layer only. The framework does ship a small
+number of hand-written SIMD kernels -- they live one directory down, in
+`src/native/asm/`, and are reached through the C ABI rather than from here.
+See [Hand-Written Assembly Kernels](./native-asm.md).
+
 ## Automatic integration points
 
 You get the tuning for free in the normal path:
@@ -162,6 +167,8 @@ drives cluster placement).
   back-pressure story.
 - [Cross-Platform](./cross-platform.md) — how the per-platform translation
   units are selected at configure time.
+- [Hand-Written Assembly Kernels](./native-asm.md) -- the assembly SIMD kernels
+  in `src/native/asm/`, and why they are not written with intrinsics.
 
 ---
 
