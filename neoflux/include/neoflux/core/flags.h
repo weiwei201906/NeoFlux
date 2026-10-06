@@ -62,6 +62,9 @@ DECLARE_int32(idle_fps);
 // Master switch: false turns every native tuning entry point into a no-op.
 DECLARE_bool(native_tuning);
 
+// Native SIMD dispatch: false forces the portable scalar premultiply path.
+DECLARE_bool(native_simd);
+
 // Linux/Android: SCHED_FIFO priority attempted for the render thread.
 DECLARE_int32(native_render_rt_priority);
 

@@ -87,9 +87,9 @@ struct CacheInfo {
 CacheInfo DetectCacheTopology() noexcept;
 
 /// Prefetch one cache line for read into the innermost cache (locality 3).
-/// Compiler intrinsic based; a no-op hint on platforms without the builtin.
-/// Use sparingly, only where a measured stall dominates (e.g. right before
-/// consuming a batch from the render queue).
+/// The call is assembly-backed when the target enables NEOFLUX_NATIVE_ASM_PREFETCH;
+/// otherwise it is a deliberate no-op. Use sparingly, only where a measured
+/// stall dominates (e.g. right before consuming a batch from the render queue).
 void PrefetchForRead(const void* p) noexcept;
 
 /// Prefetch one cache line for write (requests exclusive / RFO line).

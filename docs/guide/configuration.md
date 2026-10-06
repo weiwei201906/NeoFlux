@@ -53,6 +53,7 @@ and rebuild.
 | `--render_queue_capacity` | `uint64` | `2048` | Capacity of the SPSC render-command ring queue. Rounded up to a power of two (`std::bit_ceil`); one slot is reserved, so usable commands = `capacity - 1`. |
 | `--render_queue_drop_log_max` | `int32` | `10` | Maximum number of "render command queue full, dropped commands" warnings emitted per process. After this many drops, subsequent overflows are counted silently. Raise this only when diagnosing back-pressure. |
 | `--native_tuning` | `bool` | `true` | Master switch for the platform-native tuning layer; `false` makes every entry point a no-op. |
+| `--native_simd` | `bool` | `true` | Enable hand-written SIMD premultiply kernels when available. `false` forces the portable scalar path; architecture group sizes remain compile-time ABI constants. |
 | `--native_render_rt_priority` | `int32` | `1` | Linux/Android: SCHED_FIFO priority attempted for the render thread (1..99). |
 | `--native_thread_nice` | `int32` | `-5` | Linux/Android: nice value attempted for the render (fallback) and UI threads (-20..19). |
 | `--native_bigcore_threshold_permille` | `int32` | `950` | Big-core frequency threshold in permille of the fastest core (500..1000). |

@@ -21,7 +21,10 @@
 
 #include "native/simd_kernels.h"
 
+#include "neoflux/core/flags.h"
+#ifdef NEOFLUX_NATIVE_ASM_PREMULTIPLY
 #include "native/asm/asm_symbols.h"
+#endif
 
 namespace neoflux::native {
 namespace {
@@ -43,33 +46,25 @@ constexpr std::size_t kGroupAarch64 = 8;
 // RGBA8 layout: four 8-bit channels per pixel, alpha in the last one. Used
 // unguarded because the scalar kernel below is always compiled in.
 constexpr std::size_t kChannelsPerPixel = 4;
+constexpr unsigned kChannelShiftBits = 8;
 
 // Exact division by 255 with the round-half-up term 127:
 //   t = x + 127;  result = (t + (t >> 8)) >> 8
 // Identical to what both assembly kernels compute, so all three paths are
 // bit-identical by construction rather than by coincidence.
 //
-// Every intermediate is std::uint32_t on purpose. A signed intermediate would
-// make the shifts implementation-defined on the sign bit, whereas both
-// assembly kernels shift a 16-bit lane logically (psrlw / USHR on the widened
-// halfword). Spelling the type out is what makes "the scalar reference and the
-// kernel agree" a property of the code rather than of the compiler's choice.
+// The product fits in 16 bits. Widen before adding the rounding term because
+// the adjusted product can exceed the uint16_t range.
 //
-// The two clang-analyzer suppressions below are false positives: every operand
-// here is already std::uint32_t, and the analyzer reports the operands of a
-// parenthesized shift after integer promotion. A NOLINT range is used rather
-// than a line comment because both the sum and the shift are reported.
-// NOLINTBEGIN(bugprone-signed-bitwise)
-constexpr std::uint8_t PremultiplyChannel(std::uint8_t channel,
-                                          std::uint8_t alpha) noexcept {
-  const std::uint32_t product =
-      static_cast<std::uint32_t>(channel) * static_cast<std::uint32_t>(alpha);
-  const std::uint32_t rounded = product + 127U;
-  const std::uint32_t shifted = rounded >> 8;
+[[nodiscard]] constexpr auto PremultiplyChannel(
+    std::uint8_t channel, std::uint8_t alpha) noexcept -> std::uint8_t {
+  const std::uint16_t product = static_cast<std::uint16_t>(channel * alpha);
+  const std::uint32_t rounded =
+      static_cast<std::uint32_t>(product) + 127U;
+  const std::uint32_t shifted = rounded >> kChannelShiftBits;
   const std::uint32_t summed = rounded + shifted;
-  return static_cast<std::uint8_t>(summed >> 8);
+  return static_cast<std::uint8_t>(summed >> kChannelShiftBits);
 }
-// NOLINTEND(bugprone-signed-bitwise)
 
 // Portable kernel. Always compiled in: it serves both as the tail finisher
 // and as the entire implementation on targets without a shipped assembly
@@ -103,6 +98,8 @@ constexpr std::size_t kActiveGroup = 0;
 
 }  // namespace
 
+// Public internal-header API; it is referenced by render and verification code.
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 void PremultiplyRgba8(std::uint8_t* dst, const std::uint8_t* src,
                       std::size_t pixels) {
   if (dst == nullptr || src == nullptr || pixels == 0) {
@@ -116,7 +113,9 @@ void PremultiplyRgba8(std::uint8_t* dst, const std::uint8_t* src,
   // elimination to erase that reference is not something any compiler
   // promises. This is the difference between "skipped" and "failed to link".
 #ifdef NEOFLUX_NATIVE_ASM_PREMULTIPLY
-  done = neoflux_premultiply_rgba8(dst, src, pixels);
+  if (FLAGS_native_simd) {
+    done = neoflux_premultiply_rgba8(dst, src, pixels);
+  }
 #endif
   if (done < pixels) {
     // The tail starts at `done` whole pixels, i.e. done * channels bytes. The
@@ -128,8 +127,12 @@ void PremultiplyRgba8(std::uint8_t* dst, const std::uint8_t* src,
   }
 }
 
-SimdLevel ActiveSimdLevel() noexcept { return kActiveLevel; }
+auto ActiveSimdLevel() noexcept -> SimdLevel {
+  return FLAGS_native_simd ? kActiveLevel : SimdLevel::kScalar;
+}
 
-std::size_t SimdGroupPixels() noexcept { return kActiveGroup; }
+auto SimdGroupPixels() noexcept -> std::size_t {
+  return FLAGS_native_simd ? kActiveGroup : 0;
+}
 
 }  // namespace neoflux::native

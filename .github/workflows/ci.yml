@@ -128,10 +128,11 @@ jobs:
       - name: Run clang-tidy on neoflux source
         run: |
           run-clang-tidy -p build -j"$(nproc)" \
-            -header-filter='(neoflux/include/neoflux|neoflux/src|src)/.*' \
+            -header-filter='neoflux/.*' \
+            -warnings-as-errors='*' \
             -quiet \
             -extra-arg-before=-Wno-unknown-warning-option \
-            '^(?!.*thirdparty/).*(/neoflux/src/|/src/)' 2>&1 | tee clang-tidy.log
+            '.*/neoflux/.*' 2>&1 | tee clang-tidy.log
           if grep -qE 'error:' clang-tidy.log; then
             echo "::error::clang-tidy reported errors"
             grep -E 'error:' clang-tidy.log | head -30
@@ -157,7 +158,7 @@ jobs:
 
   policy:
     name: Policy gates (Linux)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
         with:

@@ -352,13 +352,13 @@ target_compile_features(neoflux PUBLIC cxx_std_20)
 # parentheses are invisible at the use site (`return NEOFLUX_VERSION_STRING;`).
 target_compile_definitions(neoflux PUBLIC "NEOFLUX_VERSION_STRING=\"${NEOFLUX_VERSION}\"")
 
-# Strict warnings for neoflux code only (not third-party deps).
-# -Wno-conversion/-Wno-sign-conversion: render code mixes int coords with
-# size_t indices; unavoidable without excessive casts.
+# Strict warnings for neoflux code only (not third-party deps). Conversion
+# warnings are intentionally fatal so integer widths and signedness are explicit
+# in framework code; third-party headers remain outside this policy.
 # -Wno-error=attributes: glog headers emit dllimport attribute warnings on
 # Windows; warning is still shown, just not fatal.
 target_compile_options(neoflux PRIVATE
-  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror -Wno-conversion -Wno-sign-conversion -Wno-error=attributes>
+  $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Werror -Wno-error=attributes>
 )
 
 # Platform-specific definitions

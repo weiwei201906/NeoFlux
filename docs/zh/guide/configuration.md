@@ -48,6 +48,7 @@ SDK 的 D3D12 头文件、Apple Metal 框架等），且尚未在 CI 中跑过�
 | `--render_queue_capacity` | `uint64` | `2048` | SPSC 渲染命令环形队列容量，内部向上取整为 2 的幂（`std::bit_ceil`）；保留一个槽位，可用命令数 = `capacity - 1`。 |
 | `--render_queue_drop_log_max` | `int32` | `10` | 每个进程最多打印多少次"渲染队列已满、丢弃命令"警告。超过后静默统计，不再刷屏。仅在诊断背压时调大。 |
 | `--native_tuning` | `bool` | `true` | 平台原生调优层总开关；`false` 时所有入口均为 no-op。 |
+| `--native_simd` | `bool` | `true` | 启用目标架构可用的手写 SIMD premultiply 内核。`false` 会强制使用可移植的标量路径；架构组宽仍是编译期 ABI 常量。 |
 | `--native_render_rt_priority` | `int32` | `1` | Linux/Android：渲染线程尝试的 SCHED_FIFO 优先级（1..99）。 |
 | `--native_thread_nice` | `int32` | `-5` | Linux/Android：渲染线程（降级路径）与 UI 线程尝试的 nice 值（-20..19）。 |
 | `--native_bigcore_threshold_permille` | `int32` | `950` | 大核判定阈值（相对最快核频率的千分比，500..1000）。 |

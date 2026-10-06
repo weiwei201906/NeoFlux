@@ -110,6 +110,7 @@ NeoFlux uses gflags for runtime configuration. All flags are optional.
 | `--render_queue_capacity` | int | `2048` | Capacity of the SPSC lock-free ring queue between the application and render layers. Rounded up to the next power of two automatically. |
 | `--render_queue_drop_log_max` | int | `10` | Maximum number of "queue full, commands dropped" warnings emitted before drops are counted silently. |
 | `--native_tuning` | bool | `true` | Master switch for the platform-native tuning layer (thread scheduling, MMCSS, timer resolution, big-core pinning). `false` makes every native entry point a no-op. |
+| `--native_simd` | bool | `true` | Enable hand-written SIMD premultiply kernels when available. `false` forces the portable scalar path; architecture group sizes remain compile-time ABI constants. |
 | `--native_render_rt_priority` | int | `1` | Linux/Android: SCHED_FIFO priority attempted for the render thread (1 = lowest RT priority, range 1..99). |
 | `--native_thread_nice` | int | `-5` | Linux/Android: nice value attempted for the render (fallback) and UI threads (range -20..19). |
 | `--native_bigcore_threshold_permille` | int | `950` | Big-core detection threshold in permille of the fastest core's max frequency (500..1000). |

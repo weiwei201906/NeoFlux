@@ -67,6 +67,11 @@ DEFINE_bool(native_tuning, true,
             "scheduling, MMCSS, timer resolution, big-core pinning). "
             "false makes every native entry point a no-op.");
 
+DEFINE_bool(native_simd, true,
+            "Enable hand-written SIMD premultiply kernels when the target "
+            "provides them. false forces the portable scalar path. "
+            "The architecture group size and ABI remain compile-time constants.");
+
 DEFINE_int32(native_render_rt_priority, 1,
              "Linux/Android: SCHED_FIFO real-time priority attempted for the "
              "render thread (1 = lowest RT priority). Used only when "

@@ -55,14 +55,13 @@ CPU 特性与缓存拓扑探测。这里的一切都是 **best-effort**：在受
 | `PinThreadToBigCores` | 通过逻辑处理器拓扑的 `EfficiencyClass` | 对 ≥95% 最高频率的核调 `sched_setaffinity` | 同 Linux | no-op（由 QoS 决定集群） | no-op |
 | `DetectCpuFeatures` | cpuid / xgetbv | cpuid / `getauxval` | `getauxval` | `sysctl`（Intel）/ ABI（Silicon） | ABI（Silicon） |
 | `DetectCacheTopology` | cpuid leaf 1 + leaf 4 | sysfs 缓存树 | sysfs 缓存树 | `sysctl hw.*` | `sysctl hw.*` |
-| `PrefetchForRead/Write` | `_mm_prefetch` | `__builtin_prefetch` | `__builtin_prefetch` | `__builtin_prefetch` | `__builtin_prefetch` |
+| `PrefetchForRead/Write` | MSVC 构建为 no-op | x86 或 AArch64 汇编 | x86 或 AArch64 汇编 | x86 或 AArch64 汇编 | x86 或 AArch64 汇编 |
 | `VerifyCacheLineConfig` | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-全部基于 intrinsic 实现：本层任何地方都不使用手写内联汇编（cpuid 用
-`__cpuid`/`__cpuidex`，预取用 `__builtin_prefetch` / `_mm_prefetch`）。
-
-这句话只针对**本层**。框架确实带有少量手写 SIMD 内核——它们在下一级目录
-`src/native/asm/` 里，通过 C ABI 接入，而不是从这里调用。参见
+平台调优层是唯一允许直接调用 OS 底层 API 的地方。CPU 特性检测可能使用
+编译器 intrinsic 或平台 ABI 辅助函数，而缓存预取由 `src/native/asm/` 中的
+架构专用汇编提供；若构建没有启用汇编，则两个预取入口都将安全地成为
+no-op。汇编通过 C ABI 在编译期选型，绝不进入业务或渲染管线代码。参见
 [手写汇编内核](./native-asm.md)。
 
 ## 自动接入点

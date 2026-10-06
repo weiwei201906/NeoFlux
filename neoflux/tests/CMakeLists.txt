@@ -30,6 +30,10 @@ neoflux_add_test(route_registry_test route_registry_test.cpp)
 neoflux_add_test(render_command_test render_command_test.cpp)
 neoflux_add_test(widget_extra_test widget_extra_test.cpp)
 neoflux_add_test(button_e2e_test button_e2e_test.cpp)
+neoflux_add_test(simd_kernels_test simd_kernels_test.cpp)
+target_include_directories(simd_kernels_test PRIVATE
+  ${CMAKE_SOURCE_DIR}/neoflux/src
+)
 
 # ---------------------------------------------------------------------------
 # Frame-image registry test.

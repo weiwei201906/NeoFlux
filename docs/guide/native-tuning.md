@@ -20,8 +20,8 @@ the automatic hooks are, and when a manual call is worth it.
 | `PinThreadToBigCores()` | Pin the calling thread to "big"/performance cores on big.LITTLE / hybrid topologies. | One-time | Automatic after `TuneRenderThread()`. Manual if you spawn your own worker on a P-core–sensitive path. |
 | `DetectCpuFeatures()` | Snapshot of SIMD capabilities (`sse42`, `avx2`, `neon`, `neon_fp16`). | Trivial, repeated | Anywhere; results are informational and callers must keep a scalar fallback. |
 | `DetectCacheTopology()` | Runtime cache geometry (`CacheInfo`: coherence line size + L1d/L2/L3 bytes). | Cheap (one-time probe) | Once at startup, or before sizing your own data structures. |
-| `PrefetchForRead(const void*)` | One-line read prefetch hint. | Free (a single instruction) | In tight loops you own, one iteration ahead. |
-| `PrefetchForWrite(const void*)` | One-line write prefetch hint (exclusive / prepare-for-store). | Free | Before a store into a newly claimed slot or slab. |
+| `PrefetchForRead(const void*)` | Architecture-specific read prefetch hint. | Free (a single instruction) | In tight loops you own, one iteration ahead. |
+| `PrefetchForWrite(const void*)` | Architecture-specific write prefetch hint. | Free | Before a store into a newly claimed slot or slab. |
 | `VerifyCacheLineConfig()` | Compares runtime line size against compile-time `config::kCacheLineSize`; logs a **WARNING once** if the hardware line is wider. | Cheap | Once at startup (debug/telemetry), after logging is initialised. |
 
 ::: tip All entry points are `noexcept`
@@ -57,17 +57,16 @@ the OS refuses — the flags only change what is *attempted*, never correctness.
 | `PinThreadToBigCores` | `EfficiencyClass` via logic-processor topology | `sched_setaffinity` on ≥95%-of-max-frequency cores | same as Linux | no-op (QoS drives clusters) | no-op |
 | `DetectCpuFeatures` | cpuid / xgetbv | cpuid / `getauxval` | `getauxval` | `sysctl` (Intel) / ABI (Silicon) | ABI (Silicon) |
 | `DetectCacheTopology` | cpuid leaf 1 + leaf 4 | sysfs cache tree | sysfs cache tree | `sysctl hw.*` | `sysctl hw.*` |
-| `PrefetchForRead/Write` | `_mm_prefetch` | `__builtin_prefetch` | `__builtin_prefetch` | `__builtin_prefetch` | `__builtin_prefetch` |
+| `PrefetchForRead/Write` | no-op on MSVC | x86 or AArch64 assembly | x86 or AArch64 assembly | x86 or AArch64 assembly | x86 or AArch64 assembly |
 | `VerifyCacheLineConfig` | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-Every method is intrinsic-based: no hand-written inline assembly is used
-anywhere in this layer (cpuid is `__cpuid`/`__cpuidex`, prefetch is
-`__builtin_prefetch` / `_mm_prefetch`).
-
-That statement is about *this* layer only. The framework does ship a small
-number of hand-written SIMD kernels -- they live one directory down, in
-`src/native/asm/`, and are reached through the C ABI rather than from here.
-See [Hand-Written Assembly Kernels](./native-asm.md).
+The platform tuning layer is the only place allowed to call OS APIs directly.
+CPU feature detection may use compiler intrinsics or platform ABI helpers, while
+cache prefetch is provided by architecture-specific assembly in `src/native/asm/`
+when the build enables it. On a platform without an assembler, both prefetch
+functions deliberately become no-ops. Assembly is selected at compile time and
+reached through the C ABI; it never leaks into business or render-pipeline
+code. See [Hand-Written Assembly Kernels](./native-asm.md).
 
 ## Automatic integration points
 

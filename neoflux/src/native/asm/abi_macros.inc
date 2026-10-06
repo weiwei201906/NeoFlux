@@ -56,8 +56,11 @@
 #define NF_ELF 1
 // Opens the function's metadata (must follow a .globl for the symbol).
 #define NF_ELF_FUNCBEGIN(name) .type SYMBOL_NAME(name), @function
-// Closes it with the symbol size and the non-executable-stack note.
+// Closes it with the symbol size and the non-executable-stack note, then
+// restores .text. Without that restoration, a second function in the same
+// file is emitted into the discarded GNU-stack section and becomes unlinkable.
 #define NF_ELF_FUNCEND(name)                            \
   .size SYMBOL_NAME(name), .-SYMBOL_NAME(name);         \
-  .section .note.GNU-stack, "", @progbits
+  .section .note.GNU-stack, "", @progbits;              \
+  .text
 #endif
