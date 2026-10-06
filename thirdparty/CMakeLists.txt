@@ -191,6 +191,13 @@ if(APPLE AND TGFX_USE_METAL)
   )
 endif()
 
+if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(tgfx PRIVATE
+    -Wno-error=pointer-sign
+    -Wno-error=sign-conversion
+  )
+endif()
+
 # ---------------------------------------------------------------------------
 # Vendored tgfx third-party deps that tgfx does NOT git-track.
 #
