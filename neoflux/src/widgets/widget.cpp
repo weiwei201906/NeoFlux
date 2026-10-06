@@ -18,7 +18,6 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <ranges>
 #include <string_view>
 
 #include "neoflux/apps/application.h"
@@ -138,11 +137,11 @@ std::shared_ptr<Widget> Widget::HitTest(  // NOLINT(misc-no-recursion): bounded 
   const Point local_pos{.x = parent_pos.x - bounds_.x,
                         .y = parent_pos.y - bounds_.y,};
   // Test children in reverse order (top-most / last painted first).
-  for (const auto& child : std::views::reverse(children_)) {
-    if (child == nullptr) {
+  for (auto it = children_.rbegin(); it != children_.rend(); ++it) {  // NOLINT(modernize-loop-convert)
+    if (*it == nullptr) {
       continue;
     }
-    std::shared_ptr<Widget> hit = child->HitTest(local_pos);
+    std::shared_ptr<Widget> hit = (*it)->HitTest(local_pos);
     if (hit != nullptr) {
       return hit;
     }

@@ -1,4 +1,6 @@
 ---
+# Ownership is enforced by NonCopyable/PImpl bases and explicit deleted
+# operations; the hierarchy also intentionally exposes layout state to widgets.
 Checks: >
   -*,
   bugprone-*,
@@ -13,10 +15,7 @@ Checks: >
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-type-vararg,
   -cppcoreguidelines-pro-type-union-access,
-  # Framework ownership is enforced by NonCopyable/PImpl bases and explicit
-  # deleted operations; these classes intentionally declare out-of-line dtors.
   -cppcoreguidelines-special-member-functions,
-  # Widget subclasses need direct access to layout results for paint/input.
   -cppcoreguidelines-non-private-member-variables-in-classes,
   -cppcoreguidelines-owning-memory,
   -cppcoreguidelines-avoid-non-const-global-variables,

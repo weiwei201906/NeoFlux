@@ -183,7 +183,7 @@ if(APPLE AND TGFX_USE_METAL)
     ${SHADERC_INCLUDE_DIR}
     ${SPIRV_CROSS_INCLUDE_DIR}
   )
-  target_link_libraries(tgfx PRIVATE
+  target_link_libraries(tgfx
     ${SHADERC_LIBRARY}
     ${SPIRV_CROSS_MSL_LIBRARY}
     ${SPIRV_CROSS_GLSL_LIBRARY}

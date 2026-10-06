@@ -59,10 +59,7 @@ Button::Button(std::string label)
     : label_(std::move(label)),
       background_color_{.r = 0x21, .g = 0x96, .b = 0xF3, .a = 0xFF},
       text_color_{.r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF},
-      pressed_color_{.r = 0x19, .g = 0x76, .b = 0xD2, .a = 0xFF},
-      font_size_(14.0F),
-      horizontal_padding_(16.0F),
-      vertical_padding_(8.0F) {
+      pressed_color_{.r = 0x19, .g = 0x76, .b = 0xD2, .a = 0xFF} {
   // Button is a leaf node: enable the Taitank measure function.
   EnableMeasureFunction();
 }

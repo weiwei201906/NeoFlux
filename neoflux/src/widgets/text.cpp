@@ -52,9 +52,7 @@ float EstimateTextWidth(std::string_view text, float font_size) {
 
 Text::Text(std::string text)
     : text_(std::move(text)),
-      text_color_{.r = 0, .g = 0, .b = 0, .a = 255},
-      font_size_(14.0F),
-      alignment_(HAlign::kLeft) {
+      text_color_{.r = 0, .g = 0, .b = 0, .a = 255} {
   // Text is a leaf node: enable the Taitank measure function so the layout
   // engine queries this widget's intrinsic size.
   EnableMeasureFunction();
