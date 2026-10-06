@@ -1,61 +1,58 @@
 # Media Playback (libmpv)
 
 On desktop, NeoFlux can render video through [libmpv](https://mpv.io) using
-mpv's **render API**. Instead of putting mpv in its own window, the renderer
-is driven by the tgfx Window's OpenGL context (EGLWindow/WGLWindow, the
-`TGFX_USE_OPENGL` build) so each decoded video frame becomes a normal GL
-texture that a widget can draw.
+mpv's **software render API** (`MPV_RENDER_API_TYPE_SW`). Instead of putting mpv
+in its own window, the render layer drives mpv on the render thread: every
+decoded frame is rendered into a CPU buffer, published as a tgfx image, and
+composited with the same backend-agnostic draw path as any other image. NeoFlux
+never touches OpenGL itself, so playback works on the OpenGL, Metal, Vulkan and
+D3D12 tgfx backends alike.
 
-::: warning Optional feature, bound to the OpenGL backend
+::: warning Optional feature
 Desktop video support is gated behind the `NEOFLUX_HAS_MPV` compile definition
-and requires libmpv development files at build time. Without it, the media
-APIs are not compiled in and the rest of the framework works unchanged.
-
-Media is part of the **OpenGL backend module**: the build probes and links
-libmpv only when `TGFX_USE_OPENGL` is the active tgfx backend. On
-`Vulkan`/`D3D12`/`Metal` builds mpv
-is not downloaded, linked, or compiled (`MpvMediaPlayer` becomes a no-op stub)
-and `MediaWidget` renders its placeholder. This is deliberate: the mpv-to-GL
-texture interop has no equivalent on those backends yet, so the module stays
-decoupled instead of half-working.
+and requires libmpv development files at build time (the build probes for the
+`thirdparty/mpv-bundle` bundle on Windows and for a system libmpv via
+pkg-config elsewhere). Without libmpv, `MpvMediaPlayer` is a no-op stub and
+`MediaWidget` renders its placeholder, while the rest of the framework works
+unchanged. The media backend is independent of the selected tgfx backend.
 :::
 
 ## Threading model
 
-Video playback spans three threads. The GL work always happens on the render
-thread; mpv only ever *signals* that a frame is ready, it never pushes render
-commands (the SPSC queue is preserved).
+Video playback spans three threads. Frame pulling and publishing always happen
+on the render thread; mpv only ever *signals* that a frame is ready, it never
+pushes render commands (the SPSC queue is preserved).
 
 ```
-+-- App / UI thread (EventLoop) -------------------------------+
++-- App / UI thread (EventLoop) --------------------------------+
 |  Widget tree, widget lifecycle.                               |
 |  App-affine calls: SetSource / Play / Pause / Stop / Seek /   |
 |  SetVolume / SetStateCallback / SetFrameCallback /            |
 |  SetWakeCallback.                                             |
 |                                                               |
-|  MediaWidget::Paint()  -- NO GL --                           |
-|    reads the atomically-published texture_id/w/h and emits a  |
-|    DrawTexture command onto the SPSC queue.                   |
+|  MediaWidget::Paint()  -- NO GL --                            |
+|    reads the atomically-published image_id/w/h and emits a    |
+|    DrawImage command onto the SPSC queue.                     |
 +---------------------------------------------------------------+
             ^ MarkFrameDirty() (repaint)        \
             |                                    \
-+-- mpv internal thread ---------------------------------------+
-|  OnRenderUpdate():                                             |
++-- mpv internal thread ----------------------------------------+
+|  OnRenderUpdate():                                            |
 |    bump update_count_, set new_frame_=true, notify,           |
 |    then call SetWakeCallback().                               |
-|    NEVER blocks, NEVER touches GL.                            |
+|    NEVER blocks, NEVER touches GL/GPU state.                  |
 +---------------------------------------------------------------+
             | layer->Wake()
             v
-+-- Render thread (owns the GL context) -------------------------+
++-- Render thread (drives the frame pump) ----------------------+
 |  On each wake, first run the render pump:                     |
-|    InitRender() once, then UpdateTexture() ->                  |
+|    InitRender() once, then UpdateFrame() ->                   |
 |      mpv_render_context_update / mpv_render_context_render    |
-|      into a cached FBO-backed texture (FBO and texture are    |
-|      reused; texture storage is (re)allocated only on size     |
-|      change). Publish texture_id/w/h to atomics.              |
+|      into a reusable CPU frame buffer (reallocated only on    |
+|      size change), copied into a tgfx Bitmap and published    |
+|      as a tgfx Image under a stable frame-image id.           |
 |  Then drain the SPSC queue and execute commands               |
-|  (including the DrawTexture for the video).                    |
+|  (including the DrawImage that composites the frame).         |
 +---------------------------------------------------------------+
 ```
 
@@ -65,12 +62,12 @@ commands (the SPSC queue is preserved).
    `OnRenderUpdate`. That callback only bumps the observability counter, raises
    a `new_frame_` flag, and calls the installed wake callback.
 2. The wake callback (installed by `MediaWidget` on first build) does two
-   non-blocking things: `RenderLayer::Wake()` wakes the render thread to upload
+   non-blocking things: `RenderLayer::Wake()` wakes the render thread to publish
    the new frame, and `Application::MarkFrameDirty()` wakes the App thread to
    repaint.
-3. The render thread, woken by `Wake()`, runs the pump: `UpdateTexture()` calls
-   `mpv_render_context_render()` into the cached FBO and publishes the new
-   texture id. It then drains the SPSC queue and composites that texture.
+3. The render thread, woken by `Wake()`, runs the pump: `UpdateFrame()` calls
+   `mpv_render_context_render()` into the CPU frame buffer and republishes the
+   frame image. It then drains the SPSC queue and composites that image.
 
 The render thread therefore sleeps until either the App submits commands or mpv
 signals a new frame; there is no fixed per-frame poll.
@@ -80,27 +77,28 @@ signals a new frame; there is no fixed per-frame poll.
 | Thread | Methods |
 |--------|---------|
 | App / UI | `SetSource`, `GetSource`, `Play`, `Pause`, `Stop`, `Seek`, `SetVolume`, `SetStateCallback`, `SetFrameCallback`, `SetWakeCallback` |
-| Render (GL context current) | `InitRender`, `UpdateTexture` |
+| Render (no GL context needed) | `InitRender`, `UpdateFrame`, `TeardownRender` |
 | Any thread | `GetState`, `GetVideoWidth`, `GetVideoHeight`, `GetPosition`, `GetDuration`, `GetRenderUpdateCount` |
 
 Callbacks:
 
-- `StateCallback` fires on whichever thread pumped mpv events — the render
-  thread in production (via `UpdateTexture`), but it may also be dispatched
+- `StateCallback` fires on whichever thread pumped mpv events - the render
+  thread in production (via `UpdateFrame`), but it may also be dispatched
   synchronously on the App thread from `Play()`/`Pause()`/`Stop()`. Never block
-  or touch GL.
+  or touch GPU/driver state.
 - `FrameCallback` fires on the render thread, synchronously at the end of
-  `UpdateTexture()`, with the GL context current.
+  `UpdateFrame()`, and hands over the published frame-image id with its pixel
+  dimensions.
 - `WakeCallback` fires on the mpv internal thread. It must be non-blocking and
-  must not touch GL.
+  must not touch GPU/driver state.
 
 Do **not** swap a callback (`SetStateCallback`/`SetFrameCallback`/
 `SetWakeCallback`) from inside a callback. `GetSource()`/`SetSource()` are
 App-thread affine; do not read the source string from the render thread while
 the App thread may be calling `SetSource()`.
 
-Because all mpv rendering happens on the render thread where the GL context is
-current, no context migration is needed.
+Because all frame pulling happens on the render thread, no GPU context
+migration is needed anywhere in the media path.
 
 ## Playing a real file
 
@@ -139,9 +137,9 @@ visible in the terminal (the app is otherwise GUI-subsystem with no console).
 
 ## Requirements
 
-- libmpv (`mpv/client.h`, `mpv/render_gl.h`) available at build time.
-- An OpenGL build (`TGFX_USE_OPENGL`, the default), since the render context
-  wraps an OpenGL context.
+- libmpv (`mpv/client.h`, `mpv/render.h`) available at build time.
+- Any tgfx backend: the software render path is backend-independent and makes no
+  GL call of its own.
 - A decode path for the container/codecs your files use (system ffmpeg/libav
   bundled with your mpv build).
 
@@ -176,33 +174,35 @@ play_btn->SetOnPressed([media, play_btn]() {
 });
 ```
 
-`MediaWidget` is a Flutter-style texture-sharing widget: decoding runs inside
-mpv on its own thread, each frame becomes a GL texture composited by the
-render thread, and `Paint()` on the UI thread just emits one `DrawTexture`
-command. You build your own transport UI out of ordinary buttons/sliders on
-top of it; the widget itself only handles tap-to-toggle by default.
+`MediaWidget` is a frame-sharing widget without the texture: decoding runs inside
+mpv on its own thread, each decoded frame becomes a CPU-backed tgfx image that
+the render thread composites, and `Paint()` on the UI thread just emits one
+`DrawImage` command carrying the opaque image id. You build your own transport
+UI out of ordinary buttons/sliders on top of it; the widget itself only handles
+tap-to-toggle by default.
 
-## GL resource lifecycle and teardown
+## Frame image lifecycle and teardown
 
-The mpv render context, the GL texture, and the FBO are all created on the
-**render thread** (where the OpenGL context is current). They MUST be freed on
-the same thread -- deleting a GL object on a thread without a current context
-causes a hard crash.
+`InitRender()`, `UpdateFrame()` and `TeardownRender()` are all driven by the
+**render thread**. Nothing in that path needs a current OpenGL context: the mpv
+software renderer writes into a CPU buffer, tgfx owns the bitmap/image, and the
+renderer uploads the image through whichever GPU backend is active.
 
-`MediaWidget` handles this automatically in its destructor:
+`MediaWidget` handles the lifecycle automatically in its destructor:
 
 1. `SetRenderPump(nullptr)` -- stops the render thread from pulling new frames.
-2. `player->Stop()` -- stops playback.
+2. `player->Stop()` -- stops playback, so no further frame is decoded.
 3. `RenderLayer::RunOnRenderThread([]{ player->TeardownRender(); })` --
-   synchronously executes `TeardownRender()` on the render thread (which owns
-   the GL context), blocks until it returns. This frees the mpv render context,
-   GL texture, and FBO.
+   synchronously executes `TeardownRender()` on the render thread and blocks
+   until it returns. This frees the mpv render context, releases the published
+   frame image from the registry and drops the CPU frame buffers. Running it on
+   the render thread is what serializes the release against an in-flight frame
+   pull; it is not a GL requirement.
 4. The `player` `unique_ptr` then destructs on the App thread, which only runs
-   `mpv_terminate_destroy()` (non-GL mpv core teardown).
+   `mpv_terminate_destroy()` for the remaining mpv core.
 
 ::: warning Do not call `delete` on a MediaPlayer from the App thread
-If you own a `MediaPlayer` directly (not via `MediaWidget`), you must call
+If you own a `MediaPlayer` directly (not via `MediaWidget`), call
 `TeardownRender()` on the render thread (via `RunOnRenderThread` or equivalent)
-BEFORE destroying the player. Otherwise the destructor will try to free GL
-objects on a thread with no current OpenGL context.
+BEFORE destroying the player, so the teardown cannot race a frame pull.
 :::
