@@ -50,11 +50,11 @@ RenderCommand RenderCommand::MakeDrawText(std::string text,
   return cmd;
 }
 
-RenderCommand RenderCommand::MakeDrawTexture(std::uint32_t texture_id,
+RenderCommand RenderCommand::MakeDrawTexture(std::uint32_t image_id,
                                              const Rect& rect) {
   RenderCommand cmd;
   cmd.type = RenderCommandType::kDrawTexture;
-  cmd.texture_id = texture_id;
+  cmd.image_id = image_id;
   cmd.rect = rect;
   return cmd;
 }

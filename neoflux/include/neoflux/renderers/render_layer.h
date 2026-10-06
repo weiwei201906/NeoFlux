@@ -56,29 +56,30 @@ class RenderLayer : public NonCopyable {  // NOLINT(cppcoreguidelines-special-me
   std::size_t Submit(const RenderCommand* commands, std::size_t count);
 
   // Wakes the render thread without submitting commands. Thread-safe. Used by
-  // external GL producers (e.g. the mpv media player, which signals frame
+  // external frame producers (e.g. the mpv media player, which signals frame
   // availability on its own internal thread) to ask the render thread to wake
-  // and pull a newly decoded frame via the registered render pump.
+  // and publish a newly decoded frame via the registered render pump.
   void Wake();
 
-  // Registers a callback invoked on the render thread (GL context current) at
-  // the top of every render-loop wake, before queued commands are executed.
-  // Used by external GL producers to pull newly decoded frames into a texture
-  // on the thread that owns the GL context. The callback must be non-blocking
-  // and must not throw. At most one pump is supported; a later call replaces the
-  // earlier one. Set once at wiring time. Pass nullptr to clear.
+  // Registers a callback invoked on the render thread at the top of every
+  // render-loop wake, before queued commands are executed. Used by external
+  // frame producers (e.g. the media player) to turn a decoded frame into a
+  // drawable image on the thread that serializes rendering. The callback must be
+  // non-blocking and must not throw. At most one pump is supported; a later call
+  // replaces the earlier one. Set once at wiring time. Pass nullptr to clear.
   void SetRenderPump(std::function<void()> pump);
 
-  // Runs |task| on the render thread (OpenGL context current) and BLOCKS the
-  // calling thread until it has executed. The task is serialized with the render
-  // pump and draw commands: it runs at the end of a render-loop iteration,
-  // AFTER any in-flight pump and AFTER all queued draw commands for that
-  // iteration have executed, so it is safe to delete GL objects (textures/FBOs/
-  // render contexts) that pending draw commands might still reference. Used by
-  // external GL producers (e.g. mpv) to tear down their GL resources on the
-  // thread that owns the GL context. Must NOT be called from the render thread
+  // Runs |task| on the render thread and BLOCKS the calling thread until it has
+  // executed. The task is serialized with the render pump and draw commands: it
+  // runs at the end of a render-loop iteration, AFTER any in-flight pump and
+  // AFTER all queued draw commands for that iteration have executed, so it is
+  // safe to release render resources (frame images, render contexts) that
+  // pending draw commands might still reference. Used by external frame
+  // producers (e.g. the media player) to tear down their render state on the
+  // thread that drives rendering. Must NOT be called from the render thread
   // itself (would deadlock). If the render thread is not running the task is
-  // dropped (the GL context has already been destroyed and reclaimed the names).
+  // dropped (the run loop has already stopped, so nothing can reference those
+  // resources any more).
   void RunOnRenderThread(std::function<void()> task);
 
   // Returns true if the render thread is running.
@@ -113,9 +114,9 @@ class RenderLayer : public NonCopyable {  // NOLINT(cppcoreguidelines-special-me
   std::mutex frame_mutex_;
   std::condition_variable frame_cv_;
   bool frame_ready_ = false;
-  // External GL pump (e.g. mpv UpdateTexture), invoked on the render thread at
-  // the top of each wake. Read/written under frame_mutex_ so the render loop
-  // copies it out before invoking.
+  // External frame pump (e.g. the media player's UpdateFrame), invoked on the
+  // render thread at the top of each wake. Read/written under frame_mutex_ so
+  // the render loop copies it out before invoking.
   std::function<void()> render_pump_;
 
   // One-shot tasks submitted via RunOnRenderThread and drained on the render
@@ -127,10 +128,10 @@ class RenderLayer : public NonCopyable {  // NOLINT(cppcoreguidelines-special-me
   std::atomic<bool> should_close_{false};
   std::unique_ptr<std::thread> render_thread_ = nullptr;
 
-  // Set by the render thread after it has made the GL context current and
-  // performed a preliminary BeginFrame/EndFrame to initialise GL resources.
-  // Start() blocks on this until the render thread is ready, so the first
-  // real frame submitted by the application never races GL initialisation.
+  // Set by the render thread after it has locked the tgfx context and
+  // performed a preliminary BeginFrame/EndFrame to initialise the render
+  // resources. Start() blocks on this until the render thread is ready, so the
+  // first real frame submitted by the application never races initialisation.
   std::promise<void> render_ready_;
   std::future<void> render_ready_future_;
 

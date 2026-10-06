@@ -4,19 +4,20 @@
 // NeoFlux - media_widget.cpp
 //
 // Integrated media playback widget. Uses the platform MediaPlayer backend to
-// decode video frames into an OpenGL texture, then composites the texture into
-// the widget's bounding rectangle via the render layer.
+// decode video frames into a CPU image, then composites that image into the
+// widget's bounding rectangle through the render layer.
 //
 // Threading:
 //   - Paint() runs on the App/UI thread and only reads atomically-published
-//     state (texture id, size). It performs NO GL calls.
-//   - The actual mpv -> GL texture work (InitRender/UpdateTexture) runs on the
+//     state (frame-image id, size). It performs NO GPU or GL call.
+//   - The actual mpv -> CPU image work (InitRender/UpdateFrame) runs on the
 //     render thread via the RenderLayer render pump. When mpv decodes a new
 //     frame on its internal thread, it signals RenderLayer::Wake() which wakes
-//     the render thread to pull the frame, and MarkFrameDirty() which wakes the
-//     App thread to repaint. mpv never pushes RenderCommands (SPSC preserved).
+//     the render thread to publish the frame, and MarkFrameDirty() which wakes
+//     the App thread to repaint. mpv never pushes RenderCommands (SPSC
+//     preserved).
 //
-// Pimpl: MediaWidget::Impl owns the player handle and published texture state.
+// Pimpl: MediaWidget::Impl owns the player handle and the published frame state.
 // =============================================================================
 
 #include "neoflux/widgets/media_widget.h"
@@ -41,9 +42,9 @@ constexpr float kDefaultHeight = 270.0F;
 }  // namespace
 
 struct MediaWidget::Impl {
-  // Runs on the render thread (GL context current). Initializes the player's
-  // render context on first call, then pulls the newest mpv frame into the GL
-  // texture and publishes the result to the atomics read by Paint().
+  // Runs on the render thread. Initializes the player's render API on first
+  // call, then publishes the newest decoded frame as a CPU image and stores the
+  // resulting image id in the atomics read by Paint(). No GL context is needed.
   void PumpOnRenderThread() {
     if (player == nullptr) {
       return;
@@ -53,8 +54,8 @@ struct MediaWidget::Impl {
       render_init_requested = true;
       LOG(INFO) << "MediaWidget: player render context initialized";
     }
-    const std::uint32_t tex = player->UpdateTexture();
-    published_texture.store(tex);
+    const std::uint32_t image_id = player->UpdateFrame();
+    published_image_id.store(image_id);
     published_w.store(player->GetVideoWidth());
     published_h.store(player->GetVideoHeight());
   }
@@ -63,8 +64,9 @@ struct MediaWidget::Impl {
   bool render_init_requested = false;
 
   // Atomically-published frame state. Written by PumpOnRenderThread on the
-  // render thread, read by Paint on the App thread.
-  std::atomic<std::uint32_t> published_texture{0};
+  // render thread, read by Paint on the App thread. |published_image_id| is the
+  // opaque id of the newest frame (0 = nothing to composite yet).
+  std::atomic<std::uint32_t> published_image_id{0};
   std::atomic<int> published_w{0};
   std::atomic<int> published_h{0};
 
@@ -96,15 +98,17 @@ MediaWidget::MediaWidget() : impl_(std::make_unique<Impl>()) {
 
 MediaWidget::~MediaWidget() {
   // Teardown ordering (Application::Stop clears navigation_stack_ BEFORE it
-  // joins the render thread, so the render thread still owns the current GL
-  // context when this runs):
-  //   1. Detach the per-frame pump so the render thread stops pulling mpv frames.
-  //   2. Detach mpv's internal-thread wake callback and issue mpv stop.
-  //   3. Free the mpv render context + GL texture/FBO ON THE RENDER THREAD (the
-  //      only thread with the GL context current). RunOnRenderThread blocks until
-  //      that completes, so by the time this destructor returns and the player
-  //      unique_ptr runs ~MpvMediaPlayer, render_ctx is already nullptr and the
-  //      App-thread destructor only does mpv_terminate_destroy (no GL calls).
+  // joins the render thread, so the render thread is still pumping frames when
+  // this runs):
+  //   1. Detach the per-frame pump so the render thread stops pulling frames.
+  //   2. Detach the mpv internal-thread wake callback and issue mpv stop.
+  //   3. Free the player's render state (mpv render context, published frame
+  //      image, CPU frame buffers) ON THE RENDER THREAD, so the release cannot
+  //      race an in-flight frame pull. No GL context is involved.
+  //      RunOnRenderThread blocks until that completes, so by the time this
+  //      destructor returns and the player unique_ptr runs ~MpvMediaPlayer,
+  //      render_ctx is already nullptr and the App-thread destructor only does
+  //      mpv_terminate_destroy.
   if (impl_->render_layer != nullptr) {
     impl_->render_layer->SetRenderPump(nullptr);
   }
@@ -140,12 +144,12 @@ std::shared_ptr<Widget> MediaWidget::Build(BuildContext& context) {
       impl_->render_layer = &impl_->app->GetRenderLayer();
     }
     if (impl_->player != nullptr && impl_->render_layer != nullptr) {
-      // Render thread: pull mpv frames into a GL texture.
+      // Render thread: publish decoded frames as CPU images.
       impl_->render_layer->SetRenderPump(
           [this]() { impl_->PumpOnRenderThread(); });
       // mpv internal thread: a new frame is decoded -> wake the render thread
-      // to upload it AND wake the App thread to repaint. Both are non-blocking
-      // and touch no GL.
+      // to publish it AND wake the App thread to repaint. Both are non-blocking
+      // and touch no GPU state.
       MediaPlayer* const player = impl_->player.get();
       Application* const app = impl_->app;
       RenderLayer* const layer = impl_->render_layer;
@@ -168,20 +172,21 @@ void MediaWidget::Paint(RenderContext& context) {
     return;
   }
 
-  // Read the atomically-published texture. GL upload happens on the render
-  // thread (the pump); this App-thread method only emits a DrawTexture command.
-  const std::uint32_t texture = impl_->published_texture.load();
+  // Read the atomically-published frame image id. The frame itself is decoded
+  // and published on the render thread (the pump); this App-thread method only
+  // emits a DrawImage command that the renderer resolves by id.
+  const std::uint32_t image_id = impl_->published_image_id.load();
 
   // Draw placeholder background.
   context.DrawRoundedRect({.x = 0.0F, .y = 0.0F, .width = b.width,
                            .height = b.height,},
                           impl_->background_color, 4.0F);
 
-  // Draw the video texture if available.
-  if (texture != 0U) {
-    context.DrawTexture(texture,
-                        {.x = 0.0F, .y = 0.0F, .width = b.width,
-                         .height = b.height,});
+  // Draw the decoded video frame if available.
+  if (image_id != 0U) {
+    context.DrawImage(image_id,
+                      {.x = 0.0F, .y = 0.0F, .width = b.width,
+                       .height = b.height,});
   } else {
     // Draw placeholder text when no video frame is available.
     const char* msg = "No media loaded";
@@ -233,7 +238,9 @@ void MediaWidget::Pause() {
 void MediaWidget::Stop() {
   if (impl_->player != nullptr) {
     impl_->player->Stop();
-    impl_->published_texture.store(0);
+    // Stop compositing: the pump may still republish the last frame id, and the
+    // player releases that id at teardown.
+    impl_->published_image_id.store(0);
   }
 }
 

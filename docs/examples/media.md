@@ -1,8 +1,8 @@
 # Media Player
 
 Demonstrates `MediaWidget`: a libmpv-backed video surface with a play/pause
-toggle. The demo plays a local file or URL, composites the decoded frame into
-the widget tree via an OpenGL texture, and exposes the most common playback
+toggle. The demo plays a local file or URL, composites the decoded CPU frame
+into the widget tree as a tgfx image, and exposes the most common playback
 controls.
 
 ::: tip Prerequisite
@@ -30,9 +30,9 @@ the executable.
 
 ## Features
 
-- Video decoded by libmpv and rendered to an OpenGL texture
-- Texture shared across the App/Render thread boundary (mpv frame callback
-  wakes the render thread; `Paint` only reads an atomically-published texture id)
+- Video decoded by libmpv (software render API) into a CPU frame image
+- Frame image shared across the App/Render thread boundary (mpv frame callback
+  wakes the render thread; `Paint` only reads an atomically-published image id)
 - Play/pause toggle button with label swap
 - Tap-on-video to toggle playback
 - Placeholder black background before the first frame arrives
@@ -61,10 +61,10 @@ toggle->SetOnPressed([player, toggle]() {
 
 | Thread | Responsibility |
 | --- | --- |
-| App / EventLoop | Layout, pointer events, `Paint` (reads texture id only) |
-| Render | Owns the GL context; uploads mpv frames to an FBO-backed texture |
+| App / EventLoop | Layout, pointer events, `Paint` (reads image id only) |
+| Render | Publishes the decoded CPU frame as a tgfx image (no GL context needed) |
 | mpv internal | Decodes video; calls `OnRenderUpdate` when a new frame is ready |
 
 The mpv callback only signals the render thread (`condition_variable::notify_one`);
-it never touches GL or blocks. See [Media Architecture](../guide/media.md) for
-the full diagram.
+it never touches GPU/driver state or blocks. See
+[Media Architecture](../guide/media.md) for the full diagram.

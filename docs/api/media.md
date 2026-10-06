@@ -5,9 +5,12 @@ class MediaWidget : public Widget;
 enum class MediaState { kIdle, kLoading, kPlaying, kPaused, kEnded, kError };
 ```
 
-Flutter-style texture sharing: the platform backend decodes video frames into an
-OpenGL texture that the render layer composites into the widget's rectangle. On
-desktop this is libmpv (`MpvMediaPlayer`); on mobile it is the native player.
+Frame sharing without a GPU handle: the platform backend decodes video frames
+into a CPU buffer, publishes the frame as a tgfx image under an opaque
+frame-image id, and the render layer composites that image through whatever tgfx
+backend is active (OpenGL, Metal, Vulkan, D3D12). NeoFlux itself makes no GL
+call. On desktop this is libmpv (`MpvMediaPlayer`); on mobile it is the native
+player.
 
 ::: warning Requires NEOFLUX_HAS_MPV
 The desktop libmpv backend is compiled only when `NEOFLUX_HAS_MPV` is defined.
@@ -64,17 +67,22 @@ class MediaPlayer {
   virtual int GetVideoWidth() const noexcept = 0;
   virtual int GetVideoHeight() const noexcept = 0;
   virtual void SetStateCallback(StateCallback) = 0;   // void(MediaState)
-  virtual void SetFrameCallback(FrameCallback) = 0;   // void(uint32_t tex, int w, int h)
-  virtual void InitRender() = 0;                       // render thread, GL ctx current
-  virtual uint32_t UpdateTexture() = 0;                // returns GL texture name
+  virtual void SetFrameCallback(FrameCallback) = 0;   // void(uint32_t image_id, int w, int h)
+  virtual void InitRender() = 0;                       // render thread, no GL context
+  virtual uint32_t UpdateFrame() = 0;                  // opaque frame-image id (0 = none)
 };
 std::unique_ptr<MediaPlayer> CreateMediaPlayer();
 ```
 
 ::: warning Threading
-`InitRender()` and `UpdateTexture()` must run on the **render thread with the GL
-context current**. Business code only calls the control methods.
+`InitRender()` and `UpdateFrame()` must run on the **render thread** (the thread
+that drives the render pump); no GPU/GL context is required. Business code only
+calls the control methods.
 :::
+
+Frames are handed over as an opaque id, never as a GPU handle. The id is
+resolved by the render layer through the internal frame-image registry, so the
+same code path composites video on every tgfx backend.
 
 ## MpvMediaPlayer
 
@@ -82,8 +90,9 @@ context current**. Business code only calls the control methods.
 class MpvMediaPlayer final : public MediaPlayer;
 ```
 
-Header: `<neoflux/media/mpv_media_player.h>`. The desktop libmpv render-API
-implementation. Pimpl: leaks no mpv/GL types in the header. Use
+Header: `<neoflux/media/mpv_media_player.h>`. The desktop libmpv software
+render-API implementation: mpv renders into a CPU buffer, which is published as
+a tgfx image. Pimpl: leaks no mpv, tgfx or GL types in the header. Use
 `CreateMediaPlayer()` rather than constructing it directly.
 
 ## MediaState values

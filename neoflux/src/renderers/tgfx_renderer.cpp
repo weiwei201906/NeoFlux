@@ -26,6 +26,11 @@
 // GLFW is a pure window + input bridge on every platform: the window is
 // created with GLFW_NO_API and NeoFlux never touches a GL/EGL/WGL context
 // itself. All tgfx / GLFW state lives in TgfxRenderer::Impl (Pimpl).
+//
+// External frames (media playback) arrive as an opaque image id on the
+// kDrawTexture command and are resolved to a CPU-backed tgfx::Image through
+// FrameImageRegistry, then composited with Canvas::drawImageRect(). No GL
+// interop, no GL types, and no GL header appears in this file.
 // =============================================================================
 
 #include "neoflux/renderers/tgfx_renderer.h"
@@ -38,6 +43,8 @@
 #include "neoflux/core/font_manager.h"
 #include "neoflux/core/types.h"
 
+#include "renderers/frame_image_registry.h"
+
 #include "tgfx/core/Canvas.h"
 #include "tgfx/core/Color.h"
 #include "tgfx/core/Font.h"
@@ -48,7 +55,6 @@
 #include "tgfx/core/SamplingOptions.h"
 #include "tgfx/core/Surface.h"
 #include "tgfx/core/Typeface.h"
-#include "tgfx/gpu/Backend.h"
 #include "tgfx/gpu/Context.h"
 
 #if defined(NEOFLUX_PLATFORM_DESKTOP)
@@ -71,8 +77,6 @@
 #include "tgfx/gpu/Window.h"
 
 #if defined(TGFX_USE_OPENGL)
-// GL interop types (GLTextureInfo) for the media module's mpv->tgfx bridge.
-#include "tgfx/gpu/opengl/GLTypes.h"
 #if defined(_WIN32)
 #include "tgfx/gpu/opengl/wgl/WGLWindow.h"
 #elif defined(__linux__)
@@ -438,36 +442,25 @@ void TgfxRenderer::Execute(const RenderCommand& command) {
           command.rect.x, command.rect.y, command.rect.width,
           command.rect.height));
       break;
-#if defined(TGFX_USE_OPENGL)
     case RenderCommandType::kDrawTexture: {
-      // Media module (GL interop only): wrap an externally-produced GL
-      // texture (mpv render context) as a tgfx BackendTexture and draw it
-      // into the destination rect. MakeFrom does NOT take ownership of the
-      // GL texture; the producer (mpv) manages its lifetime. The texture id
-      // stays the same across frames; only its contents are updated by mpv,
-      // so re-creating the Image each frame is cheap (just a handle, no GPU
-      // upload). On non-OpenGL tgfx builds this case does not exist at all:
-      // the media module is bound to OpenGL (see neoflux/CMakeLists.txt) and
-      // MediaWidget degrades to a placeholder, so no kDrawTexture command is
-      // ever sent.
-      tgfx::GLTextureInfo gl_info{};
-      gl_info.id = command.texture_id;
-      gl_info.target = 0x0DE1U;   // GL_TEXTURE_2D
-      gl_info.format = 0x8058U;   // GL_RGBA8
-      const auto src_w = static_cast<int>(command.rect.width);
-      const auto src_h = static_cast<int>(command.rect.height);
-      tgfx::BackendTexture backend(gl_info, src_w, src_h);
-      auto image = tgfx::Image::MakeFrom(impl_->context, backend);
-      if (image != nullptr) {
-        auto dest = tgfx::Rect::MakeXYWH(command.rect.x, command.rect.y,
-                                          command.rect.width,
-                                          command.rect.height);
-        impl_->canvas->drawImageRect(image, dest,
-                                     tgfx::SamplingOptions());
+      // External frame compositing. The command carries only an opaque image id;
+      // the producer (the media module) registered a CPU-backed tgfx::Image
+      // under that id and keeps it valid until it releases it. Resolving the id
+      // here is backend-agnostic: drawImageRect() uploads the CPU frame through
+      // whichever tgfx backend is active (OpenGL, Metal, Vulkan, D3D12), so no
+      // GL interop and no GL header is involved anywhere in NeoFlux.
+      auto image = FrameImageRegistry::Find(command.image_id);
+      if (image == nullptr) {
+        // Unknown or already released id (the producer tore its frame down
+        // first, or the command outlived the frame): draw nothing.
+        break;
       }
+      const auto dest = tgfx::Rect::MakeXYWH(command.rect.x, command.rect.y,
+                                             command.rect.width,
+                                             command.rect.height);
+      impl_->canvas->drawImageRect(image, dest, tgfx::SamplingOptions());
       break;
     }
-#endif
     default:
       break;
   }

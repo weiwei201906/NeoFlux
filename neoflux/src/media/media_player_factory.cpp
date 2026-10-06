@@ -5,18 +5,18 @@
 //
 // Factory function that creates the platform-appropriate MediaPlayer.
 //
-// ARCHITECTURE: media playback is bound to the OpenGL backend module. libmpv
-// decodes frames into GL textures and TgfxRenderer composites them via tgfx's
-// GL texture interop (kDrawTexture) -- a path that exists only on the OpenGL
-// backend. The build therefore defines NEOFLUX_HAS_MPV only when
-// TGFX_USE_OPENGL is the active tgfx backend (see neoflux/CMakeLists.txt).
-// On any other backend:
-//   - mpv is not probed, downloaded, or linked;
-//   - MpvMediaPlayer compiles as a no-op stub (UpdateTexture() returns 0);
+// ARCHITECTURE: the media backend is backend-agnostic. libmpv decodes frames
+// through its SOFTWARE render API (MPV_RENDER_API_TYPE_SW) into a CPU buffer,
+// the buffer is published as a tgfx image under an opaque frame-image id, and
+// TgfxRenderer composites it with Canvas::drawImageRect() -- a path that works
+// on every tgfx backend (OpenGL, Metal, Vulkan, D3D12). The build therefore
+// defines NEOFLUX_HAS_MPV purely on libmpv availability, with no dependency on
+// which tgfx backend is selected (see neoflux/CMakeLists.txt).
+// When libmpv is absent:
+//   - MpvMediaPlayer compiles as a no-op stub (UpdateFrame() returns 0);
 //   - MediaWidget::Paint() draws its "No media loaded" placeholder.
 // The MediaPlayer interface and the kDrawTexture protocol command stay
-// backend-agnostic on purpose: a future backend can implement its own texture
-// importer without touching this module or the render protocol.
+// backend-agnostic on purpose: producers only ever hand over opaque image ids.
 // =============================================================================
 
 #include "neoflux/media/media_player.h"
@@ -28,8 +28,8 @@ namespace neoflux {
 
 std::unique_ptr<MediaPlayer> CreateMediaPlayer() {
 #ifdef NEOFLUX_PLATFORM_DESKTOP
-  // Desktop: libmpv with OpenGL texture output (GL backend module only;
-  // no-op stub unless NEOFLUX_HAS_MPV is defined by the build).
+  // Desktop: libmpv with software-rendered CPU frame output (no-op stub unless
+  // NEOFLUX_HAS_MPV is defined by the build).
   return std::make_unique<MpvMediaPlayer>();
 #else
   // KNOWN LIMITATION (mobile): no player backend exists on mobile yet. The
