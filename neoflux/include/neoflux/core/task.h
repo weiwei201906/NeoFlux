@@ -83,9 +83,10 @@ class Task {
       bool await_ready() const noexcept { return false; }
       std::coroutine_handle<> await_suspend(
           std::coroutine_handle<promise_type> handle) const noexcept {
-        const std::coroutine_handle<> continuation =
+        const std::coroutine_handle<> continuation_handle =
             handle.promise().continuation;
-        return continuation != nullptr ? continuation : std::noop_coroutine();
+        return continuation_handle != nullptr ? continuation_handle
+                            : std::noop_coroutine();
       }
       void await_resume() const noexcept {}
     };
@@ -194,9 +195,10 @@ class Task<void> {
       bool await_ready() const noexcept { return false; }
       std::coroutine_handle<> await_suspend(
           std::coroutine_handle<promise_type> handle) const noexcept {
-        const std::coroutine_handle<> continuation =
+        const std::coroutine_handle<> continuation_handle =
             handle.promise().continuation;
-        return continuation != nullptr ? continuation : std::noop_coroutine();
+        return continuation_handle != nullptr ? continuation_handle
+                            : std::noop_coroutine();
       }
       void await_resume() const noexcept {}
     };

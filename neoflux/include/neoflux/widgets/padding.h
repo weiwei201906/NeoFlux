@@ -27,7 +27,8 @@ class Padding : public Container {
   explicit Padding(float all, std::shared_ptr<Widget> child = nullptr);
 
   // Applies explicit edge insets around the child.
-  Padding(const EdgeInsets& insets, std::shared_ptr<Widget> child = nullptr);
+  explicit Padding(const EdgeInsets& insets,
+                   std::shared_ptr<Widget> child = nullptr);
   ~Padding() override;
 
   [[nodiscard]] std::string_view GetWidgetName() const noexcept override;

@@ -58,7 +58,7 @@ constexpr unsigned kChannelShiftBits = 8;
 //
 [[nodiscard]] constexpr auto PremultiplyChannel(
     std::uint8_t channel, std::uint8_t alpha) noexcept -> std::uint8_t {
-  const std::uint16_t product = static_cast<std::uint16_t>(channel * alpha);
+  const auto product = static_cast<std::uint16_t>(channel * alpha);
   const std::uint32_t rounded =
       static_cast<std::uint32_t>(product) + 127U;
   const std::uint32_t shifted = rounded >> kChannelShiftBits;

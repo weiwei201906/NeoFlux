@@ -45,9 +45,7 @@
 #define NEOFLUX_HAVE_CPUIDEX 1
 #endif
 
-namespace neoflux {
-namespace native {
-namespace cpuid_bits {
+namespace neoflux::native::cpuid_bits {
 
 /// True when some route to a real CPUID read exists in this build.
 [[nodiscard]] constexpr bool Available() noexcept {
@@ -81,6 +79,4 @@ namespace cpuid_bits {
   return out;
 }
 
-}  // namespace cpuid_bits
-}  // namespace native
-}  // namespace neoflux
+}  // namespace neoflux::native::cpuid_bits

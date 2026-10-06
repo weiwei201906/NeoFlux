@@ -141,7 +141,9 @@ set(TGFX_BUILD_PDF OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_LAYERS OFF CACHE BOOL "" FORCE)
 set(TGFX_BUILD_HELLO2D OFF CACHE BOOL "" FORCE)
 
-# Placeholder to skip tgfx's unconditional shaderc glslang network sync.
+# TGFX's CMake unconditionally checks for shaderc/third_party/glslang and runs
+# git-sync-deps when absent. OpenGL does not need shaderc, and Metal gets its
+# compiler headers/libraries from the platform package manager below.
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tgfx/third_party/shaderc/third_party/glslang")
 endif()
@@ -169,6 +171,25 @@ endfunction()
 ")
 endif()
 add_subdirectory(tgfx)
+
+if(APPLE AND TGFX_USE_METAL)
+  find_path(SHADERC_INCLUDE_DIR shaderc/shaderc.hpp REQUIRED)
+  find_library(SHADERC_LIBRARY NAMES shaderc_shared REQUIRED)
+  find_path(SPIRV_CROSS_INCLUDE_DIR spirv_cross/spirv_msl.hpp REQUIRED)
+  find_library(SPIRV_CROSS_CORE_LIBRARY NAMES spirv-cross-core REQUIRED)
+  find_library(SPIRV_CROSS_GLSL_LIBRARY NAMES spirv-cross-glsl REQUIRED)
+  find_library(SPIRV_CROSS_MSL_LIBRARY NAMES spirv-cross-msl REQUIRED)
+  target_include_directories(tgfx SYSTEM PRIVATE
+    ${SHADERC_INCLUDE_DIR}
+    ${SPIRV_CROSS_INCLUDE_DIR}
+  )
+  target_link_libraries(tgfx PRIVATE
+    ${SHADERC_LIBRARY}
+    ${SPIRV_CROSS_MSL_LIBRARY}
+    ${SPIRV_CROSS_GLSL_LIBRARY}
+    ${SPIRV_CROSS_CORE_LIBRARY}
+  )
+endif()
 
 # ---------------------------------------------------------------------------
 # Vendored tgfx third-party deps that tgfx does NOT git-track.

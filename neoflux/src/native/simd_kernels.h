@@ -35,8 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 
 /// Which kernel this build dispatches to. kScalar means no assembly was
 /// compiled in and the portable C kernel does all the work.
@@ -78,5 +77,4 @@ void PremultiplyRgba8(std::uint8_t* dst, const std::uint8_t* src,
 /// the largest tail PremultiplyRgba8() ever finishes with the scalar kernel.
 [[nodiscard]] std::size_t SimdGroupPixels() noexcept;
 
-}  // namespace native
-}  // namespace neoflux
+}  // namespace neoflux::native

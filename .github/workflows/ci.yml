@@ -67,7 +67,7 @@ jobs:
       - name: Install macOS deps
         if: runner.os == 'macOS'
         run: |
-          brew install ninja mpv
+          brew install ninja mpv shaderc spirv-cross
 
       - name: Configure
         shell: bash
@@ -131,7 +131,7 @@ jobs:
             -header-filter='neoflux/.*' \
             -quiet \
             -extra-arg-before=-Wno-unknown-warning-option \
-            '.*/neoflux/.*' 2>&1 | tee clang-tidy.log
+            '(^|.*/)neoflux/.*\.(cpp|cc|cxx)$' 2>&1 | tee clang-tidy.log
           if grep -qE '(warning:|error:)' clang-tidy.log; then
             echo "::error::clang-tidy reported warnings or errors"
             grep -E '(warning:|error:)' clang-tidy.log | head -30

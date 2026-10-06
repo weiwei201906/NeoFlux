@@ -26,8 +26,7 @@
 
 #include <cstddef>
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 
 /// Bitmask-style snapshot of CPU SIMD capabilities relevant to hot paths.
 ///
@@ -102,5 +101,4 @@ void PrefetchForWrite(const void* p) noexcept;
 /// -DNEOFLUX_CACHE_LINE_SIZE=<n> override. Logs at most once per process.
 void VerifyCacheLineConfig() noexcept;
 
-}  // namespace native
-}  // namespace neoflux
+}  // namespace neoflux::native

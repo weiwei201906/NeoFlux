@@ -400,11 +400,8 @@ void MpvMediaPlayer::Impl::PollEvents() {
         }
         break;
       }
-      case MPV_EVENT_SHUTDOWN:
-        // mpv core asked to shut itself down; nothing to do here (the owning
-        // Impl destructor handles mpv_terminate_destroy).
-        break;
       default:
+        // Shutdown and unknown events need no action; Impl handles teardown.
         break;
     }
   }
@@ -560,7 +557,7 @@ void MpvMediaPlayer::SetFrameCallback(FrameCallback callback) {
 
 void MpvMediaPlayer::SetWakeCallback(const std::function<void()>& callback) {
   std::scoped_lock lock(impl_->mutex);
-  impl_->wake_callback = std::move(callback);
+  impl_->wake_callback = callback;
 }
 
 void MpvMediaPlayer::TeardownRender() {

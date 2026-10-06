@@ -206,6 +206,9 @@ target_include_directories(neoflux
     ${CMAKE_SOURCE_DIR}/thirdparty
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+target_include_directories(neoflux SYSTEM PRIVATE
+  ${CMAKE_SOURCE_DIR}/thirdparty/glog/src
+)
 
 # ---------------------------------------------------------------------------
 # GPU backend link dependency

@@ -54,8 +54,8 @@ class Text : public Widget {
  private:
   std::string text_{};
   Color text_color_;
-  float font_size_;
-  HAlign alignment_;
+  float font_size_{14.0F};
+  HAlign alignment_{HAlign::kLeft};
   std::string font_name_{};
 };
 

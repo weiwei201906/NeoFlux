@@ -93,10 +93,10 @@ class Button : public Widget {
   Color text_color_;
   Color pressed_color_;
   Color hover_color_{.r = 0x42, .g = 0xA5, .b = 0xF5, .a = 0xFF};
-  float font_size_;
+  float font_size_{14.0F};
   std::string font_name_{};
-  float horizontal_padding_;
-  float vertical_padding_;
+  float horizontal_padding_{16.0F};
+  float vertical_padding_{8.0F};
   bool is_pressed_ = false;
   bool hovered_ = false;
   bool long_press_fired_ = false;

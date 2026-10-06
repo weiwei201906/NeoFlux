@@ -40,8 +40,7 @@
 #include "native/cpuid_bits.h"
 #include "native/native_tuning.h"
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 
 /// Walks CPUID leaf 4 and returns the coherence line size plus the L1d/L2/L3
 /// capacities. Returns the documented fallback (line_size = 64, capacities 0 =
@@ -119,5 +118,4 @@ namespace native {
   return info;
 }
 
-}  // namespace native
-}  // namespace neoflux
+}  // namespace neoflux::native
