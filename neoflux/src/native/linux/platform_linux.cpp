@@ -29,9 +29,12 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
+#include <charconv>
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -69,32 +72,49 @@ constexpr std::uint32_t kAvx2Bit = 1U << 5;      ///< leaf 7 EBX[5]
 // XCR0 bits [2:1] must both be set for the OS to save/restore YMM state.
 constexpr std::uint64_t kXcr0XmmYmmMask = 0x6ULL;
 
-/// Attempts a nice bump to the (clamped) configured value; returns true on
-/// success. Negative nice values require CAP_SYS_NICE -- commonly absent in
-/// desktop sessions, so failure here is normal and quiet.
-bool TryNiceBump(int nice_value) {
-  return setpriority(PRIO_PROCESS, 0, nice_value) == 0;
+/// Attempts a nice bump to the (clamped) configured value. Returns 0 on
+/// success, or the errno set by setpriority(). Negative nice values require
+/// CAP_SYS_NICE -- commonly absent in desktop sessions, so failure here is
+/// normal and the caller stays quiet about it.
+int TryNiceBump(int nice_value) {
+  if (setpriority(PRIO_PROCESS, 0, nice_value) == 0) {
+    return 0;
+  }
+  return errno;
 }
 
 /// Returns max frequency (kHz) per logical CPU from cpufreq, or an empty
 /// vector when the sysfs tree is unavailable (containers, some VMs, x86
 /// servers with acpi-cpufreq disabled). Present on virtually all ARM SoCs
 /// (big.LITTLE) and modern Intel/AMD hybrid parts.
+///
+/// Parsing goes through std::from_chars rather than std::fscanf: the sysfs
+/// value has no locale, and from_chars also rejects trailing junk instead of
+/// silently accepting it. The read itself is a single small file, so the cost
+/// that matters is the open(), not the conversion.
 std::vector<std::int64_t> ReadCoreMaxFrequencies() {
   static constexpr const char* kMaxFreqSuffix = "/cpufreq/cpuinfo_max_freq";
   std::vector<std::int64_t> freqs;
   for (int cpu = 0;; ++cpu) {
-    // One-shot startup probe: readability beats the snprintf micro-cost.
+    // One-shot startup probe: readability beats hand-rolled C-string building.
     const std::string path =
         "/sys/devices/system/cpu/cpu" + std::to_string(cpu) + kMaxFreqSuffix;
     FILE* const fp = std::fopen(path.c_str(), "r");
     if (fp == nullptr) {
       break;  // cpuN does not exist (or no cpufreq): stop at first gap.
     }
-    std::int64_t khz = 0;
-    const bool ok = std::fscanf(fp, "%ld", &khz) == 1;
+    // sysfs reports a short decimal plus a newline; 32 bytes is generous.
+    char text[32] = {};
+    const std::size_t read = std::fread(text, 1, sizeof(text) - 1, fp);
     std::fclose(fp);
-    if (!ok) {
+    if (read == 0) {
+      break;
+    }
+    std::int64_t khz = 0;
+    const char* const begin = text;
+    const char* const end = text + read;
+    const auto parsed = std::from_chars(begin, end, khz);
+    if (parsed.ec != std::errc{} || parsed.ptr == begin) {
       break;
     }
     freqs.push_back(khz);
@@ -121,7 +141,7 @@ void TuneRenderThread() noexcept {
     return;
   }
   const int nice_value = std::clamp(FLAGS_native_thread_nice, -20, 19);
-  if (TryNiceBump(nice_value)) {
+  if (TryNiceBump(nice_value) == 0) {
     LOG(INFO) << "native: render thread -> nice " << nice_value
               << " (RT scheduling denied)";
     return;
@@ -139,7 +159,7 @@ void TuneUiThread() noexcept {
   // to do here (unlike Windows). A gentle nice bump helps input latency when
   // compositing is busy; failures are normal for unprivileged sessions.
   const int nice_value = std::clamp(FLAGS_native_thread_nice, -20, 19);
-  if (TryNiceBump(nice_value)) {
+  if (TryNiceBump(nice_value) == 0) {
     LOG(INFO) << "native: ui thread -> nice " << nice_value;
   }
 }
