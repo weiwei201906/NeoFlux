@@ -49,6 +49,12 @@ constexpr std::size_t kChannelsPerPixel = 4;
 //   t = x + 127;  result = (t + (t >> 8)) >> 8
 // Identical to what both assembly kernels compute, so all three paths are
 // bit-identical by construction rather than by coincidence.
+//
+// Every intermediate is std::uint32_t on purpose. A signed intermediate would
+// make the shifts implementation-defined on the sign bit, whereas both
+// assembly kernels shift a 16-bit lane logically (psrlw / USHR on the widened
+// halfword). Spelling the type out is what makes "the scalar reference and the
+// kernel agree" a property of the code rather than of the compiler's choice.
 constexpr std::uint8_t PremultiplyChannel(std::uint8_t channel,
                                           std::uint8_t alpha) noexcept {
   const std::uint32_t product =
@@ -105,7 +111,11 @@ void PremultiplyRgba8(std::uint8_t* dst, const std::uint8_t* src,
   done = neoflux_premultiply_rgba8(dst, src, pixels);
 #endif
   if (done < pixels) {
-    PremultiplyScalar(dst + done * 4, src + done * 4, pixels - done);
+    // The tail starts at `done` whole pixels, i.e. done * channels bytes. The
+    // kernel contract guarantees done <= pixels, so the subtraction cannot
+    // underflow.
+    PremultiplyScalar(dst + done * kChannelsPerPixel,
+                      src + done * kChannelsPerPixel, pixels - done);
   }
 }
 

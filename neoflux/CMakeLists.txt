@@ -73,11 +73,20 @@ endif()
 # tgfx (the GPU backend is tgfx's own TGFX_USE_* compile-time choice; see thirdparty/CMakeLists.txt).
 # ---------------------------------------------------------------------------
 # Hand-written assembly lives in src/native/asm/ (project policy: no inline
-# asm in C++ sources). Only non-MSVC x86_64 toolchains assemble it today:
-# MSVC covers xgetbv via the _xgetbv intrinsic instead.
+# asm in C++ sources). Only non-MSVC x86 toolchains assemble it today: MSVC
+# covers xgetbv via the _xgetbv intrinsic instead.
+#
+# Sourcing the .S and defining the matching macro are two halves of one
+# decision. The macro is what the C++ dispatch reads, so a build where the .S
+# was added but the macro was forgotten would silently keep the scalar path,
+# and a build where the macro was defined but the .S was dropped would fail to
+# link. They are set from the same predicate on purpose.
+# ---------------------------------------------------------------------------
 enable_language(ASM)
 if(NOT MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i[3-6]86)")
   set(NEOFLUX_NATIVE_ASM_SRC src/native/asm/xgetbv.S)
+  target_compile_definitions(neoflux PRIVATE NEOFLUX_NATIVE_ASM_XGETBV=1)
+  message(STATUS "Native assembly: xgetbv.S linked (non-MSVC x86)")
 endif()
 
 if(WIN32)

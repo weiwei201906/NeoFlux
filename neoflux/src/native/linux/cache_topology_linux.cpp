@@ -28,11 +28,13 @@
 
 #include "native/native_tuning.h"
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
+#include <string>
+#include <system_error>
 
 #include "neoflux/core/config.h"
 
@@ -68,54 +70,67 @@ bool ReadSysfsFile(const char* path, char* out, std::size_t out_size) {
 
 /// Parses a sysfs cache-size string such as "48K", "1280K", "16M", "2G" into
 /// bytes. A bare number is treated as bytes. Returns 0 on anything unparsable.
+///
+/// The conversion uses std::from_chars, which is locale-independent: the sysfs
+/// value is machine text, and std::strtoull would silently honour a program
+/// that called setlocale(). The suffix table is a plain lookup rather than a
+/// switch so that adding a unit is a one-line data change.
 std::size_t ParseCacheSize(const char* text) {
   if (text == nullptr || *text == '\0') {
     return 0;
   }
-  char* end = nullptr;
-  const std::uint64_t value = std::strtoull(text, &end, 10);
-  if (end == text) {
-    return 0;  // No leading digits at all.
+  std::uint64_t value = 0;
+  const char* const begin = text;
+  const char* const end = text + std::strlen(text);
+  const auto parsed = std::from_chars(begin, end, value);
+  if (parsed.ec != std::errc{} || parsed.ptr == begin) {
+    return 0;  // No leading digits, or out of range.
   }
-  std::size_t multiplier = 1;
-  switch (*end) {
-    case 'K':
-    case 'k':
-      multiplier = 1024ULL;
+  struct Unit {
+    char letter;
+    std::uint64_t multiplier;
+  };
+  // K/M/G are the only units the kernel ever writes; the lowercase forms are
+  // accepted defensively because the field is plain text.
+  static constexpr Unit kUnits[] = {
+      {'K', 1024ULL},
+      {'M', 1024ULL * 1024ULL},
+      {'G', 1024ULL * 1024ULL * 1024ULL},
+  };
+  std::uint64_t multiplier = 1;  // Bare number: already bytes.
+  const char suffix = *parsed.ptr;
+  for (const Unit& unit : kUnits) {
+    if (suffix == unit.letter || suffix == (unit.letter - 'A' + 'a')) {
+      multiplier = unit.multiplier;
       break;
-    case 'M':
-    case 'm':
-      multiplier = 1024ULL * 1024ULL;
-      break;
-    case 'G':
-    case 'g':
-      multiplier = 1024ULL * 1024ULL * 1024ULL;
-      break;
-    default:
-      multiplier = 1;  // Already bytes (or trailing junk: best-effort).
-      break;
+    }
   }
-  return static_cast<std::size_t>(value) * multiplier;
+  return static_cast<std::size_t>(value * multiplier);
 }
 
 /// Reads one integer field (level / coherency_line_size) from an index dir.
 /// Returns 0 on failure.
-std::size_t ReadIndexInt(const char* index_dir, const char* field) {
-  char path[320];
-  std::snprintf(path, sizeof(path), "%s/%s", index_dir, field);
-  char buf[64];
-  if (!ReadSysfsFile(path, buf, sizeof(buf))) {
+std::size_t ReadIndexInt(const std::string& index_dir, const char* field) {
+  const std::string path = index_dir + "/" + field;
+  char buf[64] = {};
+  if (!ReadSysfsFile(path.c_str(), buf, sizeof(buf))) {
     return 0;
   }
-  return static_cast<std::size_t>(std::strtoull(buf, nullptr, 10));
+  std::uint64_t value = 0;
+  const char* const begin = buf;
+  const char* const end = buf + std::strlen(buf);
+  const auto parsed = std::from_chars(begin, end, value);
+  if (parsed.ec != std::errc{} || parsed.ptr == begin) {
+    return 0;
+  }
+  return static_cast<std::size_t>(value);
 }
 
 /// Reads a cache-size field at a given index dir (K/M/G aware). 0 on failure.
-std::size_t ReadIndexSize(const char* index_dir) {
-  char path[320];
-  std::snprintf(path, sizeof(path), "%s/size", index_dir);
-  char buf[64];
-  if (!ReadSysfsFile(path, buf, sizeof(buf))) {
+std::size_t ReadIndexSize(const std::string& index_dir) {
+  const std::string path = index_dir + "/size";
+  char buf[64] = {};
+  if (!ReadSysfsFile(path.c_str(), buf, sizeof(buf))) {
     return 0;
   }
   return ParseCacheSize(buf);
@@ -135,14 +150,13 @@ CacheInfo DetectCacheTopologySysfsImpl() noexcept {
 
   // index0..indexN with no holes; stop at the first missing index dir.
   for (int index = 0; index < 16; ++index) {
-    char dir[256];
-    std::snprintf(dir, sizeof(dir), "%s/index%d", kCacheRoot, index);
+    const std::string dir = std::string(kCacheRoot) + "/index" +
+                            std::to_string(index);
 
     // level + type are mandatory; absence means we walked past the last index.
-    char type_path[288];
-    std::snprintf(type_path, sizeof(type_path), "%s/type", dir);
-    char type[32];
-    if (!ReadSysfsFile(type_path, type, sizeof(type))) {
+    const std::string type_path = dir + "/type";
+    char type[32] = {};
+    if (!ReadSysfsFile(type_path.c_str(), type, sizeof(type))) {
       break;
     }
     const std::size_t level = ReadIndexInt(dir, "level");
@@ -193,8 +207,11 @@ void PrefetchForRead(const void* p) noexcept {
 }
 
 void PrefetchForWrite(const void* p) noexcept {
-  // rw = 1 requests an exclusive/prepared-for-write line, sparing the
-  // read-for-ownership bus traffic before the store.
+  // rw = 1 asks for the line in the exclusive state, sparing the
+  // read-for-ownership bus traffic before the store. On x86-64 GCC and Clang
+  // lower this to PREFETCHW when the target enables PRFCHW, and to a plain
+  // PREFETCHT0 otherwise; on AArch64 it is PRFM PSTL1KEEP. Either form is a
+  // hint that cannot fault on an unmapped address.
   __builtin_prefetch(p, 1, 3);
 }
 

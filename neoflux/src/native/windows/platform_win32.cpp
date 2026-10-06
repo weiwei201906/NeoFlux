@@ -10,9 +10,13 @@
 
 #include "native/native_tuning.h"
 
-// neoflux_read_xcr0() (asm/xgetbv.S) is used by the non-MSVC x86_64 branches
+// neoflux_read_xcr0() (asm/xgetbv.S) is used by the non-MSVC x86 branches
 // below. MSVC uses the _xgetbv intrinsic instead and does not link the .S.
-#if !defined(_MSC_VER) && (defined(__x86_64__) || defined(_M_X64))
+//
+// The guard is the CMake macro that is defined exactly when CMake added
+// xgetbv.S to the target, so the declaration and the definition cannot
+// disagree: no macro means no .S means no reference is formed below.
+#if defined(NEOFLUX_NATIVE_ASM_XGETBV)
 #include "native/asm/asm_symbols.h"
 #endif
 
@@ -27,12 +31,18 @@
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0A00
 #endif
+// timeBeginPeriod and the MMRESULT / TIMERR_NOERROR types live in mmsystem.h.
+// MSVC's windows.h happens to pull it in; MinGW's does not (and MinGW's
+// mmsystem.h needs the base types from windows.h first), so include it
+// explicitly and after windows.h. winmm is linked by neoflux/CMakeLists.txt.
 #include <windows.h>
+#include <mmsystem.h>
 
 #include <avrt.h>
 #include <intrin.h>
 
 #include <bit>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -62,9 +72,19 @@ std::uint64_t ReadXcr0() {
   // policy (which only forbids __asm__/__asm in C++ sources).
   return _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
 #else
-  // GCC/Clang/MinGW (x86_64): the xgetbv instruction is implemented in
+  // GCC/Clang/MinGW (x86): the xgetbv instruction is implemented in
   // asm/xgetbv.S; inline asm is forbidden by project policy.
+  //
+  // NEOFLUX_NATIVE_ASM_XGETBV is defined by CMake exactly when that .S was
+  // added to the target, so this branch can never reference a symbol that was
+  // not compiled. Without it (a 32-bit x86 build with no assembly) the probe
+  // reports AVX2 unsupported: AVX2 cannot be reported without reading XCR0,
+  // and claiming OS support we did not verify is worse than saying no.
+#if defined(NEOFLUX_NATIVE_ASM_XGETBV)
   return neoflux_read_xcr0();
+#else
+  return 0;
+#endif
 #endif
 }
 
@@ -171,10 +191,20 @@ void PinThreadToBigCores() noexcept {
   if (size == 0) {
     return;  // API unavailable / failed: stay unpinned.
   }
-  std::vector<char> buffer(size);
-  auto* const info =
-      reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(buffer.data());
-  if (!GetLogicalProcessorInformationEx(RelationProcessorCore, info, &size)) {
+  // The API reports a byte count, but SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX
+  // contains pointer-sized members, so the storage must carry
+  // alignof(std::max_align_t) at least. std::vector<std::byte> guarantees
+  // alignment 1 and reinterpreting its data() would be undefined behaviour on
+  // targets where the base alignment really is 1 (32-bit ARM, wasm). Backing
+  // the buffer with max_align_t costs at most one element of slack and makes
+  // the cast well-defined on every target.
+  const std::size_t slots =
+      (static_cast<std::size_t>(size) + sizeof(std::max_align_t) - 1) /
+      sizeof(std::max_align_t);
+  std::vector<std::max_align_t> buffer(slots);
+  auto* const base = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(
+      buffer.data());
+  if (!GetLogicalProcessorInformationEx(RelationProcessorCore, base, &size)) {
     return;
   }
 
@@ -185,9 +215,8 @@ void PinThreadToBigCores() noexcept {
   DWORD offset = 0;
   bool any_big = false;
   while (offset < size) {
-    auto* const entry =
-        reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(
-            buffer.data() + offset);
+    auto* const entry = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(
+        reinterpret_cast<std::byte*>(buffer.data()) + offset);
     if (entry->Relationship == RelationProcessorCore &&
         entry->Processor.EfficiencyClass > 0) {
       // GROUP_AFFINITY may span groups; this app does not support >64-core

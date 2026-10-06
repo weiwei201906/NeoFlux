@@ -30,6 +30,13 @@ namespace neoflux {
 namespace native {
 
 /// Bitmask-style snapshot of CPU SIMD capabilities relevant to hot paths.
+///
+/// `avx2` is never reported from the hardware bit alone: the OS must also be
+/// saving and restoring YMM state, which on x86 means reading XCR0. That read
+/// is the xgetbv instruction from asm/xgetbv.S on GCC and Clang, and the
+/// _xgetbv intrinsic on MSVC. A build that links no assembly therefore reports
+/// avx2 = false rather than guessing -- see ReadXcr0() in
+/// native/windows/platform_win32.cpp.
 struct CpuFeatures {
   bool sse42{false};      ///< x86/x64: SSE4.2
   bool avx2{false};       ///< x86/x64: AVX2 (hardware AND OS-enabled via XCR0)
