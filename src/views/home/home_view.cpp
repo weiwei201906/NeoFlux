@@ -32,7 +32,7 @@ std::shared_ptr<neoflux::Widget> BuildHomeView(
   media_btn->SetBackgroundColor({.r = 80, .g = 140, .b = 255, .a = 255})
       .SetTextColor({.r = 255, .g = 255, .b = 255, .a = 255})
       .SetFontSize(16.0F)
-      .SetOnPressed([app = context.GetApplication()]() { app->PushRoute("/media"); });
+      .SetOnPressed([app = context.GetApplication()] { app->PushRoute("/media"); });
 
   root->AddChild(title);
   root->AddChild(subtitle);

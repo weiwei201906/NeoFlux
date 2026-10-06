@@ -271,7 +271,7 @@ The command must report no diagnostics at error severity. The CI job
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DNEOFLUX_BUILD_TESTS=ON
-cmake --build build -j 2
+cmake --build build -j
 cd build && ctest --output-on-failure
 ```
 

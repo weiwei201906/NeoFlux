@@ -38,7 +38,7 @@ namespace neoflux {
 // Name of the tgfx backend compiled into this binary. thirdparty/
 // CMakeLists.txt resolves tgfx's options to a single TGFX_USE_*=1 definition
 // that mirrors what tgfx actually compiled.
-#if defined(TGFX_USE_OPENGL)
+#ifdef TGFX_USE_OPENGL
 static constexpr const char kBackendName[] = "OpenGL";
 #elif defined(TGFX_USE_VULKAN)
 static constexpr const char kBackendName[] = "Vulkan";
@@ -133,7 +133,7 @@ bool RenderLayer::Start(int width, int height, std::string_view title,
 #endif
 
   running_.store(true);
-  render_thread_ = std::make_unique<std::thread>([this]() { RenderLoop(); });
+  render_thread_ = std::make_unique<std::thread>([this] { RenderLoop(); });
 
   // Block until the render thread is up and will service submitted frames
   // promptly. The tgfx Window/device is created lazily in BeginFrame() on the
@@ -252,6 +252,8 @@ void RenderLayer::RunOnRenderThread(std::function<void()> task) {
   std::future<void> fut = done->get_future();
   {
     std::scoped_lock lock(frame_mutex_);
+    // `mutable` requires the parameter list to be present, even when empty:
+    // `[capture] mutable {` is not valid C++.
     render_tasks_.emplace_back([task = std::move(task), done]() mutable {
       task();
       done->set_value();

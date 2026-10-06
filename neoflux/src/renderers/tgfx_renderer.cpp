@@ -57,7 +57,7 @@
 #include "tgfx/core/Typeface.h"
 #include "tgfx/gpu/Context.h"
 
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -65,7 +65,7 @@
 // Expose the GLFW native-accessors so the tgfx Window can be built from the
 // platform's native window handle (XID on X11, HWND on Windows, NSWindow* on
 // Apple). The matching window-system headers come via glfw3native.h.
-#if defined(_WIN32)
+#ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
 #elif defined(__linux__)
 #define GLFW_EXPOSE_NATIVE_X11
@@ -76,8 +76,8 @@
 
 #include "tgfx/gpu/Window.h"
 
-#if defined(TGFX_USE_OPENGL)
-#if defined(_WIN32)
+#ifdef TGFX_USE_OPENGL
+#ifdef _WIN32
 #include "tgfx/gpu/opengl/wgl/WGLWindow.h"
 #elif defined(__linux__)
 #include "tgfx/gpu/opengl/egl/EGLWindow.h"
@@ -98,7 +98,7 @@ the tgfx OpenGL backend needs an ObjC++ (CGL) app shell we do not provide."
 
 #else  // mobile
 
-#if defined(__ANDROID__)
+#ifdef __ANDROID__
 #include <android/native_window.h>
 #include "tgfx/gpu/opengl/egl/EGLWindow.h"
 #endif
@@ -138,11 +138,11 @@ struct TgfxRenderer::Impl {
     if (ready) {
       return true;
     }
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
-#if defined(TGFX_USE_OPENGL)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
+#ifdef TGFX_USE_OPENGL
     // Desktop OpenGL: tgfx creates and owns the EGL/WGL context and surface
     // for the native window; NeoFlux holds no GL context of its own.
-#if defined(_WIN32)
+#ifdef _WIN32
     auto* const hwnd = glfwGetWin32Window(static_cast<GLFWwindow*>(native_window));
     if (hwnd == nullptr) {
       LOG(ERROR) << "glfwGetWin32Window() returned nullptr";
@@ -177,7 +177,7 @@ struct TgfxRenderer::Impl {
 #elif defined(TGFX_USE_VULKAN)
     // VulkanWindow only exposes a Win32 (HWND) target on Windows in the pinned
     // tgfx revision; see the header for the Android/OHOS overloads.
-#if defined(_WIN32)
+#ifdef _WIN32
     auto vk_device = tgfx::VulkanDevice::Make();
     if (vk_device == nullptr) {
       LOG(ERROR) << "tgfx::VulkanDevice::Make() failed: no usable Vulkan device";
@@ -228,7 +228,7 @@ struct TgfxRenderer::Impl {
     return false;
 #endif  // TGFX_USE_OPENGL / VULKAN / D3D12 / METAL
 #else   // mobile
-#if defined(__ANDROID__)
+#ifdef __ANDROID__
     auto* const anw = static_cast<ANativeWindow*>(native_window);
     if (anw == nullptr) {
       LOG(ERROR) << "EnsureDevice: null ANativeWindow from the app shell";
@@ -318,7 +318,7 @@ void TgfxRenderer::BeginFrame(const Color& clear_color) {
   int fb_h = 0;
   int win_w = impl_->width;
   int win_h = impl_->height;
-#if defined(NEOFLUX_PLATFORM_DESKTOP)
+#ifdef NEOFLUX_PLATFORM_DESKTOP
   auto* const window = static_cast<GLFWwindow*>(impl_->native_window);
   glfwGetFramebufferSize(window, &fb_w, &fb_h);
   int queried_w = 0;

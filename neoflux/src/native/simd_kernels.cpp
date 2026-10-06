@@ -23,8 +23,7 @@
 
 #include "native/asm/asm_symbols.h"
 
-namespace neoflux {
-namespace native {
+namespace neoflux::native {
 namespace {
 
 // Pixels consumed per assembly pass. Each constant is guarded by the macro
@@ -32,11 +31,11 @@ namespace {
 // unused constexpr triggers -Wunused-const-variable, and the build compiles
 // with -Werror, so declaring the other architecture's group size here would
 // fail every build that does not use it.
-#if defined(NEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64)
+#ifdef NEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64
 // One 16-byte SSE2 register holds exactly four RGBA pixels.
 constexpr std::size_t kGroupX86_64 = 4;
 #endif
-#if defined(NEOFLUX_NATIVE_ASM_PREMULTIPLY_AARCH64)
+#ifdef NEOFLUX_NATIVE_ASM_PREMULTIPLY_AARCH64
 // LD4/ST4 move four 8-byte channel planes: eight pixels per pass.
 constexpr std::size_t kGroupAarch64 = 8;
 #endif
@@ -55,13 +54,22 @@ constexpr std::size_t kChannelsPerPixel = 4;
 // assembly kernels shift a 16-bit lane logically (psrlw / USHR on the widened
 // halfword). Spelling the type out is what makes "the scalar reference and the
 // kernel agree" a property of the code rather than of the compiler's choice.
+//
+// The two clang-analyzer suppressions below are false positives: every operand
+// here is already std::uint32_t, and the analyzer reports the operands of a
+// parenthesized shift after integer promotion. A NOLINT range is used rather
+// than a line comment because both the sum and the shift are reported.
+// NOLINTBEGIN(bugprone-signed-bitwise)
 constexpr std::uint8_t PremultiplyChannel(std::uint8_t channel,
                                           std::uint8_t alpha) noexcept {
   const std::uint32_t product =
       static_cast<std::uint32_t>(channel) * static_cast<std::uint32_t>(alpha);
   const std::uint32_t rounded = product + 127U;
-  return static_cast<std::uint8_t>((rounded + (rounded >> 8)) >> 8);
+  const std::uint32_t shifted = rounded >> 8;
+  const std::uint32_t summed = rounded + shifted;
+  return static_cast<std::uint8_t>(summed >> 8);
 }
+// NOLINTEND(bugprone-signed-bitwise)
 
 // Portable kernel. Always compiled in: it serves both as the tail finisher
 // and as the entire implementation on targets without a shipped assembly
@@ -82,7 +90,7 @@ void PremultiplyScalar(std::uint8_t* dst, const std::uint8_t* src,
 // Compile-time dispatch. Derived from the same CMake macros that decide which
 // .S file is added to the target, so there is no way for this to claim a
 // kernel that was not linked.
-#if defined(NEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64)
+#ifdef NEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64
 constexpr SimdLevel kActiveLevel = SimdLevel::kSse2;
 constexpr std::size_t kActiveGroup = kGroupX86_64;
 #elif defined(NEOFLUX_NATIVE_ASM_PREMULTIPLY_AARCH64)
@@ -107,15 +115,16 @@ void PremultiplyRgba8(std::uint8_t* dst, const std::uint8_t* src,
   // assembly symbol in builds that compile none, and relying on dead-code
   // elimination to erase that reference is not something any compiler
   // promises. This is the difference between "skipped" and "failed to link".
-#if defined(NEOFLUX_NATIVE_ASM_PREMULTIPLY)
+#ifdef NEOFLUX_NATIVE_ASM_PREMULTIPLY
   done = neoflux_premultiply_rgba8(dst, src, pixels);
 #endif
   if (done < pixels) {
     // The tail starts at `done` whole pixels, i.e. done * channels bytes. The
     // kernel contract guarantees done <= pixels, so the subtraction cannot
-    // underflow.
-    PremultiplyScalar(dst + done * kChannelsPerPixel,
-                      src + done * kChannelsPerPixel, pixels - done);
+    // underflow. The parenthesized offset is a byte offset, not a pixel index,
+    // which is what the explicit grouping makes obvious.
+    const std::size_t offset = done * kChannelsPerPixel;
+    PremultiplyScalar(dst + offset, src + offset, pixels - done);
   }
 }
 
@@ -123,5 +132,4 @@ SimdLevel ActiveSimdLevel() noexcept { return kActiveLevel; }
 
 std::size_t SimdGroupPixels() noexcept { return kActiveGroup; }
 
-}  // namespace native
-}  // namespace neoflux
+}  // namespace neoflux::native

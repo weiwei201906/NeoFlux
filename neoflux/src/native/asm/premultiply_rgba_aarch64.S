@@ -54,13 +54,7 @@
 //   underscore. SYMBOL_NAME below hides that difference.
 // =============================================================================
 
-#if defined(__APPLE__) && defined(__MACH__)
-// Mach-O prepends an underscore to every C symbol.
-#define SYMBOL_NAME(x) _##x
-#else
-// ELF (Linux/BSD/Android) does not mangle the leading name.
-#define SYMBOL_NAME(x) x
-#endif
+#include "abi_macros.inc"
 
     .text
 
@@ -70,8 +64,8 @@
 // -----------------------------------------------------------------------------
     .globl SYMBOL_NAME(neoflux_premultiply_rgba8)
     .p2align 2                                     // 4-byte align (instruction alignment)
-#if defined(__ELF__)
-    .type  SYMBOL_NAME(neoflux_premultiply_rgba8), @function
+#ifdef NF_ELF
+    NF_ELF_FUNCBEGIN(neoflux_premultiply_rgba8)
 #endif
 SYMBOL_NAME(neoflux_premultiply_rgba8):
     movi     v16.8h, #127                          // v16 = rounding term, 8 lanes of 127
@@ -126,9 +120,6 @@ SYMBOL_NAME(neoflux_premultiply_rgba8):
     mov      x0, x3                                // return floor(pixels / 8) * 8
     ret
 
-// Symbol metadata and the non-executable-stack note are ELF-only: Mach-O and
-// COFF assemblers reject .type/@function, .size and @progbits outright.
-#if defined(__ELF__)
-    .size   SYMBOL_NAME(neoflux_premultiply_rgba8), .-SYMBOL_NAME(neoflux_premultiply_rgba8)
-    .section .note.GNU-stack, "", @progbits
+#ifdef NF_ELF
+    NF_ELF_FUNCEND(neoflux_premultiply_rgba8)
 #endif

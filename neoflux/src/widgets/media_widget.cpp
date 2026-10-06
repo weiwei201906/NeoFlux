@@ -120,7 +120,7 @@ MediaWidget::~MediaWidget() {
       // synchronous call (RunOnRenderThread blocks until the lambda returns).
       MediaPlayer* const player = impl_->player.get();
       impl_->render_layer->RunOnRenderThread(
-          [player]() { player->TeardownRender(); });
+          [player] { player->TeardownRender(); });
     }
   }
 }
@@ -146,14 +146,14 @@ std::shared_ptr<Widget> MediaWidget::Build(BuildContext& context) {
     if (impl_->player != nullptr && impl_->render_layer != nullptr) {
       // Render thread: publish decoded frames as CPU images.
       impl_->render_layer->SetRenderPump(
-          [this]() { impl_->PumpOnRenderThread(); });
+          [this] { impl_->PumpOnRenderThread(); });
       // mpv internal thread: a new frame is decoded -> wake the render thread
       // to publish it AND wake the App thread to repaint. Both are non-blocking
       // and touch no GPU state.
       MediaPlayer* const player = impl_->player.get();
       Application* const app = impl_->app;
       RenderLayer* const layer = impl_->render_layer;
-      player->SetWakeCallback([app, layer]() {
+      player->SetWakeCallback([app, layer] {
         if (layer != nullptr) {
           layer->Wake();
         }

@@ -11,14 +11,38 @@ documentation as `docs/zh/guide/native-layer.md`.
 | Content | File |
 |---|---|
 | Interface declarations | `native_tuning.h` (namespace `neoflux::native`) |
-| Windows tuning | `windows/platform_win32.cpp` (thread priority, `timeBeginPeriod(1)`, cpuid/xgetbv) |
-| Linux/Android tuning | `linux/platform_linux.cpp` (SCHED_FIFO with a nice fallback, cpuid/getauxval) |
-| macOS/iOS tuning | `apple/platform_apple.cpp` (QoS class, sysctl) |
+| CPUID dispatch (the only file allowed to include `<intrin.h>`) | `cpuid_bits.h` |
+| Shared x86 cache-topology walk | `cache_topology_cpuid.h` |
+| Windows tuning | `windows/platform_win32.cpp` (thread priority, `timeBeginPeriod(1)`, big-core pinning) |
+| Linux/Android tuning | `linux/platform_linux.cpp` (SCHED_FIFO with a nice fallback, cpufreq big-core pinning) |
+| macOS/iOS tuning | `apple/platform_apple.cpp` (QoS class) and `apple/cache_topology_apple.cpp` (sysctl) |
 | Fallback for other platforms | `platform_common.cpp` (everything is a no-op) |
 
 Current capabilities: render-thread and UI-thread scheduling shaping, frame
-pacing timer resolution, and CPU SIMD feature detection (SSE4.2 / AVX2 / ASIMD
-/ FP16, including the OS-support check).
+pacing timer resolution, CPU SIMD feature detection (SSE4.2 / AVX2 / ASIMD /
+FP16, including the OS-support check), cache-topology detection, and cache
+prefetch hints.
+
+## No compiler intrinsics on the hot paths
+
+CPU instructions are reached through `asm/` rather than through a per-compiler
+intrinsic, so the Windows, Linux and macOS code paths are the same source. The
+consequences worth knowing:
+
+- `cpuid_bits.h` is the only file that may include `<intrin.h>`, and only as a
+  fallback for MSVC/clang-cl, which cannot assemble GAS syntax. Everywhere else
+  the CPUID read is `neoflux_cpuid_subleaf` from `asm/cpuid_x86.S`.
+- Cache topology has one implementation for x86 (`cache_topology_cpuid.h`) used
+  by both Windows and Linux. Two copies of a bit-field decoder is two chances to
+  transcribe a mask wrong, so there is now one.
+- Prefetch hints are `neoflux_prefetch_read/write` from `asm/prefetch_x86.S`
+  (PREFETCHT0) or `asm/prefetch_aarch64.S` (PRFM), never `__builtin_prefetch`
+  or `_mm_prefetch`.
+- Where a primitive is unavailable (an MSVC build, or an architecture with no
+  such instruction) the C++ side degrades explicitly rather than guessing: an
+  uninstrumented AVX2 read reports `avx2 = false`, and an unlinked prefetch is a
+  no-op. Advertising an unverified capability is how a kernel corrupts a
+  neighbouring thread.
 
 ## What does not belong here (lessons learned)
 

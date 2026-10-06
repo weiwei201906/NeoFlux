@@ -138,7 +138,7 @@ bool Button::OnPointerDown(const Point& local_pos) {
     anim_.Bind(weak_from_this());
     if (anim_.CanAnimate()) {
       long_press_fired_ = false;
-      anim_.Delay(kLongPressDuration, [this]() {
+      anim_.Delay(kLongPressDuration, [this] {
         if (is_pressed_ && on_long_press_) {
           long_press_fired_ = true;
           on_long_press_();

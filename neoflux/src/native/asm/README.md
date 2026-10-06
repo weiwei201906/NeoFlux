@@ -8,14 +8,28 @@ documentation as `docs/zh/guide/native-asm-files.md`.
 
 ## What belongs here
 
-- **Single-purpose standalone functions**: one `.S` file implements **one**
-  function, named as described below.
+- **Single-purpose standalone functions**: one `.S` file implements one or a
+  few closely related functions, named as described below.
 - **Performance-critical bare instruction sequences**: cases that need exact
   control over instruction selection, register use, or that have to step past
   the boundary of what a compiler abstracts.
-- **Instructions with no intrinsic**: when the target platform or compiler
-  offers no builtin, a short hand-written sequence is allowed. `xgetbv.S` is
-  exactly that case.
+- **Instructions with no portable spelling**: when each compiler exposes the
+  operation through a different intrinsic, or through none, the instruction
+  belongs here behind one C ABI. This is why `cpuid_x86.S`, `xgetbv.S` and the
+  two prefetch files exist: the platform code above them is then identical on
+  Windows, Linux and macOS, and only the argument-register mapping differs.
+
+## Current primitives
+
+| File | Exports | Reached through |
+|---|---|---|
+| `cpuid_x86.S` | `neoflux_cpuid`, `neoflux_cpuid_subleaf` | `native/cpuid_bits.h`, and so the feature and cache probes of every x86 platform |
+| `xgetbv.S` | `neoflux_read_xcr0` | the AVX2 OS-support check in those probes |
+| `prefetch_x86.S` | `neoflux_prefetch_read`, `neoflux_prefetch_write` | `PrefetchForRead/Write` on x86 |
+| `prefetch_aarch64.S` | `neoflux_prefetch_read`, `neoflux_prefetch_write` | the same call sites on AArch64 |
+| `premultiply_rgba_x86_64.S` | `neoflux_premultiply_rgba8` | SSE2 premultiply kernel |
+| `premultiply_rgba_aarch64.S` | `neoflux_premultiply_rgba8` | NEON premultiply kernel |
+| `abi_macros.inc` | assembler macros | every `.S` above |
 
 ## What does not belong here
 
@@ -23,14 +37,16 @@ documentation as `docs/zh/guide/native-asm-files.md`.
   project rule). Platform-specific assembly is externalized into this
   directory instead.
 - **Complex logic**: loops, branches and data-structure manipulation belong in
-  C++ or intrinsics, not in `.S`. What is left here should be "a few
-  instructions you can explain in one sentence". **The only exception is a
-  SIMD kernel, see the next section** - `premultiply_rgba_*.S` contains a loop.
+  C++, not in `.S`. What is left here should be "a few instructions you can
+  explain in one sentence". **The only exception is a SIMD kernel, see the next
+  section** - `premultiply_rgba_*.S` contains a loop.
 - **Business code**: rendering, media, windowing and tuning policy belong to
   their own modules and must not enter this directory.
-- **Anything an intrinsic already covers**: when an equivalent intrinsic
-  exists (MSVC `_xgetbv`, `__cpuid`), prefer the intrinsic. It is not inline
-  asm and it is more portable.
+- **Anything that has a portable spelling**: if the operation is expressible in
+  standard C++ (a bit test, `std::popcount`, a rotate in C++20), write it in
+  C++ and let the compiler choose the instruction. A CPU intrinsic is the last
+  resort and is confined to `native/cpuid_bits.h`, which is the single file
+  allowed to include `<intrin.h>`.
 
 ## The one exception: SIMD kernels (loops are allowed)
 
@@ -102,43 +118,54 @@ Beyond the general requirements above, such a file **must** also:
   [`asm_symbols.h`](asm_symbols.h). Do **not** write an `extern "C"`
   declaration at the call site.
 - **Apple exception**: Mach-O prefixes every C symbol with an underscore
-  (`neoflux_foo` becomes `_neoflux_foo`). A macro hides that difference inside
-  the `.S` file:
+  (`neoflux_foo` becomes `_neoflux_foo`), and the two 64-bit x86 ABIs disagree
+  about which registers carry the arguments. Both differences are hidden by
+  `abi_macros.inc`, which every `.S` in this directory includes:
 
   ```asm
-  #if defined(__APPLE__) && defined(__MACH__)
-  #define SYMBOL_NAME(x) _##x
-  #else
-  #define SYMBOL_NAME(x) x
+  #include "abi_macros.inc"
+
+  SYMBOL_NAME(neoflux_thing):          // handles the Mach-O underscore
+      movq     NF_DST, %rax            // handles SysV vs Win64 arguments
+  #ifdef NF_ELF
+      NF_ELF_FUNCBEGIN(neoflux_thing)  // .type/.size/@progbits are ELF-only
   #endif
   ```
 
+  A new routine must include that header rather than redefining `SYMBOL_NAME`,
+  `NF_DST`, `NF_SRC` or `NF_CNT` locally: one copy of the ABI rules is what
+  keeps the kernels from disagreeing about which register holds what.
+
   Note the **uppercase `.S`** used in this directory: it goes through the C
-  preprocessor, so `#if` and macros are available.
+  preprocessor, so `#if`, `#include` and macros are available.
 
 ## How CMake selects these files (summary)
 
 - This directory is **not** collected with a glob, and there is no
   `src/native/CMakeLists.txt`. All wiring lives in `neoflux/CMakeLists.txt`,
-  where `enable_language(ASM)` is already called. Add a new `.S` to exactly one
-  block with an explicit `target_sources(...)`:
-  - **The "Platform-native tuning layer" block** (for example `xgetbv.S`):
-    selected by **platform, processor and compiler**. xgetbv is assembled for
-    **any non-MSVC x86** target (Linux/macOS GCC or Clang,
-    MinGW/Clang-on-Windows). MSVC uses the `_xgetbv` intrinsic and does not
-    link this file.
-  - **The "SIMD kernels" block** (for example `premultiply_rgba_*.S`):
-    selected by **target architecture**, not by operating system. SSE2 is an
-    architectural baseline of x86-64 and NEON is one of AArch64, so no runtime
-    probe is needed. MSVC (which needs MASM rather than GAS syntax) does not
-    compile them, and the portable scalar kernel in
+  where `enable_language(ASM)` is already called. A new `.S` joins exactly one
+  of the two blocks selected by an explicit `target_sources(...)`:
+  - **The assembly-primitives block** (`cpuid_x86.S`, `xgetbv.S`,
+    `prefetch_x86.S`, `prefetch_aarch64.S`): selected by **architecture and
+    compiler**. The x86 entries are assembled for any **non-MSVC x86** target
+    (Linux/macOS GCC or Clang, MinGW/Clang-on-Windows); the AArch64 prefetch is
+    assembled for every AArch64 target. MSVC assembles MASM, not GAS, so it
+    links none of them and falls back to `cpuid_bits.h`.
+  - **The SIMD kernels block** (`premultiply_rgba_*.S`): selected by **target
+    architecture**, not by operating system. SSE2 is an architectural baseline
+    of x86-64 and NEON is one of AArch64, so no runtime probe is needed. MSVC
+    does not compile them and the portable scalar kernel in
     `src/native/simd_kernels.cpp` covers the fallback.
-- Selecting a `.S` **also** requires
+- Selecting a `.S` **also** requires the matching
   `target_compile_definitions(neoflux PRIVATE NEOFLUX_NATIVE_ASM_*=1)` in
   `neoflux/CMakeLists.txt`, so that `asm_symbols.h` declares the symbol only
-  when it is really linked in.
+  when it is really linked in. The current macro set is
+  `NEOFLUX_NATIVE_ASM_XGETBV`, `NEOFLUX_NATIVE_ASM_CPUID`,
+  `NEOFLUX_NATIVE_ASM_PREFETCH`, `NEOFLUX_NATIVE_ASM_PREMULTIPLY_X86_64` and
+  `NEOFLUX_NATIVE_ASM_PREMULTIPLY_AARCH64`; the configure log prints which of
+  them were set.
 - CMake integration is the build maintainers' responsibility. A new routine
-  must update the `asm_symbols.h` comments and this section in the same change.
+  must update `asm_symbols.h`, the CMake block and this section in one change.
 
 > The concrete CMake edits live in `neoflux/CMakeLists.txt`; this file only
 > describes the conventions.

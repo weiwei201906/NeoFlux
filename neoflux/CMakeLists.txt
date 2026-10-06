@@ -73,27 +73,59 @@ endif()
 # contract). No rendering, no GL, no backend code -- GPU backends live behind
 # tgfx (the GPU backend is tgfx's own TGFX_USE_* compile-time choice; see thirdparty/CMakeLists.txt).
 # ---------------------------------------------------------------------------
-# Hand-written assembly lives in src/native/asm/ (project policy: no inline
-# asm in C++ sources). Only non-MSVC x86 toolchains assemble it today: MSVC
-# covers xgetbv via the _xgetbv intrinsic instead.
+# Hand-written assembly primitives (src/native/asm/)
 #
-# Sourcing the .S and defining the matching macro are two halves of one
-# decision. The macro is what the C++ dispatch reads, so a build where the .S
-# was added but the macro was forgotten would silently keep the scalar path,
-# and a build where the macro was defined but the .S was dropped would fail to
-# link. They are set from the same predicate on purpose.
+# Project policy: no inline asm in C++ sources, and no CPU intrinsics outside
+# this dispatch layer. Every instruction the framework needs that portable C++
+# cannot express is one entry in asm_symbols.h, implemented once per
+# architecture:
+#
+#   cpuid_x86.S        CPUID leaf/subleaf reads         x86, non-MSVC
+#   xgetbv.S           XCR0 read                        x86, non-MSVC
+#   prefetch_x86.S     PREFETCHT0 read/write hints      x86-64, non-MSVC
+#   prefetch_aarch64.S PRFM read/write hints            AArch64
+#   premultiply_*.S    SSE2 / NEON premultiply kernels  x86-64 / AArch64
+#
+# Sharing one primitive instead of one intrinsic per compiler is what stops a
+# change verified on Linux from breaking Windows: the platform code above this
+# layer calls a plain C function with the same signature everywhere, and only
+# the argument-register mapping differs, hidden inside abi_macros.inc.
+#
+# MSVC is excluded because it assembles MASM, not GAS. An MSVC build therefore
+# takes the routes in cpuid_bits.h (__cpuidex) and reports avx2 = false rather
+# than guessing, and the SIMD kernels fall back to the portable scalar path.
+#
+# Sourcing a .S and defining its macro are two halves of one decision: the macro
+# is what C++ tests, so a build that added the source without the macro would
+# silently keep the scalar path, and one that defined the macro without the
+# source would fail to link. Both come from the same predicate on purpose.
 # ---------------------------------------------------------------------------
 enable_language(ASM)
-if(NOT MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i[3-6]86)")
-  set(NEOFLUX_NATIVE_ASM_SRC src/native/asm/xgetbv.S)
-  target_compile_definitions(neoflux PRIVATE NEOFLUX_NATIVE_ASM_XGETBV=1)
-  message(STATUS "Native assembly: xgetbv.S linked (non-MSVC x86)")
+
+set(NEOFLUX_NATIVE_ASM_SRC "")
+set(NEOFLUX_ASM_SUMMARY "")
+
+if(NOT MSVC)
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i[3-6]86)")
+    list(APPEND NEOFLUX_NATIVE_ASM_SRC
+      src/native/asm/xgetbv.S
+      src/native/asm/cpuid_x86.S
+      src/native/asm/prefetch_x86.S)
+    target_compile_definitions(neoflux PRIVATE
+      NEOFLUX_NATIVE_ASM_XGETBV=1
+      NEOFLUX_NATIVE_ASM_CPUID=1
+      NEOFLUX_NATIVE_ASM_PREFETCH=1)
+    set(NEOFLUX_ASM_SUMMARY "xgetbv, cpuid, prefetch (x86)")
+  elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
+    list(APPEND NEOFLUX_NATIVE_ASM_SRC src/native/asm/prefetch_aarch64.S)
+    target_compile_definitions(neoflux PRIVATE NEOFLUX_NATIVE_ASM_PREFETCH=1)
+    set(NEOFLUX_ASM_SUMMARY "prefetch (AArch64)")
+  endif()
 endif()
 
 if(WIN32)
   target_sources(neoflux PRIVATE
     src/native/windows/platform_win32.cpp
-    src/native/windows/cache_topology_win32.cpp
     ${NEOFLUX_NATIVE_ASM_SRC})
   # winmm: timeBeginPeriod (frame pacing timer resolution)
   # avrt:  MMCSS render-thread registration (AvSetMmThreadCharacteristicsW)
@@ -106,10 +138,19 @@ elseif(APPLE)
 elseif(ANDROID OR UNIX)
   target_sources(neoflux PRIVATE
     src/native/linux/platform_linux.cpp
-    src/native/linux/cache_topology_linux.cpp
     ${NEOFLUX_NATIVE_ASM_SRC})
 else()
   target_sources(neoflux PRIVATE src/native/platform_common.cpp)
+endif()
+
+if(NEOFLUX_ASM_SUMMARY)
+  message(STATUS "Native assembly primitives: ${NEOFLUX_ASM_SUMMARY}")
+elseif(MSVC)
+  message(STATUS "Native assembly primitives: none (MSVC uses cpuid_bits.h "
+                 "intrinsics; SIMD kernels fall back to the scalar path)")
+else()
+  message(STATUS "Native assembly primitives: none for "
+                 "${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
 # ---------------------------------------------------------------------------

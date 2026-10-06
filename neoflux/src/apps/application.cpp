@@ -196,7 +196,7 @@ void Application::Run() {
   }
 
   frame_dirty_.store(true);
-  event_loop_.Run([this]() { OnFrame(); });
+  event_loop_.Run([this] { OnFrame(); });
 
   LOG(INFO) << "Application event loop ended";
 }

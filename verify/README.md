@@ -12,16 +12,22 @@ sudo apt-get install -y g++ libgoogle-glog-dev libgflags-dev
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 V="$REPO/verify"
-# The native tuning sources read NEOFLUX_NATIVE_ASM_XGETBV to decide whether to
-# declare and call the xgetbv routine in asm/xgetbv.S. Define it here exactly as
-# neoflux/CMakeLists.txt does whenever it adds that .S to the target, otherwise
-# the standalone build disagrees with the CMake build about whether the symbol
-# exists.
+# The native tuning sources read the NEOFLUX_NATIVE_ASM_* macros to decide
+# whether to declare and call the assembly primitives in asm/*.S. Define them
+# here exactly as neoflux/CMakeLists.txt does whenever it adds those sources to
+# the target, otherwise the standalone build disagrees with the CMake build
+# about which symbols exist:
+#   NEOFLUX_NATIVE_ASM_XGETBV    asm/xgetbv.S      -> neoflux_read_xcr0
+#   NEOFLUX_NATIVE_ASM_CPUID     asm/cpuid_x86.S   -> neoflux_cpuid[_subleaf]
+#   NEOFLUX_NATIVE_ASM_PREFETCH  asm/prefetch_*.S  -> neoflux_prefetch_read/write
 NATIVE_SRC=("$REPO/neoflux/src/core/flags.cpp"
             "$REPO/neoflux/src/native/linux/platform_linux.cpp"
-            "$REPO/neoflux/src/native/linux/cache_topology_linux.cpp"
-            "$REPO/neoflux/src/native/asm/xgetbv.S")   # Linux build
-INC=(-I "$REPO/neoflux/include" -I "$REPO/neoflux/src" -DNEOFLUX_NATIVE_ASM_XGETBV=1)
+            "$REPO/neoflux/src/native/asm/xgetbv.S"
+            "$REPO/neoflux/src/native/asm/cpuid_x86.S"
+            "$REPO/neoflux/src/native/asm/prefetch_x86.S")   # Linux/x86 build
+INC=(-I "$REPO/neoflux/include" -I "$REPO/neoflux/src"
+     -DNEOFLUX_NATIVE_ASM_XGETBV=1 -DNEOFLUX_NATIVE_ASM_CPUID=1
+     -DNEOFLUX_NATIVE_ASM_PREFETCH=1)
 
 # [1] Task coroutine semantics
 g++ -std=c++20 "${INC[@]}" "$V/test_task_await.cpp" "$V/yield_stub.cpp" -o /tmp/t1 && /tmp/t1

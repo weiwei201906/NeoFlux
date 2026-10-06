@@ -55,7 +55,7 @@ std::shared_ptr<neoflux::Widget> BuildMediaView(
   back_btn->SetBackgroundColor(kAccent)
       .SetTextColor(kTextLight)
       .SetFontSize(14.0F)
-      .SetOnPressed([app = context.GetApplication()]() { app->PopRoute(); });
+      .SetOnPressed([app = context.GetApplication()] { app->PopRoute(); });
 
   auto title = std::make_shared<neoflux::Text>("Media Player");
   title->SetFontSize(18.0F).SetTextColor(kTextLight);
@@ -93,7 +93,7 @@ std::shared_ptr<neoflux::Widget> BuildMediaView(
   // Play/pause toggle keeps a shared_ptr so the callback can flip the label.
   auto play_btn = std::make_shared<neoflux::Button>("Pause");
   play_btn->SetBackgroundColor(kAccent).SetTextColor(kTextLight).SetFontSize(14.0F);
-  play_btn->SetOnPressed([media, play_btn]() {
+  play_btn->SetOnPressed([media, play_btn] {
     if (media->GetState() == neoflux::MediaState::kPlaying) {
       media->Pause();
       play_btn->SetLabel("Play");

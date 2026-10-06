@@ -220,7 +220,7 @@ void GlfwBridge::MouseButtonCallback(GLFWwindow* window, int button,
   }
   bridge->impl_->input_callback(btn, act,
                                 {.x = static_cast<float>(cursor_x),
-                                 .y = static_cast<float>(cursor_y)});
+                                 .y = static_cast<float>(cursor_y),});
 }
 
 void GlfwBridge::CursorPosCallback(GLFWwindow* window, double xpos,

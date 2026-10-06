@@ -33,6 +33,7 @@
 #include <cstddef>
 
 #include "neoflux/core/config.h"
+#include "native/asm/asm_symbols.h"
 
 #include <glog/logging.h>
 
@@ -75,14 +76,25 @@ CacheInfo DetectCacheTopologySysctlImpl() noexcept {
 }
 
 void PrefetchForRead(const void* p) noexcept {
-  // locality = 3 (all levels), rw = 0 (read).
-  __builtin_prefetch(p, 0, 3);
+#if defined(NEOFLUX_NATIVE_ASM_PREFETCH)
+  // PRFM PSTL1KEEP on arm64, PREFETCHT0 on x86-64. Issued by hand-written
+  // assembly rather than __builtin_prefetch so every platform reaches the same
+  // instruction through the same C ABI.
+  neoflux_prefetch_read(p);
+#else
+  (void)p;
+#endif
 }
 
 void PrefetchForWrite(const void* p) noexcept {
-  // rw = 1 -> PRFM PSTL1KEEP on arm64 / PREFETCHW-style hint on x86, sparing
-  // the read-for-ownership traffic before the store.
-  __builtin_prefetch(p, 1, 3);
+#if defined(NEOFLUX_NATIVE_ASM_PREFETCH)
+  // PRFM PSTL1STRM on arm64 (streaming, keeps L1 for useful lines); PREFETCHT0
+  // on x86-64, where the write-allocate hint is an AMD extension that is not
+  // part of the baseline.
+  neoflux_prefetch_write(p);
+#else
+  (void)p;
+#endif
 }
 
 void VerifyCacheLineConfig() noexcept {

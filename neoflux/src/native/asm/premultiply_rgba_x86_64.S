@@ -64,24 +64,7 @@
 //   instruction body stays readable.
 // =============================================================================
 
-#if defined(__APPLE__) && defined(__MACH__)
-// Mach-O prepends an underscore to every C symbol.
-#define SYMBOL_NAME(x) _##x
-#else
-// ELF (Linux/BSD) and PE/COFF (Windows) do not mangle the leading name.
-#define SYMBOL_NAME(x) x
-#endif
-
-// Integer argument registers: first = dst, second = src, third = pixel count.
-#if defined(_WIN64)
-#define NF_DST %rcx
-#define NF_SRC %rdx
-#define NF_CNT %r8
-#else
-#define NF_DST %rdi
-#define NF_SRC %rsi
-#define NF_CNT %rdx
-#endif
+#include "abi_macros.inc"
 
     .text
 
@@ -91,8 +74,8 @@
 // -----------------------------------------------------------------------------
     .globl SYMBOL_NAME(neoflux_premultiply_rgba8)
     .p2align 4                                     // 16-byte align: clean decode
-#if defined(__ELF__)
-    .type  SYMBOL_NAME(neoflux_premultiply_rgba8), @function
+#ifdef NF_ELF
+    NF_ELF_FUNCBEGIN(neoflux_premultiply_rgba8)
 #endif
 SYMBOL_NAME(neoflux_premultiply_rgba8):
     // ---- Constants, built with ALU ops so the file stays position
@@ -158,9 +141,6 @@ SYMBOL_NAME(neoflux_premultiply_rgba8):
 .Ldone:
     ret                                            // rax = floor(pixels / 4) * 4
 
-// Symbol metadata and the non-executable-stack note are ELF-only: Mach-O and
-// COFF assemblers reject .type/@function, .size and @progbits outright.
-#if defined(__ELF__)
-    .size   SYMBOL_NAME(neoflux_premultiply_rgba8), .-SYMBOL_NAME(neoflux_premultiply_rgba8)
-    .section .note.GNU-stack, "", @progbits
+#ifdef NF_ELF
+    NF_ELF_FUNCEND(neoflux_premultiply_rgba8)
 #endif

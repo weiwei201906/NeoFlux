@@ -60,7 +60,7 @@ Card& Card::SetCardRadius(float radius) noexcept {
 
 Card& Card::SetCardPadding(float padding) noexcept {
   SetPadding({.left = padding, .top = padding, .right = padding,
-              .bottom = padding});
+              .bottom = padding,});
   return *this;
 }
 
