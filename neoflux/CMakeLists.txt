@@ -310,7 +310,13 @@ target_compile_features(neoflux PUBLIC cxx_std_20)
 # exposed via neoflux::Version() in neoflux/version.h. Use the full tag string
 # (including any prerelease suffix such as "-alpha"); PROJECT_VERSION holds only
 # the numeric components CMake accepts.
-target_compile_definitions(neoflux PUBLIC NEOFLUX_VERSION_STRING="${NEOFLUX_VERSION}")
+#
+# The replacement list is parenthesised. `NEOFLUX_VERSION_STRING="0.3.1"` is a
+# perfectly valid definition, but an unparenthesised macro body is exactly what
+# clang-tidy's bugprone-macro-parentheses reports, and this definition is
+# visible to every translation unit that includes neoflux/version.h. The extra
+# parentheses are invisible at the use site (`return NEOFLUX_VERSION_STRING;`).
+target_compile_definitions(neoflux PUBLIC "NEOFLUX_VERSION_STRING=\"${NEOFLUX_VERSION}\"")
 
 # Strict warnings for neoflux code only (not third-party deps).
 # -Wno-conversion/-Wno-sign-conversion: render code mixes int coords with
