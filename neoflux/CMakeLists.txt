@@ -41,6 +41,7 @@ add_library(neoflux STATIC
   src/renderers/render_layer.cpp
   src/renderers/render_command.cpp
   src/renderers/render_context.cpp
+  src/renderers/frame_image_registry.cpp
   src/renderers/tgfx_renderer.cpp
   src/widgets/media_widget.cpp
   src/media/mpv_media_player.cpp
@@ -176,15 +177,16 @@ target_include_directories(neoflux
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# libmpv (optional desktop media backend) -- BOUND TO THE OPENGL BACKEND
+# libmpv (optional desktop media backend) -- BACKEND-INDEPENDENT
 #
-# Media playback is part of the OpenGL backend module: libmpv decodes frames
-# into OpenGL textures (via its render API) which TgfxRenderer imports through
-# tgfx's GL texture interop (kDrawTexture). That interop path does not exist on
-# the vulkan/d3d12/metal backends, so mpv is only probed and linked when
-# TGFX_USE_OPENGL builds. Other backends get a no-op MpvMediaPlayer stub and a
-# placeholder MediaWidget -- zero mpv coupling, zero GL dependency in media
-# code paths that cannot run.
+# Media playback is no longer tied to the tgfx backend: libmpv renders frames
+# into a CPU buffer through its software render API (MPV_RENDER_API_TYPE_SW),
+# the frame is published as a tgfx image, and TgfxRenderer composites it through
+# the backend-agnostic kDrawTexture path (Canvas::drawImageRect). Nothing in
+# that path is OpenGL-specific, so the media backend is gated ONLY on libmpv
+# being available. When it is not, NEOFLUX_HAS_MPV stays undefined,
+# MpvMediaPlayer compiles as a no-op stub and MediaWidget renders its
+# placeholder -- on every tgfx backend (this is the CI configuration).
 #
 # On Windows, cmake/DownloadMPV.cmake pulls the latest shinchiro/mpv-win32
 # build (headers + libmpv-2.dll) into thirdparty/mpv-bundle on first configure.
@@ -194,12 +196,11 @@ target_include_directories(neoflux
 # When mpv is present, NEOFLUX_HAS_MPV is defined.
 # ---------------------------------------------------------------------------
 set(NEOFLUX_MPV_FOUND FALSE CACHE INTERNAL "libmpv availability")
-if(TGFX_USE_OPENGL)
-  include("${CMAKE_SOURCE_DIR}/cmake/DownloadMPV.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/DownloadMPV.cmake")
 
-  set(MPV_DEF "${MPV_BUNDLE_DIR}/mpv.def")
+set(MPV_DEF "${MPV_BUNDLE_DIR}/mpv.def")
 
-  if(WIN32)
+if(WIN32)
   if(EXISTS "${MPV_BUNDLE_DIR}/include/mpv/client.h" AND EXISTS "${MPV_DLL}")
     if(NOT EXISTS "${MPV_IMPORTED_LIB}")
       find_program(DUMPBIN_EXECUTABLE NAMES dumpbin)
@@ -242,18 +243,10 @@ else()
   endif()
 endif()
 
-  if(NEOFLUX_MPV_FOUND)
-    message(STATUS "libmpv media backend ENABLED (${MPV_IMPORTED_LIB})")
-  else()
-    message(STATUS "libmpv media backend disabled")
-  endif()
+if(NEOFLUX_MPV_FOUND)
+  message(STATUS "libmpv media backend ENABLED (${MPV_IMPORTED_LIB})")
 else()
-  # Non-OpenGL backend: media stays decoupled entirely -- no mpv probing, no
-  # bundle download, no linking. MpvMediaPlayer compiles as a no-op stub
-  # (NEOFLUX_HAS_MPV undefined) and MediaWidget renders its placeholder.
-  message(STATUS
-    "libmpv media backend disabled: media is bound to the OpenGL backend "
-    "(tgfx backend: OpenGL interop)")
+  message(STATUS "libmpv media backend disabled (media path is backend-agnostic)")
 endif()
 
 target_link_libraries(neoflux

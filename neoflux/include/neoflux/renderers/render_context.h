@@ -40,9 +40,13 @@ class RenderContext {
                 const Color& color, float font_size,
                 std::string_view font_name = "");
 
-  // Composites an OpenGL texture (e.g. a decoded video frame from the media
-  // backend) into the given rectangle.
-  void DrawTexture(std::uint32_t texture_id, const Rect& rect);
+  // Composites a decoded video frame (produced by the media backend) into the
+  // given rectangle. |image_id| is the opaque frame-image id published by the
+  // producer, NOT a GPU handle; see RenderCommand::image_id for the id
+  // contract. App/UI thread. Records one command and owns nothing: the frame
+  // stays owned by the producer. Failure mode: a released/unknown id is still
+  // recorded and is skipped by the renderer at execute time.
+  void DrawImage(std::uint32_t image_id, const Rect& rect);
 
   // Saves the current transform/clip state.
   void Save();

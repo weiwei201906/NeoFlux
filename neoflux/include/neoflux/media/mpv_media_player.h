@@ -4,11 +4,12 @@
 // NeoFlux - mpv_media_player.h
 //
 // libmpv-based media player implementation for desktop platforms.
-// Uses the mpv render API to decode video frames into an OpenGL texture that
-// can be composited by the NeoFlux render layer.
+// Decodes video through the mpv software render API (MPV_RENDER_API_TYPE_SW)
+// into a CPU buffer, wraps that buffer as a tgfx image and publishes it under
+// an opaque frame-image id that the NeoFlux render layer composites.
 //
-// Pimpl: this header leaks no mpv or GL types. All implementation state and
-// the mpv/GL interaction live in MpvMediaPlayer::Impl, defined in the .cpp.
+// Pimpl: this header leaks no mpv, tgfx or GL types. All implementation state
+// and the mpv interaction live in MpvMediaPlayer::Impl, defined in the .cpp.
 //
 // All method implementations are in src/media/mpv_media_player.cpp.
 // =============================================================================
@@ -24,8 +25,8 @@
 
 namespace neoflux {
 
-// libmpv-backed media player. Decodes video via libmpv and outputs frames to
-// an OpenGL texture.
+// libmpv-backed media player. Decodes video via libmpv into a CPU frame and
+// publishes the resulting tgfx image for the render layer.
 //
 // ---------------------------------------------------------------------------
 // THREADING MODEL
@@ -36,42 +37,44 @@ namespace neoflux {
 //
 //   [App/UI thread]   - the thread running Application's EventLoop. Owns the
 //                       widget tree and all widget lifecycle.
-//   [Render thread]   - the thread owned by RenderLayer where the OpenGL
-//                       context is current. All GL work MUST happen here.
+//   [Render thread]   - the thread owned by RenderLayer. It drives the render
+//                       pump, so all frame pulling happens here. It also owns
+//                       the GPU context, but this player does not use it.
 //   [mpv internal]    - an arbitrary thread owned by libmpv. The render-update
 //                       callback fires here whenever a new decoded frame is
 //                       available.
 //
-// App/UI-thread methods (safe to call from the EventLoop only; never touch GL):
+// App/UI-thread methods (safe to call from the EventLoop only):
 //   SetSource(), GetSource(), Play(), Pause(), Stop(), Seek(), SetVolume(),
 //   GetVolume(), SetStateCallback(), SetFrameCallback(), SetWakeCallback().
 //
-// Render-thread methods (require a CURRENT OpenGL context; never call from the
-// App/UI thread):
-//   InitRender(), UpdateTexture(), TeardownRender().
+// Render-thread methods (never call from the App/UI thread):
+//   InitRender(), UpdateFrame(), TeardownRender().
 //
-// DESTRUCTION / GL TEARDOWN ORDERING (read this before changing ~MpvMediaPlayer):
-//   The OpenGL context was made current on the render thread (RenderLayer owns
-//   it). mpv_render_context_create and every GL call (GenTextures/GenFramebuffers/
-//   TexImage2D/mpv_render_context_render) happen on that thread. By OpenGL's
-//   rules, mpv_render_context_free() and glDeleteTextures/glDeleteFramebuffers
-//   MUST also run on that same thread with the context current -- doing so on
-//   the App/UI thread (where no context is current) crashes.
+//   None of them needs a current OpenGL context, because the mpv software
+//   renderer writes into a CPU buffer: there is no GL object to create,
+//   upload or delete anywhere in the media path.
+//
+// DESTRUCTION / TEARDOWN ORDERING (read this before changing ~MpvMediaPlayer):
+//   InitRender(), UpdateFrame() and TeardownRender() are all driven by the
+//   render thread. TeardownRender() frees the mpv render context and drops the
+//   published frame image, so it MUST NOT run concurrently with a frame pull;
+//   routing it through the render thread (RenderLayer::RunOnRenderThread) is
+//   what guarantees that serialization.
 //
 //   Correct shutdown sequence (driven by MediaWidget):
 //     1. [App thread] MediaWidget dtor: SetRenderPump(nullptr), SetWakeCallback,
 //        then RenderLayer::RunOnRenderThread([p]{ p->TeardownRender(); }) which
 //        BLOCKS the App thread until the render thread has freed the mpv render
-//        context and the cached texture/FBO with the context current.
+//        context and released the frame image.
 //     2. [App thread] ~MpvMediaPlayer/~Impl then only calls mpv_terminate_destroy
-//        (mpv core teardown, touches no GL). render_ctx is already nullptr.
+//        (mpv core teardown). render_ctx is already nullptr.
 //
-//   If TeardownRender() was never invoked (e.g. unit tests that create the
-//   player on the very thread that owns a GL context, or a player whose render
-//   context was never created), ~Impl frees the GL resources inline on the
-//   calling thread. This is valid ONLY because in that case the calling thread
-//   itself owns the current GL context. Never rely on inline freeing in the
-//   framework: there the App thread has no GL context.
+//   If TeardownRender() was never invoked (e.g. unit tests that own the player
+//   on a single thread, or a player whose render context was never created),
+//   ~Impl frees the remaining render state inline. That is safe on any thread
+//   because the state is CPU-only -- but it is still only race-free because no
+//   frame pull can be in flight once the player is being destroyed.
 //
 // Thread-safe / any-thread:
 //   GetState(), GetVideoWidth(), GetVideoHeight(), GetPosition(),
@@ -80,19 +83,19 @@ namespace neoflux {
 //
 // Callbacks:
 //   StateCallback  - fires on whichever thread pumped mpv events. In the
-//                    framework that is the render thread (UpdateTexture calls
+//                    framework that is the render thread (UpdateFrame calls
 //                    PollEvents), but Play()/Pause()/Stop() may also dispatch
 //                    it synchronously on the App thread. Treat it as a generic
-//                    callback: do NOT block, do NOT touch GL, and NEVER call
+//                    callback: do NOT block and NEVER call
 //                    SetStateCallback/SetFrameCallback/SetWakeCallback from
 //                    inside a callback (the swap would race the invocation).
 //   FrameCallback  - fires on the render thread, synchronously at the end of
-//                    UpdateTexture(), with the GL context current. It hands off
-//                    the freshly composited texture_id. Same re-entrancy rule.
+//                    UpdateFrame(), and hands off the freshly published frame
+//                    image id plus its pixel dimensions. Same re-entrancy rule.
 //   WakeCallback   - fires on the mpv internal thread the instant a new frame
-//                    is decoded. It MUST be non-blocking and MUST NOT touch GL;
-//                    its sole purpose is to wake the render thread (e.g. call
-//                    RenderLayer::Wake()). It never runs GL commands.
+//                    is decoded. It MUST be non-blocking and MUST NOT touch
+//                    GPU/driver state; its sole purpose is to wake the render
+//                    thread (e.g. call RenderLayer::Wake()).
 //
 // The source string returned by GetSource() is owned by this object and is
 // only mutated by SetSource(). Both are App/UI-thread affine, so the returned
@@ -137,7 +140,7 @@ class MpvMediaPlayer final : public MediaPlayer {
   // Number of times the libmpv render update callback has fired since the
   // render context was created. The callback runs on an internal mpv thread;
   // this counter is atomic and safe to poll from any thread. Primarily exposed
-  // for observability and tests (e.g. verifying the GPU render path actually
+  // for observability and tests (e.g. verifying the render path actually
   // receives frame-update notifications).
   [[nodiscard]] std::uint32_t GetRenderUpdateCount() const noexcept;
 
@@ -150,25 +153,30 @@ class MpvMediaPlayer final : public MediaPlayer {
 
   // Registers the frame-available wake callback. Fires on the mpv internal
   // thread the moment a new decoded frame is ready. Must be non-blocking and
-  // must not touch GL; its only job is to wake the render thread (e.g.
-  // RenderLayer::Wake()). Set once at wiring time; never swap from inside a
-  // callback.
+  // must not touch GPU/driver state; its only job is to wake the render thread
+  // (e.g. RenderLayer::Wake()). Set once at wiring time; never swap from
+  // inside a callback.
   void SetWakeCallback(const std::function<void()>& callback) override;
 
-  // Render thread. Must be called with a current OpenGL context. Creates the
-  // mpv render context and installs the update callback.
+  // Render thread. Creates the mpv render context with MPV_RENDER_API_TYPE_SW
+  // and installs the update callback. No OpenGL context is required. No-op if
+  // the render context already exists or the mpv handle could not be created.
   void InitRender() override;
-  // Render thread. Must be called with a current OpenGL context. Pulls the next
-  // mpv event, and if a new frame is available composites it into the cached
-  // FBO-backed texture. Returns the current GL texture name (0 until the first
-  // frame is decoded). Cheap to call when no new frame is ready.
-  [[nodiscard]] std::uint32_t UpdateTexture() override;
 
-  // Render thread. Must be called with a current OpenGL context. Last
-  // render-thread operation: detaches the mpv update callback, frees the mpv
-  // render context, and deletes the cached GL texture and FBO. Block the App
-  // thread on this (via RenderLayer::RunOnRenderThread) BEFORE destroying the
-  // player. Safe to call if the render context was never created (no-op).
+  // Render thread. Polls the mpv event queue and, when mpv reports a new
+  // frame, renders it into the CPU frame buffer and republishes it as the
+  // player's frame image. Returns the current frame-image id (0 until the
+  // first frame has been rendered); the same id is returned for every
+  // subsequent frame, re-bound to the newest image. Cheap to call when no new
+  // frame is ready. Must not run concurrently with TeardownRender().
+  [[nodiscard]] std::uint32_t UpdateFrame() override;
+
+  // Render thread. Last render-thread operation: detaches the mpv update
+  // callback, frees the mpv render context, releases the published frame
+  // image and drops the CPU frame buffers. Block the App thread on this (via
+  // RenderLayer::RunOnRenderThread) BEFORE destroying the player, so it cannot
+  // race a frame pull. Safe to call when the render context was never created
+  // (no-op).
   void TeardownRender() override;
 
  private:
@@ -178,9 +186,9 @@ class MpvMediaPlayer final : public MediaPlayer {
   // C-callable trampoline for mpv_render_context_set_update_callback. ctx is
   // this object; it runs on an arbitrary mpv internal thread. It only bumps
   // the atomic observability counter, raises the new-frame flag, and invokes
-  // the (non-blocking) wake callback. It NEVER touches GL and never blocks.
-  // Static so it converts to a plain function pointer without leaking mpv/GL
-  // types into this header.
+  // the (non-blocking) wake callback. It NEVER touches GPU/driver state and
+  // never blocks. Static so it converts to a plain function pointer without
+  // leaking mpv types into this header.
   static void OnRenderUpdate(void* ctx);
 };
 

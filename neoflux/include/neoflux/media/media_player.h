@@ -6,8 +6,10 @@
 // Abstract media player interface. Decouples widget layer from platform-
 // specific playback backends (libmpv on desktop, native players on mobile).
 //
-// Implementations decode video frames to an OpenGL texture that the render
-// layer can composite into the widget tree (Flutter-style texture sharing).
+// Implementations decode video frames on the CPU and publish them as opaque
+// frame-image ids that the render layer resolves and composites into the
+// widget tree. NeoFlux owns no GPU objects of its own: the frame image is
+// handed to tgfx, which uploads it through whichever GPU backend is active.
 //
 // All method implementations are in src/media/.
 // =============================================================================
@@ -37,14 +39,20 @@ enum class MediaState : std::uint8_t {
 using StateCallback = std::function<void(MediaState state)>;
 
 // Callback invoked when a new video frame is ready for compositing.
-// The texture_id is an OpenGL texture name (0 = no frame yet).
-using FrameCallback = std::function<void(std::uint32_t texture_id, int width,
+// |image_id| is the opaque frame-image id the backend published (0 = no frame
+// yet); it is NOT a GPU handle and must not be interpreted as one. |width| and
+// |height| are the pixel dimensions of the published frame.
+using FrameCallback = std::function<void(std::uint32_t image_id, int width,
                                          int height)>;
 
 // Abstract media player. Concrete implementations:
-//   - MpvMediaPlayer (desktop): libmpv render API -> OpenGL texture
-//   - AndroidMediaPlayer (mobile): MediaPlayer/ExoPlayer -> SurfaceTexture
-//   - IosMediaPlayer (mobile): AVPlayer -> CVPixelBuffer -> CVOpenGLESTexture
+//   - MpvMediaPlayer (desktop): libmpv software render API -> CPU frame image
+//   - AndroidMediaPlayer (mobile): MediaPlayer/ExoPlayer -> CPU-frame decode
+//   - IosMediaPlayer (mobile): AVPlayer -> CVPixelBuffer -> CPU frame image
+//
+// The render contract is backend-agnostic: the backend turns decoded frames
+// into an opaque image id, and the render layer composites that image through
+// tgfx. No implementation may require a current OpenGL context.
 class MediaPlayer {
  public:
   virtual ~MediaPlayer() = default;
@@ -91,37 +99,44 @@ class MediaPlayer {
   // Registers a callback invoked on state transitions.
   virtual void SetStateCallback(StateCallback callback) = 0;
 
-  // Registers a callback invoked when a new frame texture is available.
+  // Registers a callback invoked when a new frame has been published.
   virtual void SetFrameCallback(FrameCallback callback) = 0;
 
   // Registers a non-blocking callback invoked on the decoder's internal thread
   // the moment a new frame is decoded. Backends that decode synchronously or
   // do not need external frame signalling may ignore it (default no-op). The
-  // callback must not block and must not touch GL; its only purpose is to wake
-  // the render thread.
+  // callback must not block and must not touch GPU or driver state; its only
+  // purpose is to wake the render thread.
   virtual void SetWakeCallback(const std::function<void()>& callback) {
     (void)callback;
   }
 
-  // Must be called from the render thread with a current GL context.
-  // Initializes the render API (e.g. mpv_render_context).
+  // Render thread. Initializes the backend's render API (e.g. the mpv render
+  // context). No OpenGL/GPU context is required: decoders produce CPU frames.
   virtual void InitRender() = 0;
 
-  // Called each frame from the render thread. Updates the video texture if
-  // a new frame is available. Returns the current GL texture name (0 if no
-  // frame has been decoded yet).
-  [[nodiscard]] virtual std::uint32_t UpdateTexture() = 0;
+  // Render thread. Polls the backend for a new frame and publishes it as a
+  // CPU image the render layer can composite. Returns the current opaque
+  // frame-image id (0 if no frame has been published yet); the id is stable
+  // for a given producer and is re-bound to the newest frame on every call,
+  // so the returned value may be reused across frames. Never called
+  // concurrently with TeardownRender(). Ownership: the id stays owned by the
+  // producer, which releases it in TeardownRender(); consumers only resolve
+  // it for the duration of one draw.
+  [[nodiscard]] virtual std::uint32_t UpdateFrame() = 0;
 
-  // Render thread. MUST be called with a current OpenGL context, as the very
-  // LAST render-thread operation on this player, before the App thread destroys
-  // it. Frees all render-API / OpenGL resources owned by the backend (the
-  // mpv render context, GL textures, FBOs). OpenGL objects may only be deleted
-  // on the thread that owns the current context, so a backend that allocated GL
-  // objects on the render thread must reclaim them here -- NOT in the App-thread
-  // destructor. After this returns the player MUST NOT be touched from the
-  // render thread again; the App thread may then safely destroy the player
-  // (which only tears down the non-GL core). The base implementation is a no-op
-  // for backends that own no GL resources.
+  // Render thread. MUST be the very LAST render-thread operation on this
+  // player, before the App thread destroys it. Shuts the render API down and
+  // releases every resource the backend allocated for rendering, including the
+  // frame image published by UpdateFrame() (after this the last id resolves to
+  // nothing and MUST NOT be drawn again). It must run on the render thread
+  // because that is the thread that drives UpdateFrame(): tearing down there
+  // serializes the release against an in-flight frame pull. No GPU context is
+  // required and none is touched -- the resources are CPU-side. After this
+  // returns the player MUST NOT be touched from the render thread again; the
+  // App thread may then safely destroy the player (which only tears down the
+  // non-render core). Safe to call when the render API was never initialized.
+  // The base implementation is a no-op for backends that own no render state.
   virtual void TeardownRender() {}
 };
 

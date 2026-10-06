@@ -4,14 +4,16 @@
 // NeoFlux - media_widget.h
 //
 // Integrated media playback widget. Uses the platform MediaPlayer backend
-// (libmpv on desktop, native players on mobile) to decode video frames into
-// an OpenGL texture that is composited directly into the widget tree.
+// (libmpv on desktop, native players on mobile) to decode video frames into a
+// CPU image that is composited into the widget tree.
 //
-// This is a Flutter-style texture-sharing media player: video decoding happens
-// in the platform backend, and frames are rendered to a GL texture that the
-// NeoFlux render layer composites into the widget's bounding rectangle.
+// This is a texture-sharing-style media player without the texture: video
+// decoding happens in the platform backend, the decoded frame becomes a tgfx
+// image published under an opaque id, and the NeoFlux render layer composites
+// that image into the widget's bounding rectangle through the active tgfx
+// backend. NeoFlux owns no GPU object and makes no GL call.
 //
-// Pimpl: render/GL state (the player handle and current texture) lives in
+// Pimpl: the player handle and the published frame state live in
 // MediaWidget::Impl, defined in the .cpp, so this header leaks no mpv/GL types.
 //
 // All method implementations are in src/widget/media_widget.cpp.
@@ -44,10 +46,11 @@ class MediaWidget : public Widget {
  public:
   MediaWidget();
   // App/UI thread. Runs during navigation_stack_ teardown, BEFORE the render
-  // thread is joined. It synchronously offloads the mpv render-context and GL
-  // texture/FBO destruction to the render thread (which owns the GL context) and
-  // blocks until that completes; only then does it let the player unique_ptr
-  // tear down the non-GL mpv core. Do not call it after RenderLayer::Stop().
+  // thread is joined. It synchronously offloads the player's render teardown
+  // (mpv render context, published frame image, CPU frame buffers) to the render
+  // thread that drives the frame pump, and blocks until that completes; only
+  // then does it let the player unique_ptr tear down the remaining mpv core. No
+  // GL context is involved. Do not call it after RenderLayer::Stop().
   ~MediaWidget() override;
 
   // Returns the human-readable widget name for debugging.
@@ -58,12 +61,12 @@ class MediaWidget : public Widget {
                                int height_mode) override;
 
   // On the first build, captures the owning Application/RenderLayer and wires
-  // the mpv frame signal to the render thread. Returns nullptr (leaf widget).
+  // the frame signal to the render thread. Returns nullptr (leaf widget).
   [[nodiscard]] std::shared_ptr<Widget> Build(BuildContext& context) override;
 
-  // Paints the video texture (if available) or a placeholder surface. Runs on
-  // the App/UI thread; reads an atomically-published texture id and never calls
-  // GL directly.
+  // Paints the decoded video frame (if available) or a placeholder surface.
+  // Runs on the App/UI thread; reads an atomically-published frame-image id and
+  // never calls GL.
   void Paint(RenderContext& context) override;
 
   // Toggles play/pause on click.

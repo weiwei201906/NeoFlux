@@ -32,13 +32,32 @@ neoflux_add_test(widget_extra_test widget_extra_test.cpp)
 neoflux_add_test(button_e2e_test button_e2e_test.cpp)
 
 # ---------------------------------------------------------------------------
+# Frame-image registry test.
+#
+# The registry is internal renderer plumbing (neoflux/src), and the test also
+# exercises tgfx's public Bitmap/Image contract directly, so it needs the
+# private src/ root and tgfx's public include root. It needs no GPU context.
+# ---------------------------------------------------------------------------
+neoflux_add_test(frame_image_registry_test frame_image_registry_test.cpp)
+target_include_directories(frame_image_registry_test PRIVATE
+  ${CMAKE_SOURCE_DIR}/neoflux/src
+)
+# tgfx is a third-party header set: include it as a system directory so its own
+# -Wshadow/-Wold-style-cast noise does not drown the test's warnings.
+target_include_directories(frame_image_registry_test SYSTEM PRIVATE
+  ${CMAKE_SOURCE_DIR}/thirdparty/tgfx/include
+)
+
+# ---------------------------------------------------------------------------
 # libmpv media player integration test (real sample.mp4 playback).
 #
-# Requires a GL context, so the test creates a hidden GLFW window itself and
-# links glfw explicitly. NEOFLUX_HAS_MPV is propagated from the neoflux target
-# (INTERFACE) when the mpv bundle was found. The real test video path is
-# injected at configure time. libmpv-2.dll is copied next to the executable so
-# the test can load it at runtime.
+# The player renders through the mpv SOFTWARE render API into a CPU buffer, so
+# the test needs no GPU context, no window and no display: it drives the render
+# path headless, exactly like the framework's render pump does.
+# NEOFLUX_HAS_MPV is propagated from the neoflux target (INTERFACE) when the mpv
+# bundle was found. The real test video path is injected at configure time.
+# libmpv-2.dll is copied next to the executable so the test can load it at
+# runtime.
 # ---------------------------------------------------------------------------
 if(NEOFLUX_MPV_FOUND)
   set(MEDIA_TEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/data/sample.mp4")
@@ -59,7 +78,6 @@ if(NEOFLUX_MPV_FOUND)
       gtest
       gtest_main
       gmock
-      glfw
   )
   target_include_directories(mpv_media_player_test PRIVATE
     ${NEOFLUX_TEST_INCLUDE_DIR}

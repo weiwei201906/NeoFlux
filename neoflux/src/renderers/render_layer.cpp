@@ -361,9 +361,9 @@ void RenderLayer::RenderLoop() {
       pump = render_pump_;  // copy under the lock; invoke outside it
     }
 
-    // Pull any newly-decoded external frame (e.g. mpv -> GL texture) before
-    // executing queued draw commands, so the composited texture contents are
-    // up to date for this frame.
+    // Publish any newly-decoded external frame (e.g. an mpv CPU frame image)
+    // before executing queued draw commands, so the composited frame contents
+    // are up to date for this iteration.
     if (pump != nullptr) {
       pump();
     }
@@ -398,11 +398,11 @@ void RenderLayer::RenderLoop() {
       }
     }
 
-    // Drain one-shot render-thread tasks (e.g. external GL producer teardown).
-    // Run them AFTER the pump and all queued draw commands for this iteration so
-    // a task that deletes GL textures/FBOs cannot race a pending DrawTexture that
-    // still references them. The caller of RunOnRenderThread blocks on the
-    // promise set inside these tasks.
+    // Drain one-shot render-thread tasks (e.g. external frame producer
+    // teardown). Run them AFTER the pump and all queued draw commands for this
+    // iteration so a task that releases a frame image cannot race a pending
+    // draw command that still references it. The caller of RunOnRenderThread
+    // blocks on the promise set inside these tasks.
     std::vector<std::function<void()>> tasks;
     {
       std::scoped_lock lock(frame_mutex_);
