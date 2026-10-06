@@ -63,7 +63,7 @@ and the glue in `thirdparty/CMakeLists.txt`.
 
 ---
 
-## 3. ASCII-only repository content
+## 3. ASCII-only source paths
 
 **Rule**
 
@@ -74,19 +74,30 @@ and the glue in `thirdparty/CMakeLists.txt`.
 - This explicitly includes Chinese characters, full-width punctuation, emoji,
   non-breaking spaces, curly quotes, en/em dashes, and any other non-ASCII
   whitespace or typography.
-- If a translated or non-English text asset is genuinely required, it is kept
-  as a documentation asset outside the source paths and is called out in the
-  pull request. It must never be embedded in a source, build, or script file.
 - If external text must be referenced from source, use ASCII-safe identifiers
   (for example `kDefaultFontName`) and keep the human-readable text in the
   documentation tree.
+
+**Scope: translated documentation is exempt and stays bilingual**
+
+The rule applies to the paths a compiler or build tool reads, which is exactly
+the list in section 1. It does **not** apply to `docs/` (including `docs/zh/`),
+`README.md`, or `README-zh.md`: those are documentation assets, they may be
+written in any language, and they may contain any non-ASCII character.
+
+The consequence for a source directory is about placement, not about language.
+A Chinese explanation of `neoflux/src/native/` belongs in
+`docs/zh/guide/native-layer.md`, and the `README.md` that sits next to the code
+stays in English so that the directory a reviewer opens is readable by every
+maintainer and safe for every tool.
 
 **Rationale**
 
 Some assemblers and preprocessors treat non-ASCII bytes in comments as
 invalid input, and a dash that looks like a hyphen in a review diff is
-invisible until a compiler rejects the file on one platform only. The rule
-removes that entire class of platform-specific build failure.
+invisible until a compiler rejects the file on one platform only. Restricting
+the rule to the paths a toolchain consumes removes that entire class of
+platform-specific build failure without giving up translated documentation.
 
 **Verification**
 
