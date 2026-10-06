@@ -70,8 +70,8 @@
 ## 符号命名约定
 
 - 所有对外符号统一 `neoflux_` 前缀，全部为 C 链接（`extern "C"`）。
-- C++ 侧声明集中放在 [`asm_symbols.h`](asm_symbols.h)，**不要**在调用点直接
-  写 `extern "C"` 声明。
+- C++ 侧声明集中放在 `asm_symbols.h`，**不要**在调用点直接写
+  `extern "C"` 声明。
 - **Apple 特例**：Mach-O 会给 C 符号加前导下划线（`neoflux_foo` →
   `_neoflux_foo`）。`.S` 内用宏隐藏该差异：
 
