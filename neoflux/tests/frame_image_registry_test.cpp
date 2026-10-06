@@ -5,7 +5,8 @@
 //
 // Unit tests for the internal frame-image id table that carries media frames
 // from a producer to TgfxRenderer without putting a std::shared_ptr in the flat
-// RenderCommand struct. The registry is pure CPU bookkeeping plus tgfx's
+// RenderCommand struct, plus the command plumbing that transports that id. The
+// registry and the command buffer are pure CPU bookkeeping over tgfx's
 // Bitmap/Image contract, so these tests need no GPU context and no media file.
 // =============================================================================
 
@@ -16,6 +17,9 @@
 #include <memory>
 #include <vector>
 
+#include "neoflux/core/types.h"
+#include "neoflux/renderers/render_command.h"
+#include "neoflux/renderers/render_context.h"
 #include "renderers/frame_image_registry.h"
 
 #include "tgfx/core/AlphaType.h"
@@ -176,6 +180,34 @@ TEST(FrameImageRegistryTest, ImageFromBitmapKeepsStablePixels) {
   bitmap.unlockPixels();
   ASSERT_NE(after, nullptr);
   EXPECT_NE(before, after);
+}
+
+// ---------------------------------------------------------------------------
+// Command plumbing: the id travels through the flat command struct.
+// ---------------------------------------------------------------------------
+
+TEST(FrameImageRegistryTest, MakeDrawTextureCarriesTheImageId) {
+  const Rect rect{.x = 1.0F, .y = 2.0F, .width = 30.0F, .height = 40.0F};
+  const RenderCommand command = RenderCommand::MakeDrawTexture(42U, rect);
+  EXPECT_EQ(command.type, RenderCommandType::kDrawTexture);
+  EXPECT_EQ(command.image_id, 42U);
+  EXPECT_FLOAT_EQ(command.rect.x, rect.x);
+  EXPECT_FLOAT_EQ(command.rect.y, rect.y);
+  EXPECT_FLOAT_EQ(command.rect.width, rect.width);
+  EXPECT_FLOAT_EQ(command.rect.height, rect.height);
+}
+
+TEST(FrameImageRegistryTest, DrawImageRecordsADrawTextureCommand) {
+  RenderContext context;
+  const Rect rect{.x = 5.0F, .y = 6.0F, .width = 70.0F, .height = 80.0F};
+  context.DrawImage(7U, rect);
+
+  ASSERT_EQ(context.GetCommandCount(), 1U);
+  const RenderCommand& command = context.GetCommands().front();
+  EXPECT_EQ(command.type, RenderCommandType::kDrawTexture);
+  EXPECT_EQ(command.image_id, 7U);
+  EXPECT_FLOAT_EQ(command.rect.width, rect.width);
+  EXPECT_FLOAT_EQ(command.rect.height, rect.height);
 }
 
 }  // namespace
