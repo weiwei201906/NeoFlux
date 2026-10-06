@@ -51,7 +51,7 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 |------|------|------|
 | Linux (x86-64) | ✅ 已验证 | CI 构建 + Xvfb 无头测试 |
 | Windows (MSVC x64) | ✅ 已验证 | CI 构建 + 测试 |
-| macOS | 🚧 代码已适配，未经 CI 验证 | tgfx Metal 后端（`MetalWindow` 在 GLFW NSWindow 的 `CAMetalLayer` 上呈现）；Apple 上 CMake 默认 `TGFX_USE_METAL=ON` |
+| macOS | 🚧 使用 tgfx Metal，仍有 Apple 后端限制 | macOS 已纳入 CI 构建与测试矩阵。Apple 构建使用 tgfx `MetalWindow`，文字/矢量渲染走 CoreGraphics（`TGFX_USE_FREETYPE=OFF`）；剩余兼容性限制来自 tgfx 的 Apple 后端，而非缺少 CI 覆盖。 |
 | Android | 🚧 渲染与输入已接线，缺应用壳 | tgfx `EGLWindow` 持有 EGL 上下文并渲染到 `ANativeWindow`；`MobileBridge` 把触摸输入分发进控件树。仍需一个创建 Surface 并转发触摸事件的 Android 应用壳（NativeActivity/JNI）。 |
 | iOS | 🚧 需要应用壳 | `EAGLWindow::MakeFrom(CAEAGLLayer*)` 路径已定义，但本仓库尚无 ObjC++ 应用壳（视图层级）；`TgfxRenderer::Init` 会打日志并显式失败。 |
 
@@ -72,10 +72,8 @@ NeoFlux 采用两层架构，层间通过无锁环形队列通信：
 ### 构建
 
 ```bash
-mkdir build
-cd build
-cmake .. -G Ninja
-cmake --build .
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
 
 ### 运行测试
@@ -83,22 +81,21 @@ cmake --build .
 测试默认禁用，需通过 CMake 选项启用：
 
 ```bash
-cmake -S . -B build -DNEOFLUX_BUILD_TESTS=ON
+cmake -S . -B build -G Ninja -DNEOFLUX_BUILD_TESTS=ON
 cmake --build build
-cd build && ctest --output-on-failure
+ctest --test-dir build --output-on-failure
 ```
 
-### 运行示例
+默认构建会生成快速开始应用 `build/bin/neoflux_app`。独立示例默认不构建，启用方式：
 
 ```bash
-./bin/hello_neoflux   # 完整演示
-./bin/counter         # 计数器
-./bin/flex_demo       # flex 布局
-./bin/font_demo       # 字体系统
-./bin/scroll_demo     # 滚动视图
-./bin/loading_demo    # 状态机 + 协程动画
-./bin/drag_demo       # 可拖拽 Widget
+cmake -S . -B build -G Ninja -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake --build build
+./build/bin/hello_neoflux
 ```
+
+启用后还会构建 `counter`、`flex_demo`、`font_demo`、`scroll_demo`、
+`loading_demo`、`drag_demo` 和 `media_player_demo`。
 
 ## 配置（gflags）
 
@@ -137,7 +134,7 @@ cmake -S . -B build -G Ninja -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   # Windo
 | tgfx 后端 | 表面获取 | 状态 |
 |------|------|------|
 | `TGFX_USE_OPENGL` | Linux `tgfx::EGLWindow`（X11）/ Windows `tgfx::WGLWindow` / Android `tgfx::EGLWindow` | ✅ 已实现（Apple 之外的默认），桌面已在 Linux CI 验证 |
-| `TGFX_USE_METAL` | `tgfx::MetalWindow`，呈现到 GLFW NSWindow 的 `CAMetalLayer` | 🚧 代码路径已存在，尚未在 CI 验证（Apple 默认） |
+| `TGFX_USE_METAL` | `tgfx::MetalWindow`，呈现到 GLFW NSWindow 的 `CAMetalLayer` | 🚧 Apple 默认；macOS CI 会构建并测试此配置。Apple 文字/矢量渲染使用 CoreGraphics，而非 FreeType。 |
 | `TGFX_USE_VULKAN` | `tgfx::VulkanWindow`（Win32 HWND） | 🚧 代码路径已存在，尚未在 CI 验证 |
 | `TGFX_USE_D3D12` | `tgfx::D3D12Window::MakeForHwnd` | 🚧 代码路径已存在，尚未在 CI 验证 |
 
@@ -145,14 +142,14 @@ cmake -S . -B build -G Ninja -DTGFX_USE_D3D12=ON -DTGFX_USE_OPENGL=OFF   # Windo
 
 ## 字体系统
 
-NeoFlux 使用字体管理器，在启动时扫描 `thirdparty/fonts/` 目录下的 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。Widget 通过文件名（不含扩展名）引用字体：
+NeoFlux 在启动时扫描 `assets/fonts/`（以及相邻的构建目录相对路径）中的 TrueType（`.ttf`）、OpenType（`.otf`）和 TrueType Collection（`.ttc`）文件。Widget 通过文件名（不含扩展名）引用字体：
 
 ```cpp
 auto text = std::make_shared<Text>("Hello World");
-text->SetFont("NotoSansSC-Regular");  // 加载 thirdparty/fonts/NotoSansSC-Regular.ttf
+text->SetFont("NotoSansSC-Regular");  // 加载 assets/fonts/NotoSansSC-Regular.ttf
 ```
 
-若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `thirdparty/fonts/` 目录即可通过名称引用，无需构建时拷贝。
+若 Widget 未指定字体，则使用第一个被发现的字体作为默认字体。将字体文件放入 `assets/fonts/` 目录即可通过名称引用。
 
 ## Widget 系统
 
@@ -293,7 +290,7 @@ int main(int argc, char** argv) {
 
 ### font_demo
 
-字体系统演示：默认字体、显式 `SetFont()` 选择字体、多种字号/颜色、CJK 文本渲染。将字体放入 `thirdparty/fonts/` 后按名称引用即可。
+字体系统演示：默认字体、显式 `SetFont()` 选择字体、多种字号/颜色、CJK 文本渲染。将字体放入 `assets/fonts/` 后按名称引用即可。
 
 ### scroll_demo
 
@@ -310,24 +307,17 @@ int main(int argc, char** argv) {
 ## 项目结构
 
 ```
-neoflux/
-├── CMakeLists.txt          # 根构建配置
-├── LICENSE                 # GPL-3.0 开源协议
-├── README.md               # 英文文档
-├── README-zh.md            # 中文文档（本文件）
-├── .clang-tidy             # clang-tidy 规则
-├── .clang-format           # 代码风格
-├── thirdparty/             # 第三方依赖（git submodules）
-│   ├── fonts/              # 字体目录（开发者自行放入）
-│   └── CMakeLists.txt      # 依赖接线与后端开关配置
-├── include/neoflux/        # 公共头文件（仅声明）
-│   ├── core/               # 环形队列、类型定义、协程、工具
-│   ├── widget/             # Widget 系统
-│   ├── app/                # Application、EventLoop
-│   └── render/             # 渲染层、命令、tgfx、GLFW
-├── src/                    # 实现（.cpp）
-├── tests/                  # GTest 单元测试
-├── examples/               # 示例应用
+NeoFlux/
+├── CMakeLists.txt          # 构建框架与 neoflux_app
+├── src/                    # 快速开始应用（路由与视图）
+├── neoflux/                # 框架静态库
+│   ├── include/neoflux/    # 公共头文件
+│   ├── src/                # 框架实现
+│   └── tests/              # 框架单元测试
+├── examples/               # 可选示例应用
+├── assets/fonts/           # 运行时字体
+├── thirdparty/             # 第三方依赖
+├── cmake/                  # CMake 模块
 └── docs/                   # VitePress 文档
 ```
 

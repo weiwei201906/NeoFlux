@@ -52,7 +52,7 @@ NeoFlux uses a two-layer architecture with lock-free inter-thread communication:
 |----------|--------|-------|
 | Linux (x86-64) | ✅ Verified | CI build + headless tests via Xvfb |
 | Windows (MSVC x64) | ✅ Verified | CI build + tests |
-| macOS | 🚧 Adapted, not CI-verified | tgfx Metal backend (`MetalWindow` presents into a `CAMetalLayer` on the GLFW NSWindow); the CMake default on Apple is `TGFX_USE_METAL=ON` |
+| macOS | 🚧 Apple rendering uses tgfx Metal; platform-specific limitations remain | macOS is included in the CI build/test matrix. Apple builds use tgfx `MetalWindow` with CoreGraphics for text/vector rendering (`TGFX_USE_FREETYPE=OFF`); remaining compatibility limits belong to tgfx's Apple backend, not missing CI coverage. |
 | Android | 🚧 Renderer + input wired, no app shell | tgfx `EGLWindow` owns the EGL context and renders into the `ANativeWindow`; `MobileBridge` dispatches touch input into the widget tree. An Android app shell (NativeActivity/JNI) that creates the surface and forwards touch events is still needed. |
 | iOS | 🚧 Shell required | The `EAGLWindow::MakeFrom(CAEAGLLayer*)` path is defined but the ObjC++ app shell (view hierarchy) does not exist in this repository; `TgfxRenderer::Init` fails with an explicit log. |
 
@@ -82,21 +82,23 @@ results.
 ### Build
 
 ```bash
-mkdir build && cd build
-cmake .. -G Ninja
-cmake --build .
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
 
-### Run Tests
+The default build produces the quick-start application at `build/bin/neoflux_app`.
+Tests and the standalone examples are opt-in:
 
 ```bash
-ctest --output-on-failure
-```
+# Build and run tests
+cmake -S . -B build -G Ninja -DNEOFLUX_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
 
-### Run Example
-
-```bash
-./bin/hello_neoflux
+# Build the standalone examples
+cmake -S . -B build -G Ninja -DNEOFLUX_BUILD_EXAMPLES=ON
+cmake --build build
+./build/bin/hello_neoflux
 ```
 
 ## Configuration (gflags)
@@ -149,7 +151,7 @@ missing.
 | tgfx backend | Surface acquisition | Status |
 |---------|---------|--------|
 | `TGFX_USE_OPENGL` | Linux `tgfx::EGLWindow` (X11) / Windows `tgfx::WGLWindow` / Android `tgfx::EGLWindow` | ✅ Implemented (default outside Apple), desktop CI-verified on Linux |
-| `TGFX_USE_METAL` | `tgfx::MetalWindow` over a `CAMetalLayer` on the GLFW NSWindow | 🚧 Code path exists, not exercised in CI (Apple default) |
+| `TGFX_USE_METAL` | `tgfx::MetalWindow` over a `CAMetalLayer` on the GLFW NSWindow | 🚧 Apple default; macOS CI builds and tests this configuration. tgfx uses CoreGraphics instead of FreeType for Apple text/vector rendering. |
 | `TGFX_USE_VULKAN` | `tgfx::VulkanWindow` (Win32 HWND) | 🚧 Code path exists, not exercised in CI |
 | `TGFX_USE_D3D12` | `tgfx::D3D12Window::MakeForHwnd` | 🚧 Code path exists, not exercised in CI |
 
@@ -162,14 +164,14 @@ missing.
 
 ## Font System
 
-NeoFlux uses a font manager that scans `thirdparty/fonts/` for TrueType (`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup. Widgets reference fonts by filename stem (without extension):
+NeoFlux scans `assets/fonts/` and nearby build-relative locations for TrueType (`.ttf`), OpenType (`.otf`), and TrueType Collection (`.ttc`) files at startup. Widgets reference fonts by filename stem (without extension):
 
 ```cpp
 auto* text = new Text("Hello World");
-text->SetFont("NotoSansSC-Regular");  // loads thirdparty/fonts/NotoSansSC-Regular.ttf
+text->SetFont("NotoSansSC-Regular");  // loads assets/fonts/NotoSansSC-Regular.ttf
 ```
 
-If no font is specified on a widget, the first discovered font is used as the default. Place your font files in `thirdparty/fonts/` and reference them by name — no build-time copying is required.
+If no font is specified on a widget, the first discovered font is used as the default. Place font files in `assets/fonts/` and reference them by name.
 
 ## Building Tests
 
@@ -281,7 +283,7 @@ A complete demo showing stateful widgets, button callbacks, route navigation,
 and flex layout. Run with:
 
 ```bash
-./bin/hello_neoflux
+./build/bin/hello_neoflux
 ```
 
 ### counter
@@ -289,7 +291,7 @@ and flex layout. Run with:
 A minimal counter app demonstrating `StatefulWidget` and `Button` callbacks.
 
 ```bash
-./bin/counter
+./build/bin/counter
 ```
 
 ### flex_demo
@@ -298,17 +300,17 @@ A layout showcase demonstrating Taitank flex layout: row/column directions,
 center justification, flex grow, and row reverse with colored boxes.
 
 ```bash
-./bin/flex_demo
+./build/bin/flex_demo
 ```
 
 ### font_demo
 
 Demonstrates the font system: default font, explicit `SetFont()` selection,
 multiple font sizes/colors, and CJK text rendering. Place fonts in
-`thirdparty/fonts/` and reference them by name.
+`assets/fonts/` and reference them by name.
 
 ```bash
-./bin/font_demo
+./build/bin/font_demo
 ```
 
 ### scroll_demo
@@ -318,7 +320,7 @@ items. Scroll with the mouse wheel or drag the content; content is clipped
 to the viewport.
 
 ```bash
-./bin/scroll_demo
+./build/bin/scroll_demo
 ```
 
 ### loading_demo
@@ -329,7 +331,7 @@ animates a progress bar from 0% to 100% over ~2 seconds, yielding one frame
 per step. On completion, the widget transitions to a success state.
 
 ```bash
-./bin/loading_demo
+./build/bin/loading_demo
 ```
 
 ### drag_demo
@@ -342,7 +344,7 @@ released before 500ms, the coroutine observes the state change and returns
 silently. If held for 500ms+, a "[Long Press!]" indicator appears.
 
 ```bash
-./bin/drag_demo
+./build/bin/drag_demo
 ```
 
 ## Coroutines
@@ -391,21 +393,18 @@ No explicit cancellation is needed — the state machine gates execution.
 ## Project Structure
 
 ```
-neoflux/
-├── CMakeLists.txt          # Root build configuration
-├── .clang-tidy             # clang-tidy rules
-├── .clang-format           # Code style
+NeoFlux/
+├── CMakeLists.txt          # Builds the framework and neoflux_app
+├── src/                    # Quick-start application (routes and views)
+├── neoflux/                # Framework static library
+│   ├── include/neoflux/    # Public headers
+│   ├── src/                # Framework implementation
+│   └── tests/              # Framework unit tests
+├── examples/               # Optional example applications
+├── assets/fonts/           # Runtime fonts
+├── thirdparty/             # Third-party dependencies
 ├── cmake/                  # CMake modules
-├── thirdparty/             # Third-party dependencies (git submodules)
-├── include/neoflux/        # Public headers
-│   ├── core/               # Ring queue, types, utilities
-│   ├── widget/             # Widget system (Widget, Container, Text, Button)
-│   ├── app/                # Application, EventLoop
-│   └── render/             # Render layer, commands, tgfx, GLFW
-├── src/                    # Implementation
-├── tests/                  # GTest unit tests
-├── examples/               # Example applications
-└── docs/                   # Documentation
+└── docs/                   # VitePress documentation
 ```
 ## Mobile Rendering
 
