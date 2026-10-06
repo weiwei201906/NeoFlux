@@ -2,7 +2,7 @@
 <!-- Copyright (C) 2026 NeoFlux Authors -->
 # Standalone verification suite
 
-Unit-level tests that compile **without CMake, tgfx, mpv or taitank** — they
+Unit-level tests that compile **without CMake, tgfx, mpv or taitank** - they
 exercise the framework's own sources directly. Useful as a fast pre-push check
 and in CI environments that cannot pull the heavy third-party submodules.
 
@@ -12,11 +12,16 @@ sudo apt-get install -y g++ libgoogle-glog-dev libgflags-dev
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 V="$REPO/verify"
+# The native tuning sources read NEOFLUX_NATIVE_ASM_XGETBV to decide whether to
+# declare and call the xgetbv routine in asm/xgetbv.S. Define it here exactly as
+# neoflux/CMakeLists.txt does whenever it adds that .S to the target, otherwise
+# the standalone build disagrees with the CMake build about whether the symbol
+# exists.
 NATIVE_SRC=("$REPO/neoflux/src/core/flags.cpp"
             "$REPO/neoflux/src/native/linux/platform_linux.cpp"
             "$REPO/neoflux/src/native/linux/cache_topology_linux.cpp"
             "$REPO/neoflux/src/native/asm/xgetbv.S")   # Linux build
-INC=(-I "$REPO/neoflux/include" -I "$REPO/neoflux/src")
+INC=(-I "$REPO/neoflux/include" -I "$REPO/neoflux/src" -DNEOFLUX_NATIVE_ASM_XGETBV=1)
 
 # [1] Task coroutine semantics
 g++ -std=c++20 "${INC[@]}" "$V/test_task_await.cpp" "$V/yield_stub.cpp" -o /tmp/t1 && /tmp/t1

@@ -1,33 +1,44 @@
-# src/native/ — 平台原生调优层
+# src/native/ - platform-native tuning layer
 
-**本目录是框架代码中唯一允许直接调用操作系统底层 API 的地方。**
+**This directory is the only place in framework code allowed to call operating
+system APIs directly.**
 
-## 放什么
+The Chinese version of this document is kept with the other translated
+documentation as `docs/zh/guide/native-layer.md`.
 
-| 内容 | 文件 |
+## What belongs here
+
+| Content | File |
 |---|---|
-| 接口声明 | `native_tuning.h`（`neoflux::native` 命名空间） |
-| Windows 调优 | `windows/platform_win32.cpp`（线程优先级、`timeBeginPeriod(1)`、cpuid/xgetbv） |
-| Linux/Android 调优 | `linux/platform_linux.cpp`（SCHED_FIFO→nice 降级、cpuid/getauxval） |
-| macOS/iOS 调优 | `apple/platform_apple.cpp`（QoS class、sysctl） |
-| 其他平台兜底 | `platform_common.cpp`（全部 no-op） |
+| Interface declarations | `native_tuning.h` (namespace `neoflux::native`) |
+| Windows tuning | `windows/platform_win32.cpp` (thread priority, `timeBeginPeriod(1)`, cpuid/xgetbv) |
+| Linux/Android tuning | `linux/platform_linux.cpp` (SCHED_FIFO with a nice fallback, cpuid/getauxval) |
+| macOS/iOS tuning | `apple/platform_apple.cpp` (QoS class, sysctl) |
+| Fallback for other platforms | `platform_common.cpp` (everything is a no-op) |
 
-当前能力：渲染线程/UI 线程调度整形、帧节拍定时器精度、CPU SIMD 特性检测（SSE4.2 / AVX2 / ASIMD / FP16，含 OS 支持校验）。
+Current capabilities: render-thread and UI-thread scheduling shaping, frame
+pacing timer resolution, and CPU SIMD feature detection (SSE4.2 / AVX2 / ASIMD
+/ FP16, including the OS-support check).
 
-## 不放什么（历史教训）
+## What does not belong here (lessons learned)
 
-- **任何渲染 / GPU API**——GPU 后端代码全部位于 tgfx 之后，后端选择是
-  tgfx 自己的 `TGFX_USE_*` 编译期开关（见 `thirdparty/CMakeLists.txt`）。
-  曾经出现在这里的 `gl/gl_functions.{h,cpp}`（自管 GL 加载器）是
-  架构错位的死代码，已在 `refactor_strip-gl-from-core` 中删除。
-- **媒体解码 / 视频互操作**——属于 GL 后端模块（`src/media/`）。
-- **窗口系统**——属于 `src/renderers/glfw_bridge.cpp` 或 `mobile_bridge.cpp`。
+- **Any rendering or GPU API.** All GPU backends live behind tgfx, and the
+  backend choice is tgfx's own compile-time `TGFX_USE_*` switch (see
+  `thirdparty/CMakeLists.txt`). The `gl/gl_functions.{h,cpp}` pair that used to
+  live here (a self-managed GL loader) was architecturally misplaced dead code
+  and was deleted in `refactor_strip-gl-from-core`.
+- **Media decoding or video interop.** That belongs to the media module
+  (`neoflux/src/media/`).
+- **Windowing.** That belongs to `src/renderers/glfw_bridge.cpp` or
+  `mobile_bridge.cpp`.
 
-## 约定
+## Conventions
 
-- 所有入口 **best-effort**：权限不足/平台不支持时静默降级并记一条日志，
-  绝不抛异常、绝不使调用方失败。
-- 新增调优能力时：先在 `native_tuning.h` 定义跨平台语义，
-  再在四个实现里补齐，兜底实现必须同步更新。
-- CMake 侧按平台自动选择实现（`neoflux/CMakeLists.txt` 中
-  "Platform-native tuning layer" 块），无需手动指定。
+- Every entry point is **best-effort**: when privileges are missing or the
+  platform does not support the operation, it degrades silently and logs once.
+  It never throws and never fails the caller.
+- Adding a tuning capability means: define the cross-platform semantics in
+  `native_tuning.h` first, then implement it in all four backends, including
+  the fallback.
+- CMake selects the implementation per platform (the "Platform-native tuning
+  layer" block in `neoflux/CMakeLists.txt`); nothing is selected by hand.
