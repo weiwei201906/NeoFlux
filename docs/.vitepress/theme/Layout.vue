@@ -15,11 +15,11 @@ const { isDark, lang } = useData()
         </h2>
         <ClientOnly>
           <Giscus
-            repo="weiwei201906/NeoFlux"
+            repo="weiwei201906/neoflux"
             repo-id="R_kgDOT52tkA"
             category="Q&A"
             category-id="DIC_kwDOT52tkM4DG4Cb"
-            mapping="pathname"
+            mapping="title"
             strict="0"
             reactions-enabled="1"
             emit-metadata="1"
