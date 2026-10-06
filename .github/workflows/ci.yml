@@ -196,19 +196,29 @@ jobs:
       - name: No intrinsic headers outside the platform layer and tests
         run: |
           status=0
-          matches=""
+          matches=()
           for f in $(find neoflux/include neoflux/src verify \
                        -name '*.h' -o -name '*.hpp' -o -name '*.cpp'); do
             hit=$(sed 's|//.*||' "$f" \
               | grep -nP '#\s*include\s*<(immintrin|arm_neon|xmmintrin|emmintrin|pmmintrin|tmmintrin|smmintrin|nmmintrin|wmmintrin|avxintrin|avx2intrin|intrin)\.h>' || true)
             if [ -n "$hit" ]; then
-              matches="$matches$(printf '%s\n' "$hit" | sed "s|^|$f:|")
-"
+              # One array element per match. The previous revision accumulated
+              # these into a string with an embedded newline inside a quoted
+              # command substitution, which needed a closing quote at column
+              # zero - and that column-zero quote ended this YAML block scalar
+              # early, leaving the workflow file unparseable.
+              while IFS= read -r line; do
+                matches+=("$f:$line")
+              done <<< "$hit"
             fi
           done
-          violations=$(printf '%s' "$matches" \
-            | grep -v '/native/' | grep -v '/tests/' | grep -v '^verify/' \
-            | grep -v '^$' || true)
+          violations=""
+          for match in "${matches[@]}"; do
+            case "$match" in
+              */native/*|*/tests/*|verify/*) ;;
+              *) violations="$violations$match"$'\n' ;;
+            esac
+          done
           if [ -n "$violations" ]; then
             echo "::error::intrinsic header outside src/native/, tests/ and verify/:"
             echo "$violations"
