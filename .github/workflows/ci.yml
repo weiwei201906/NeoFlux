@@ -129,16 +129,15 @@ jobs:
         run: |
           run-clang-tidy -p build -j"$(nproc)" \
             -header-filter='neoflux/.*' \
-            -warnings-as-errors='*' \
             -quiet \
             -extra-arg-before=-Wno-unknown-warning-option \
             '.*/neoflux/.*' 2>&1 | tee clang-tidy.log
-          if grep -qE 'error:' clang-tidy.log; then
-            echo "::error::clang-tidy reported errors"
-            grep -E 'error:' clang-tidy.log | head -30
+          if grep -qE '(warning:|error:)' clang-tidy.log; then
+            echo "::error::clang-tidy reported warnings or errors"
+            grep -E '(warning:|error:)' clang-tidy.log | head -30
             exit 1
           fi
-          echo "clang-tidy: no errors"
+          echo "clang-tidy: no warnings or errors"
 
       # Assembly is part of the source tree and is easy to overlook: a .S file
       # that picks up a non-ASCII dash in a comment would otherwise ship

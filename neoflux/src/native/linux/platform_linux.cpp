@@ -203,7 +203,7 @@ void PinThreadToBigCores() noexcept {
       break;  // cpu_set_t is a fixed 1024-bit mask: never index out-of-bounds.
     }
     if (freqs[cpu] * threshold_permille >= max_freq * 1000) {
-      CPU_SET(static_cast<int>(cpu), &big_set);
+      CPU_SET(cpu, &big_set);
       ++big_count;
     }
   }
